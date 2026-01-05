@@ -656,59 +656,121 @@ public class TrendPlotView : View
         float range = _visibleMax - _visibleMin;
         if (range <= 0) range = 1;
 
-        // Use sub-cell precision: each cell has 2 vertical "pixels" (upper/lower half)
+        // Track which sub-pixels are lit for each column
+        // Using bit arrays for efficient storage: each column has plotHeight * 2 sub-pixels
+        var columnLit = new Dictionary<int, HashSet<int>>();
+
+        // Convert samples to sub-pixel coordinates and draw lines between them
         int subPixelHeight = plotHeight * 2;
 
-        // Calculate sub-pixel Y positions for each sample (0 = top, subPixelHeight-1 = bottom)
-        int[] subY = new int[sampleCount];
-        for (int i = 0; i < sampleCount; i++)
+        for (int i = 0; i < sampleCount - 1; i++)
         {
-            float normalized = (samples[i] - _visibleMin) / range;
-            normalized = Math.Clamp(normalized, 0, 1);
-            // Invert: high values at top (low subY), low values at bottom (high subY)
-            subY[i] = (int)((1 - normalized) * (subPixelHeight - 1));
+            // Calculate screen X positions for current and next sample
+            int x1 = LeftMargin + (plotWidth - sampleCount) + i;
+            int x2 = LeftMargin + (plotWidth - sampleCount) + i + 1;
+
+            // Calculate sub-pixel Y positions (0 = top, subPixelHeight-1 = bottom)
+            float normalized1 = Math.Clamp((samples[i] - _visibleMin) / range, 0, 1);
+            float normalized2 = Math.Clamp((samples[i + 1] - _visibleMin) / range, 0, 1);
+
+            int y1 = (int)((1 - normalized1) * (subPixelHeight - 1));
+            int y2 = (int)((1 - normalized2) * (subPixelHeight - 1));
+
+            // Draw line from (x1, y1) to (x2, y2) using Bresenham-style algorithm
+            int dx = Math.Abs(x2 - x1);
+            int dy = Math.Abs(y2 - y1);
+            int sx = x1 < x2 ? 1 : -1;
+            int sy = y1 < y2 ? 1 : -1;
+            int err = dx - dy;
+
+            int x = x1;
+            int y = y1;
+
+            while (true)
+            {
+                // Mark this sub-pixel as lit
+                if (x >= LeftMargin && x < LeftMargin + plotWidth)
+                {
+                    if (!columnLit.ContainsKey(x))
+                        columnLit[x] = new HashSet<int>();
+                    columnLit[x].Add(y);
+                }
+
+                if (x == x2 && y == y2) break;
+
+                int e2 = 2 * err;
+                if (e2 > -dy)
+                {
+                    err -= dy;
+                    x += sx;
+                }
+                if (e2 < dx)
+                {
+                    err += dx;
+                    y += sy;
+                }
+            }
         }
 
-        // Draw the waveform with proper line interpolation
-        for (int i = 0; i < sampleCount; i++)
+        // Draw the last sample point
+        if (sampleCount > 0)
         {
-            int x = LeftMargin + (plotWidth - sampleCount) + i;
-            if (x < LeftMargin || x >= LeftMargin + plotWidth) continue;
+            int x = LeftMargin + (plotWidth - sampleCount) + sampleCount - 1;
+            float normalized = Math.Clamp((samples[sampleCount - 1] - _visibleMin) / range, 0, 1);
+            int y = (int)((1 - normalized) * (subPixelHeight - 1));
 
-            int y1 = subY[i];
-            int y2 = (i < sampleCount - 1) ? subY[i + 1] : y1;
-
-            // Get the sub-pixel range to fill for this column
-            int minSubY = Math.Min(y1, y2);
-            int maxSubY = Math.Max(y1, y2);
-
-            // Convert sub-pixel coords to cell coords and draw
-            int minCell = minSubY / 2;
-            int maxCell = maxSubY / 2;
-
-            for (int cellY = minCell; cellY <= maxCell; cellY++)
+            if (x >= LeftMargin && x < LeftMargin + plotWidth)
             {
+                if (!columnLit.ContainsKey(x))
+                    columnLit[x] = new HashSet<int>();
+                columnLit[x].Add(y);
+            }
+        }
+
+        // Render the lit sub-pixels as block characters
+        foreach (var kvp in columnLit)
+        {
+            int x = kvp.Key;
+            var litSubPixels = kvp.Value;
+
+            // Determine sample index for color selection
+            int sampleIdx = x - LeftMargin - (plotWidth - sampleCount);
+
+            // Group sub-pixels into cells and determine which block character to use
+            var cellsToFill = new Dictionary<int, (bool top, bool bottom)>();
+
+            foreach (int subY in litSubPixels)
+            {
+                int cellY = subY / 2;
+                bool isTop = (subY % 2 == 0);
+
+                if (!cellsToFill.ContainsKey(cellY))
+                    cellsToFill[cellY] = (false, false);
+
+                var cell = cellsToFill[cellY];
+                cellsToFill[cellY] = isTop ? (true, cell.bottom) : (cell.top, true);
+            }
+
+            // Draw each cell
+            foreach (var cell in cellsToFill)
+            {
+                int cellY = cell.Key;
                 int screenY = TopMargin + cellY;
+
                 if (screenY < TopMargin || screenY >= TopMargin + plotHeight) continue;
-
-                // Determine which halves of this cell are filled
-                int cellTopSubY = cellY * 2;
-                int cellBottomSubY = cellY * 2 + 1;
-
-                bool fillTop = (cellTopSubY >= minSubY && cellTopSubY <= maxSubY);
-                bool fillBottom = (cellBottomSubY >= minSubY && cellBottomSubY <= maxSubY);
 
                 Move(x, screenY);
 
                 // Choose color based on position (brighter near the leading edge)
-                if (i >= sampleCount - 3 && !_isPaused)
+                if (sampleIdx >= sampleCount - 3 && !_isPaused)
                     Driver.SetAttribute(TraceGlow);
-                else if (i >= sampleCount - 8)
+                else if (sampleIdx >= sampleCount - 8)
                     Driver.SetAttribute(AmberBright);
                 else
                     Driver.SetAttribute(AmberNormal);
 
                 // Select the right block character
+                var (fillTop, fillBottom) = cell.Value;
                 if (fillTop && fillBottom)
                     AddRune((Rune)'█');  // Full block
                 else if (fillTop)
