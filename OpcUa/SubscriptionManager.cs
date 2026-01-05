@@ -119,7 +119,7 @@ public class SubscriptionManager : IDisposable
 
             monitoredItem.Notification += MonitoredItem_Notification;
 
-            // Add to subscription
+            // Add to subscription and create the monitored item on the server
             _subscription.AddItem(monitoredItem);
             _subscription.ApplyChanges();
 
@@ -172,13 +172,10 @@ public class SubscriptionManager : IDisposable
                 MonitoredNode? item = null;
                 lock (_lock)
                 {
-                    foreach (var kvp in _opcMonitoredItems)
+                    var matchingKvp = _opcMonitoredItems.Where(kvp => kvp.Value.ClientHandle == monitoredItem.ClientHandle).FirstOrDefault();
+                    if (!matchingKvp.Equals(default(KeyValuePair<uint, MonitoredItem>)))
                     {
-                        if (kvp.Value.ClientHandle == monitoredItem.ClientHandle)
-                        {
-                            _monitoredItems.TryGetValue(kvp.Key, out item);
-                            break;
-                        }
+                        _monitoredItems.TryGetValue(matchingKvp.Key, out item);
                     }
                 }
 
@@ -311,7 +308,10 @@ public class SubscriptionManager : IDisposable
                 _clientWrapper.Session.RemoveSubscription(_subscription);
                 _subscription.Dispose();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to dispose OPC UA subscription: {ex}");
+            }
         }
 
         _subscription = null;

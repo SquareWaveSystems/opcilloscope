@@ -332,7 +332,7 @@ public class MainWindow : Toplevel
             return;
         }
 
-        var dialog = new SaveDialog
+        using var dialog = new SaveDialog
         {
             Title = "Export to CSV"
         };

@@ -51,14 +51,15 @@ public class OpcUaClientWrapper : IDisposable
             ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 }
         };
 
-        await _appConfig.Validate(ApplicationType.Client);
-
         // Accept all certificates for simplicity
-        _appConfig.CertificateValidator = new CertificateValidator();
-        _appConfig.CertificateValidator.CertificateValidation += (sender, e) =>
+        var certificateValidator = new CertificateValidator();
+        certificateValidator.CertificateValidation += (sender, e) =>
         {
             e.Accept = true;
         };
+        _appConfig.CertificateValidator = certificateValidator;
+
+        await _appConfig.Validate(ApplicationType.Client);
 
         return _appConfig;
     }
@@ -74,7 +75,7 @@ public class OpcUaClientWrapper : IDisposable
             var config = await GetApplicationConfigAsync();
 
             // Discover endpoints
-            var selectedEndpoint = CoreClientUtils.SelectEndpoint(endpointUrl, useSecurity: false, 10000);
+            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config, endpointUrl, useSecurity: false, 10000);
 
             // Create session
             var endpointConfig = EndpointConfiguration.Create(config);
