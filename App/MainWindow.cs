@@ -400,7 +400,7 @@ to industrial automation data.
 Built with:
   - .NET 8
   - Terminal.Gui v2
-  - LibUA (nauful-LibUA-core)
+  - OPC Foundation UA-.NETStandard
 
 License: MIT
 ";
