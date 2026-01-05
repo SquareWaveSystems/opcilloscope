@@ -1,4 +1,4 @@
-using LibUA.Core;
+using Opc.Ua;
 using OpcScope.OpcUa.Models;
 using OpcScope.Utilities;
 
@@ -53,7 +53,7 @@ public class NodeBrowser
     {
         return new BrowsedNode
         {
-            NodeId = new NodeId(0, 84), // Root folder is ns=0;i=84
+            NodeId = ObjectIds.RootFolder, // ns=0;i=84
             BrowseName = "Root",
             DisplayName = "Root",
             NodeClass = NodeClass.Object,
@@ -73,33 +73,23 @@ public class NodeBrowser
 
             foreach (var r in refs)
             {
-                // TargetId is an ExpandedNodeId - convert to NodeId
-                NodeId targetNodeId;
-                if (r.TargetId.NumericIdentifier != 0)
-                {
-                    targetNodeId = new NodeId(r.TargetId.NamespaceIndex, r.TargetId.NumericIdentifier);
-                }
-                else if (!string.IsNullOrEmpty(r.TargetId.StringIdentifier))
-                {
-                    targetNodeId = new NodeId(r.TargetId.NamespaceIndex, r.TargetId.StringIdentifier);
-                }
-                else
-                {
-                    targetNodeId = new NodeId(r.TargetId.NamespaceIndex, (uint)0);
-                }
+                // Convert ExpandedNodeId to NodeId
+                var targetNodeId = ExpandedNodeId.ToNodeId(r.NodeId, _client.Session?.NamespaceUris);
+                if (targetNodeId == null)
+                    continue;
 
                 // Get TypeDefinition NodeId
                 NodeId? typeDefNodeId = null;
-                if (r.TypeDefinition.NumericIdentifier != 0)
+                if (r.TypeDefinition != null && !r.TypeDefinition.IsNull)
                 {
-                    typeDefNodeId = new NodeId(r.TypeDefinition.NamespaceIndex, r.TypeDefinition.NumericIdentifier);
+                    typeDefNodeId = ExpandedNodeId.ToNodeId(r.TypeDefinition, _client.Session?.NamespaceUris);
                 }
 
                 var child = new BrowsedNode
                 {
                     NodeId = targetNodeId,
-                    BrowseName = r.BrowseName.Name ?? string.Empty,
-                    DisplayName = r.DisplayName.Text ?? r.BrowseName.Name ?? "Unknown",
+                    BrowseName = r.BrowseName?.Name ?? string.Empty,
+                    DisplayName = r.DisplayName?.Text ?? r.BrowseName?.Name ?? "Unknown",
                     NodeClass = r.NodeClass,
                     DataType = typeDefNodeId,
                     Parent = parent
@@ -151,15 +141,15 @@ public class NodeBrowser
 
         try
         {
-            var attrs = _client.ReadAttributes(nodeId, NodeAttribute.DataType);
-            if (attrs.Length > 0 && attrs[0].Value is NodeId dataTypeId)
+            var attrs = _client.ReadAttributes(nodeId, Attributes.DataType);
+            if (attrs.Count > 0 && attrs[0].Value is NodeId dataTypeId)
             {
                 string? name = null;
 
                 // Check built-in types first
-                if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == NodeIdNetType.Numeric)
+                if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == IdType.Numeric)
                 {
-                    var id = (uint)(dataTypeId.NumericIdentifier);
+                    var id = (uint)dataTypeId.Identifier;
                     if (BuiltInDataTypes.TryGetValue(id, out var builtIn))
                         name = builtIn;
                 }
@@ -167,8 +157,8 @@ public class NodeBrowser
                 // If not built-in, browse for the type name
                 if (name == null)
                 {
-                    var typeAttrs = _client.ReadAttributes(dataTypeId, NodeAttribute.DisplayName);
-                    if (typeAttrs.Length > 0 && typeAttrs[0].Value is LocalizedText lt)
+                    var typeAttrs = _client.ReadAttributes(dataTypeId, Attributes.DisplayName);
+                    if (typeAttrs.Count > 0 && typeAttrs[0].Value is LocalizedText lt)
                         name = lt.Text;
                 }
 
@@ -196,28 +186,28 @@ public class NodeBrowser
         {
             var attrs = _client.ReadAttributes(
                 nodeId,
-                NodeAttribute.NodeId,
-                NodeAttribute.NodeClass,
-                NodeAttribute.BrowseName,
-                NodeAttribute.DisplayName,
-                NodeAttribute.Description,
-                NodeAttribute.DataType,
-                NodeAttribute.ValueRank,
-                NodeAttribute.AccessLevel,
-                NodeAttribute.UserAccessLevel
+                Attributes.NodeId,
+                Attributes.NodeClass,
+                Attributes.BrowseName,
+                Attributes.DisplayName,
+                Attributes.Description,
+                Attributes.DataType,
+                Attributes.ValueRank,
+                Attributes.AccessLevel,
+                Attributes.UserAccessLevel
             );
 
             return new NodeAttributes
             {
                 NodeId = nodeId,
-                NodeClass = attrs.Length > 1 && attrs[1].Value is int nc ? (NodeClass)nc : NodeClass.Unspecified,
-                BrowseName = attrs.Length > 2 && attrs[2].Value is QualifiedName qn ? qn.Name : null,
-                DisplayName = attrs.Length > 3 && attrs[3].Value is LocalizedText lt ? lt.Text : null,
-                Description = attrs.Length > 4 && attrs[4].Value is LocalizedText desc ? desc.Text : null,
-                DataType = attrs.Length > 5 && attrs[5].Value is NodeId dt ? GetDataTypeNameById(dt) : null,
-                ValueRank = attrs.Length > 6 && attrs[6].Value is int vr ? vr : null,
-                AccessLevel = attrs.Length > 7 && attrs[7].Value is byte al ? al : null,
-                UserAccessLevel = attrs.Length > 8 && attrs[8].Value is byte ual ? ual : null
+                NodeClass = attrs.Count > 1 && attrs[1].Value is int nc ? (NodeClass)nc : NodeClass.Unspecified,
+                BrowseName = attrs.Count > 2 && attrs[2].Value is QualifiedName qn ? qn.Name : null,
+                DisplayName = attrs.Count > 3 && attrs[3].Value is LocalizedText lt ? lt.Text : null,
+                Description = attrs.Count > 4 && attrs[4].Value is LocalizedText desc ? desc.Text : null,
+                DataType = attrs.Count > 5 && attrs[5].Value is NodeId dt ? GetDataTypeNameById(dt) : null,
+                ValueRank = attrs.Count > 6 && attrs[6].Value is int vr ? vr : null,
+                AccessLevel = attrs.Count > 7 && attrs[7].Value is byte al ? al : null,
+                UserAccessLevel = attrs.Count > 8 && attrs[8].Value is byte ual ? ual : null
             };
         }
         catch (Exception ex)
@@ -229,17 +219,17 @@ public class NodeBrowser
 
     private string? GetDataTypeNameById(NodeId dataTypeId)
     {
-        if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == NodeIdNetType.Numeric)
+        if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == IdType.Numeric)
         {
-            var id = (uint)(dataTypeId.NumericIdentifier);
+            var id = (uint)dataTypeId.Identifier;
             if (BuiltInDataTypes.TryGetValue(id, out var name))
                 return name;
         }
 
         try
         {
-            var attrs = _client.ReadAttributes(dataTypeId, NodeAttribute.DisplayName);
-            if (attrs.Length > 0 && attrs[0].Value is LocalizedText lt)
+            var attrs = _client.ReadAttributes(dataTypeId, Attributes.DisplayName);
+            if (attrs.Count > 0 && attrs[0].Value is LocalizedText lt)
                 return lt.Text;
         }
         catch
@@ -253,7 +243,7 @@ public class NodeBrowser
 
 public class NodeAttributes
 {
-    public NodeId NodeId { get; init; } = NodeId.Zero;
+    public NodeId NodeId { get; init; } = ObjectIds.RootFolder;
     public NodeClass NodeClass { get; init; }
     public string? BrowseName { get; init; }
     public string? DisplayName { get; init; }

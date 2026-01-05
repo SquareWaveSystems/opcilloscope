@@ -1,24 +1,24 @@
-using LibUA;
-using LibUA.Core;
+using Opc.Ua;
+using Opc.Ua.Client;
 using OpcScope.Utilities;
 
 namespace OpcScope.OpcUa;
 
 /// <summary>
-/// Wrapper around LibUA Client providing async connection management.
+/// Wrapper around OPC Foundation Client Session providing async connection management.
 /// </summary>
 public class OpcUaClientWrapper : IDisposable
 {
-    private Client? _client;
+    private ISession? _session;
     private readonly Logger _logger;
     private string? _currentEndpoint;
     private CancellationTokenSource? _reconnectCts;
     private bool _disposed;
-    private bool _isConnected;
+    private ApplicationConfiguration? _appConfig;
 
-    public bool IsConnected => _isConnected && _client != null;
+    public bool IsConnected => _session?.Connected ?? false;
     public string? CurrentEndpoint => _currentEndpoint;
-    public Client? UnderlyingClient => _client;
+    public ISession? Session => _session;
 
     public event Action? Connected;
     public event Action? Disconnected;
@@ -29,6 +29,40 @@ public class OpcUaClientWrapper : IDisposable
         _logger = logger;
     }
 
+    private async Task<ApplicationConfiguration> GetApplicationConfigAsync()
+    {
+        if (_appConfig != null)
+            return _appConfig;
+
+        _appConfig = new ApplicationConfiguration
+        {
+            ApplicationName = "OpcScope",
+            ApplicationType = ApplicationType.Client,
+            ApplicationUri = "urn:OpcScope:Client",
+            ProductUri = "urn:OpcScope",
+            SecurityConfiguration = new SecurityConfiguration
+            {
+                ApplicationCertificate = new CertificateIdentifier(),
+                AutoAcceptUntrustedCertificates = true,
+                AddAppCertToTrustedStore = false
+            },
+            TransportConfigurations = new TransportConfigurationCollection(),
+            TransportQuotas = new TransportQuotas { OperationTimeout = 30000 },
+            ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 }
+        };
+
+        await _appConfig.Validate(ApplicationType.Client);
+
+        // Accept all certificates for simplicity
+        _appConfig.CertificateValidator = new CertificateValidator();
+        _appConfig.CertificateValidator.CertificateValidation += (sender, e) =>
+        {
+            e.Accept = true;
+        };
+
+        return _appConfig;
+    }
+
     public async Task<bool> ConnectAsync(string endpointUrl)
     {
         try
@@ -37,60 +71,27 @@ public class OpcUaClientWrapper : IDisposable
 
             _logger.Info($"Connecting to {endpointUrl}...");
 
-            var uri = new Uri(endpointUrl);
-            var host = uri.Host;
-            var port = uri.Port > 0 ? uri.Port : 4840;
+            var config = await GetApplicationConfigAsync();
 
-            var appDesc = new ApplicationDescription(
-                "urn:OpcScope:Client",
-                "urn:OpcScope",
-                new LocalizedText("OpcScope"),
-                ApplicationType.Client,
-                null, null, null
-            );
-
-            _client = new Client(host, port, 10000);
-
-            // Connect socket
-            var connectResult = await Task.Run(() => _client.Connect());
-            if (connectResult != StatusCode.Good)
-            {
-                throw new Exception($"Connect failed: 0x{(uint)connectResult:X8}");
-            }
-
-            // Open secure channel (anonymous/none)
-            var openResult = await Task.Run(() => _client.OpenSecureChannel(
-                MessageSecurityMode.None,
-                SecurityPolicy.None,
-                null
-            ));
-            if (openResult != StatusCode.Good)
-            {
-                throw new Exception($"OpenSecureChannel failed: 0x{(uint)openResult:X8}");
-            }
+            // Discover endpoints
+            var selectedEndpoint = CoreClientUtils.SelectEndpoint(endpointUrl, useSecurity: false, 10000);
 
             // Create session
-            var createResult = await Task.Run(() => _client.CreateSession(
-                appDesc,
+            var endpointConfig = EndpointConfiguration.Create(config);
+            var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
+
+            _session = await Opc.Ua.Client.Session.Create(
+                config,
+                endpoint,
+                false,
                 "OpcScope Session",
-                300
-            ));
-            if (createResult != StatusCode.Good)
-            {
-                throw new Exception($"CreateSession failed: 0x{(uint)createResult:X8}");
-            }
+                60000,
+                new UserIdentity(new AnonymousIdentityToken()),
+                null
+            );
 
-            // Activate session with anonymous identity
-            var activateResult = await Task.Run(() => _client.ActivateSession(
-                new UserIdentityAnonymousToken("anonymous"),
-                Array.Empty<string>()
-            ));
-            if (activateResult != StatusCode.Good)
-            {
-                throw new Exception($"ActivateSession failed: 0x{(uint)activateResult:X8}");
-            }
+            _session.KeepAlive += Session_KeepAlive;
 
-            _isConnected = true;
             _currentEndpoint = endpointUrl;
             _logger.Info($"Connected to {endpointUrl}");
             Connected?.Invoke();
@@ -105,23 +106,36 @@ public class OpcUaClientWrapper : IDisposable
         }
     }
 
+    private void Session_KeepAlive(ISession session, KeepAliveEventArgs e)
+    {
+        if (e.Status != null && ServiceResult.IsBad(e.Status))
+        {
+            _logger.Warning($"Keep alive error: {e.Status}");
+            if (!session.Connected)
+            {
+                Disconnected?.Invoke();
+            }
+        }
+    }
+
     public void Disconnect()
     {
         _reconnectCts?.Cancel();
         _reconnectCts = null;
-        _isConnected = false;
 
-        if (_client != null)
+        if (_session != null)
         {
             try
             {
-                _client.Dispose();
+                _session.KeepAlive -= Session_KeepAlive;
+                _session.Close();
+                _session.Dispose();
             }
             catch
             {
                 // Ignore dispose errors
             }
-            _client = null;
+            _session = null;
             _currentEndpoint = null;
             Disconnected?.Invoke();
         }
@@ -163,88 +177,81 @@ public class OpcUaClientWrapper : IDisposable
         return false;
     }
 
-    public List<ReferenceDescription> Browse(NodeId nodeId)
+    public ReferenceDescriptionCollection Browse(NodeId nodeId)
     {
-        if (_client == null)
+        if (_session == null)
             throw new InvalidOperationException("Not connected");
 
-        _client.Browse(
-            new[]
-            {
-                new BrowseDescription(
-                    nodeId,
-                    BrowseDirection.Forward,
-                    NodeId.Zero,
-                    true,
-                    0xFFFFFFFF,
-                    BrowseResultMask.All
-                )
-            },
-            10000,
-            out var results
-        );
-
-        if (results != null && results.Length > 0 && results[0].Refs != null)
+        var browser = new Browser(_session)
         {
-            return results[0].Refs.ToList();
-        }
+            BrowseDirection = BrowseDirection.Forward,
+            NodeClassMask = (int)NodeClass.Object | (int)NodeClass.Variable | (int)NodeClass.Method,
+            ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
+            IncludeSubtypes = true,
+            ResultMask = (uint)BrowseResultMask.All
+        };
 
-        return new List<ReferenceDescription>();
+        return browser.Browse(nodeId);
     }
 
     public DataValue? ReadValue(NodeId nodeId)
     {
-        if (_client == null)
+        if (_session == null)
             throw new InvalidOperationException("Not connected");
 
-        _client.Read(
-            new[]
-            {
-                new ReadValueId(nodeId, NodeAttribute.Value, null, new QualifiedName(0, null))
-            },
-            out var results
-        );
-
-        return results?.FirstOrDefault();
+        return _session.ReadValue(nodeId);
     }
 
-    public DataValue[] ReadAttributes(NodeId nodeId, params NodeAttribute[] attributes)
+    public DataValueCollection ReadAttributes(NodeId nodeId, params uint[] attributeIds)
     {
-        if (_client == null)
+        if (_session == null)
             throw new InvalidOperationException("Not connected");
 
-        var readValues = attributes.Select(a =>
-            new ReadValueId(nodeId, a, null, new QualifiedName(0, null))
-        ).ToArray();
-
-        _client.Read(readValues, out var results);
-
-        return results ?? Array.Empty<DataValue>();
-    }
-
-    public StatusCode WriteValue(NodeId nodeId, object value, NodeId dataType)
-    {
-        if (_client == null)
-            throw new InvalidOperationException("Not connected");
-
-        _client.Write(
-            new[]
-            {
-                new WriteValue(
-                    nodeId,
-                    NodeAttribute.Value,
-                    null,
-                    new DataValue(value, StatusCode.Good, DateTime.UtcNow)
-                )
-            },
-            out var results
-        );
-
-        if (results != null && results.Length > 0)
+        var nodesToRead = new ReadValueIdCollection();
+        foreach (var attrId in attributeIds)
         {
-            return (StatusCode)results[0];
+            nodesToRead.Add(new ReadValueId
+            {
+                NodeId = nodeId,
+                AttributeId = attrId
+            });
         }
-        return StatusCode.BadUnexpectedError;
+
+        _session.Read(
+            null,
+            0,
+            TimestampsToReturn.Both,
+            nodesToRead,
+            out var results,
+            out _
+        );
+
+        return results;
+    }
+
+    public StatusCode WriteValue(NodeId nodeId, object value)
+    {
+        if (_session == null)
+            throw new InvalidOperationException("Not connected");
+
+        var nodesToWrite = new WriteValueCollection
+        {
+            new WriteValue
+            {
+                NodeId = nodeId,
+                AttributeId = Attributes.Value,
+                Value = new DataValue(new Variant(value))
+            }
+        };
+
+        _session.Write(
+            null,
+            nodesToWrite,
+            out var results,
+            out _
+        );
+
+        return results?.Count > 0 ? results[0] : StatusCodes.BadUnexpectedError;
     }
 
     public void Dispose()

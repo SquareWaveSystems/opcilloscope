@@ -1,7 +1,6 @@
 using Terminal.Gui;
-using OpcScope.OpcUa;
+using Opc.Ua;
 using OpcScope.OpcUa.Models;
-using LibUA.Core;
 
 namespace OpcScope.App.Views;
 
@@ -11,7 +10,7 @@ namespace OpcScope.App.Views;
 public class NodeDetailsView : FrameView
 {
     private readonly Label _detailsLabel;
-    private NodeBrowser? _nodeBrowser;
+    private OpcScope.OpcUa.NodeBrowser? _nodeBrowser;
 
     public NodeDetailsView()
     {
@@ -29,7 +28,7 @@ public class NodeDetailsView : FrameView
         Add(_detailsLabel);
     }
 
-    public void Initialize(NodeBrowser nodeBrowser)
+    public void Initialize(OpcScope.OpcUa.NodeBrowser nodeBrowser)
     {
         _nodeBrowser = nodeBrowser;
     }

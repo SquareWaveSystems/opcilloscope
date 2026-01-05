@@ -1,4 +1,4 @@
-using LibUA.Core;
+using Opc.Ua;
 
 namespace OpcScope.OpcUa.Models;
 
@@ -9,7 +9,7 @@ public class MonitoredNode
 {
     public uint ClientHandle { get; init; }
     public uint MonitoredItemId { get; set; }
-    public NodeId NodeId { get; init; } = NodeId.Zero;
+    public NodeId NodeId { get; init; } = ObjectIds.RootFolder;
     public string DisplayName { get; init; } = string.Empty;
     public string Value { get; set; } = string.Empty;
     public DateTime? Timestamp { get; set; }

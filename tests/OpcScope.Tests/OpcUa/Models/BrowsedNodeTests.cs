@@ -1,4 +1,4 @@
-using LibUA.Core;
+using Opc.Ua;
 using OpcScope.OpcUa.Models;
 
 namespace OpcScope.Tests.OpcUa.Models;
@@ -12,7 +12,7 @@ public class BrowsedNodeTests
         var node = new BrowsedNode();
 
         // Assert
-        Assert.Equal(NodeId.Zero, node.NodeId);
+        Assert.Equal(ObjectIds.RootFolder, node.NodeId);
         Assert.Equal(string.Empty, node.BrowseName);
         Assert.Equal(string.Empty, node.DisplayName);
         Assert.Equal(NodeClass.Unspecified, node.NodeClass);
@@ -60,7 +60,7 @@ public class BrowsedNodeTests
         // Arrange
         var node = new BrowsedNode
         {
-            NodeId = new NodeId(0, (uint)1),
+            NodeId = new NodeId(1),
             NodeClass = nodeClass
         };
 
@@ -74,7 +74,7 @@ public class BrowsedNodeTests
         // Arrange
         var node = new BrowsedNode
         {
-            NodeId = new NodeId(1, (uint)1000),
+            NodeId = new NodeId(1000),
             DisplayName = "TestNode",
             NodeClass = NodeClass.Object
         };
@@ -93,7 +93,7 @@ public class BrowsedNodeTests
         // Arrange
         var node = new BrowsedNode
         {
-            NodeId = new NodeId(1, (uint)1000),
+            NodeId = new NodeId(1000),
             DisplayName = "TestVariable",
             NodeClass = NodeClass.Variable,
             DataTypeName = "Int32"
@@ -114,7 +114,7 @@ public class BrowsedNodeTests
         // Arrange
         var node = new BrowsedNode
         {
-            NodeId = new NodeId(1, (uint)1000),
+            NodeId = new NodeId(1000),
             DisplayName = "TestObject",
             NodeClass = NodeClass.Object,
             DataTypeName = "SomeType" // Should be ignored for Object nodes
@@ -135,13 +135,13 @@ public class BrowsedNodeTests
         // Arrange
         var parent = new BrowsedNode
         {
-            NodeId = new NodeId(0, (uint)85),
+            NodeId = new NodeId(85),
             DisplayName = "Objects"
         };
 
         var child = new BrowsedNode
         {
-            NodeId = new NodeId(0, (uint)2253),
+            NodeId = new NodeId(2253),
             DisplayName = "Server",
             Parent = parent
         };
@@ -157,13 +157,13 @@ public class BrowsedNodeTests
         // Arrange
         var parent = new BrowsedNode
         {
-            NodeId = new NodeId(0, (uint)85),
+            NodeId = new NodeId(85),
             DisplayName = "Objects"
         };
 
         var child = new BrowsedNode
         {
-            NodeId = new NodeId(0, (uint)2253),
+            NodeId = new NodeId(2253),
             DisplayName = "Server",
             Parent = parent
         };

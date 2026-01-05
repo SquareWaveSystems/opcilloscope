@@ -1,4 +1,4 @@
-using LibUA.Core;
+using Opc.Ua;
 using OpcScope.OpcUa.Models;
 
 namespace OpcScope.Tests.OpcUa.Models;
@@ -11,7 +11,7 @@ public class MonitoredNodeTests
         // Arrange
         var node = new MonitoredNode
         {
-            NodeId = new NodeId(1, (uint)1000),
+            NodeId = new NodeId(1000),
             DisplayName = "Test",
             StatusCode = 0
         };
@@ -28,7 +28,7 @@ public class MonitoredNodeTests
         // Arrange
         var node = new MonitoredNode
         {
-            NodeId = new NodeId(1, (uint)1000),
+            NodeId = new NodeId(1000),
             DisplayName = "Test",
             StatusCode = 0x80000000 // Bad status code
         };
@@ -45,7 +45,7 @@ public class MonitoredNodeTests
         // Arrange
         var node = new MonitoredNode
         {
-            NodeId = new NodeId(1, (uint)1000),
+            NodeId = new NodeId(1000),
             DisplayName = "Test",
             StatusCode = 0x40000000 // Uncertain status code
         };

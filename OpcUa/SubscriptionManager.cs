@@ -1,22 +1,22 @@
-using LibUA.Core;
+using Opc.Ua;
+using Opc.Ua.Client;
 using OpcScope.OpcUa.Models;
 using OpcScope.Utilities;
 
 namespace OpcScope.OpcUa;
 
 /// <summary>
-/// Manages monitored items with polling-based value updates.
-/// Uses polling instead of OPC UA subscriptions for LibUA compatibility.
+/// Manages OPC UA subscriptions and monitored items using proper Publish/Subscribe.
 /// </summary>
 public class SubscriptionManager : IDisposable
 {
     private readonly OpcUaClientWrapper _clientWrapper;
     private readonly Logger _logger;
+    private Subscription? _subscription;
     private readonly Dictionary<uint, MonitoredNode> _monitoredItems = new();
+    private readonly Dictionary<uint, MonitoredItem> _opcMonitoredItems = new();
     private uint _nextClientHandle = 1;
-    private CancellationTokenSource? _pollCts;
-    private Task? _pollTask;
-    private int _pollingInterval = 1000;
+    private int _publishingInterval = 1000;
     private bool _isInitialized;
     private readonly object _lock = new();
 
@@ -26,8 +26,8 @@ public class SubscriptionManager : IDisposable
 
     public int PublishingInterval
     {
-        get => _pollingInterval;
-        set => _pollingInterval = Math.Max(100, Math.Min(10000, value));
+        get => _publishingInterval;
+        set => _publishingInterval = Math.Max(100, Math.Min(10000, value));
     }
 
     public IReadOnlyCollection<MonitoredNode> MonitoredItems
@@ -49,7 +49,7 @@ public class SubscriptionManager : IDisposable
 
     public bool Initialize()
     {
-        if (_clientWrapper.UnderlyingClient == null || !_clientWrapper.IsConnected)
+        if (_clientWrapper.Session == null || !_clientWrapper.IsConnected)
         {
             _logger.Error("Cannot initialize subscription: not connected");
             return false;
@@ -57,33 +57,45 @@ public class SubscriptionManager : IDisposable
 
         try
         {
-            _isInitialized = true;
-            _logger.Info($"Subscription manager initialized (Polling Interval: {_pollingInterval}ms)");
+            // Create subscription
+            _subscription = new Subscription(_clientWrapper.Session.DefaultSubscription)
+            {
+                DisplayName = "OpcScope Subscription",
+                PublishingEnabled = true,
+                PublishingInterval = _publishingInterval,
+                KeepAliveCount = 10,
+                LifetimeCount = 100,
+                MaxNotificationsPerPublish = 1000,
+                Priority = 0
+            };
 
-            // Start polling loop
-            StartPollingLoop();
+            _clientWrapper.Session.AddSubscription(_subscription);
+            _subscription.Create();
+
+            _isInitialized = true;
+            _logger.Info($"Subscription created (ID: {_subscription.Id}, Interval: {_publishingInterval}ms)");
 
             return true;
         }
         catch (Exception ex)
         {
-            _logger.Error($"Failed to initialize subscription manager: {ex.Message}");
+            _logger.Error($"Failed to create subscription: {ex.Message}");
             return false;
         }
     }
 
     public MonitoredNode? AddNode(NodeId nodeId, string displayName)
     {
-        if (!_isInitialized || _clientWrapper.UnderlyingClient == null)
+        if (!_isInitialized || _subscription == null || _clientWrapper.Session == null)
         {
-            _logger.Error("Subscription manager not initialized");
+            _logger.Error("Subscription not initialized");
             return null;
         }
 
         lock (_lock)
         {
             // Check if already monitoring this node
-            if (_monitoredItems.Values.Any(m => m.NodeId.Equals(nodeId)))
+            if (_monitoredItems.Values.Any(m => m.NodeId.EqualsNodeId(nodeId)))
             {
                 _logger.Warning($"Node {displayName} is already being monitored");
                 return null;
@@ -94,10 +106,35 @@ public class SubscriptionManager : IDisposable
         {
             var clientHandle = _nextClientHandle++;
 
+            // Create OPC UA monitored item
+            var monitoredItem = new MonitoredItem(_subscription.DefaultItem)
+            {
+                DisplayName = displayName,
+                StartNodeId = nodeId,
+                AttributeId = Attributes.Value,
+                SamplingInterval = 500,
+                QueueSize = 10,
+                DiscardOldest = true
+            };
+
+            monitoredItem.Notification += MonitoredItem_Notification;
+
+            // Add to subscription
+            _subscription.AddItem(monitoredItem);
+            _subscription.ApplyChanges();
+
+            if (ServiceResult.IsBad(monitoredItem.Status.Error))
+            {
+                _logger.Error($"Failed to create monitored item for {displayName}: {monitoredItem.Status.Error}");
+                _subscription.RemoveItem(monitoredItem);
+                return null;
+            }
+
+            // Create our model item
             var item = new MonitoredNode
             {
                 ClientHandle = clientHandle,
-                MonitoredItemId = clientHandle, // Use clientHandle as ID for polling approach
+                MonitoredItemId = monitoredItem.ClientHandle,
                 NodeId = nodeId,
                 DisplayName = displayName,
                 Value = "(pending)",
@@ -107,6 +144,7 @@ public class SubscriptionManager : IDisposable
             lock (_lock)
             {
                 _monitoredItems[clientHandle] = item;
+                _opcMonitoredItems[clientHandle] = monitoredItem;
             }
 
             _logger.Info($"Subscribed to {displayName}");
@@ -124,6 +162,38 @@ public class SubscriptionManager : IDisposable
         }
     }
 
+    private void MonitoredItem_Notification(MonitoredItem monitoredItem, MonitoredItemNotificationEventArgs e)
+    {
+        try
+        {
+            if (e.NotificationValue is MonitoredItemNotification notification)
+            {
+                // Find our item by the OPC monitored item's client handle
+                MonitoredNode? item = null;
+                lock (_lock)
+                {
+                    foreach (var kvp in _opcMonitoredItems)
+                    {
+                        if (kvp.Value.ClientHandle == monitoredItem.ClientHandle)
+                        {
+                            _monitoredItems.TryGetValue(kvp.Key, out item);
+                            break;
+                        }
+                    }
+                }
+
+                if (item != null)
+                {
+                    ProcessValueChange(item, notification.Value);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Error processing notification: {ex.Message}");
+        }
+    }
+
     private void ReadInitialValue(MonitoredNode item)
     {
         try
@@ -133,7 +203,7 @@ public class SubscriptionManager : IDisposable
             {
                 item.Value = FormatValue(value.Value);
                 item.Timestamp = value.SourceTimestamp;
-                item.StatusCode = value.StatusCode.HasValue ? (uint)value.StatusCode.Value : 0;
+                item.StatusCode = (uint)value.StatusCode.Code;
                 ValueChanged?.Invoke(item);
             }
         }
@@ -146,12 +216,30 @@ public class SubscriptionManager : IDisposable
     public bool RemoveNode(uint clientHandle)
     {
         MonitoredNode? item;
+        MonitoredItem? opcItem;
+
         lock (_lock)
         {
             if (!_monitoredItems.TryGetValue(clientHandle, out item))
                 return false;
 
+            _opcMonitoredItems.TryGetValue(clientHandle, out opcItem);
             _monitoredItems.Remove(clientHandle);
+            _opcMonitoredItems.Remove(clientHandle);
+        }
+
+        if (opcItem != null && _subscription != null)
+        {
+            try
+            {
+                opcItem.Notification -= MonitoredItem_Notification;
+                _subscription.RemoveItem(opcItem);
+                _subscription.ApplyChanges();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Error removing monitored item: {ex.Message}");
+            }
         }
 
         _logger.Info($"Unsubscribed from {item.DisplayName}");
@@ -164,7 +252,7 @@ public class SubscriptionManager : IDisposable
         MonitoredNode? item;
         lock (_lock)
         {
-            item = _monitoredItems.Values.FirstOrDefault(m => m.NodeId.Equals(nodeId));
+            item = _monitoredItems.Values.FirstOrDefault(m => m.NodeId.EqualsNodeId(nodeId));
         }
 
         if (item != null)
@@ -174,67 +262,6 @@ public class SubscriptionManager : IDisposable
         return false;
     }
 
-    private void StartPollingLoop()
-    {
-        _pollCts = new CancellationTokenSource();
-        _pollTask = Task.Run(async () => await PollingLoopAsync(_pollCts.Token));
-    }
-
-    private async Task PollingLoopAsync(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try
-            {
-                if (_clientWrapper.IsConnected && _clientWrapper.UnderlyingClient != null)
-                {
-                    PollValues();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Warning($"Polling error: {ex.Message}");
-            }
-
-            try
-            {
-                await Task.Delay(_pollingInterval, ct);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-        }
-    }
-
-    private void PollValues()
-    {
-        List<MonitoredNode> itemsToRead;
-        lock (_lock)
-        {
-            itemsToRead = _monitoredItems.Values.ToList();
-        }
-
-        if (itemsToRead.Count == 0)
-            return;
-
-        foreach (var item in itemsToRead)
-        {
-            try
-            {
-                var value = _clientWrapper.ReadValue(item.NodeId);
-                if (value != null)
-                {
-                    ProcessValueChange(item, value);
-                }
-            }
-            catch
-            {
-                // Ignore individual read errors
-            }
-        }
-    }
-
     private void ProcessValueChange(MonitoredNode item, DataValue dataValue)
     {
         var oldValue = item.Value;
@@ -242,13 +269,15 @@ public class SubscriptionManager : IDisposable
 
         item.Value = newValue;
         item.Timestamp = dataValue.SourceTimestamp;
-        item.StatusCode = dataValue.StatusCode.HasValue ? (uint)dataValue.StatusCode.Value : 0;
+        item.StatusCode = (uint)dataValue.StatusCode.Code;
 
         if (oldValue != newValue)
         {
             item.LastChangeTime = DateTime.Now;
-            ValueChanged?.Invoke(item);
         }
+
+        // Always notify on subscription updates
+        ValueChanged?.Invoke(item);
     }
 
     private static string FormatValue(object? value)
@@ -275,15 +304,30 @@ public class SubscriptionManager : IDisposable
 
     public void Dispose()
     {
-        _pollCts?.Cancel();
-
-        try
+        if (_subscription != null && _clientWrapper.Session != null)
         {
-            _pollTask?.Wait(1000);
+            try
+            {
+                _clientWrapper.Session.RemoveSubscription(_subscription);
+                _subscription.Dispose();
+            }
+            catch { }
         }
-        catch { }
 
+        _subscription = null;
         _isInitialized = false;
         _monitoredItems.Clear();
+        _opcMonitoredItems.Clear();
+    }
+}
+
+// Extension method for NodeId comparison
+public static class NodeIdExtensions
+{
+    public static bool EqualsNodeId(this NodeId nodeId, NodeId other)
+    {
+        if (nodeId == null && other == null) return true;
+        if (nodeId == null || other == null) return false;
+        return nodeId.Equals(other);
     }
 }

@@ -99,7 +99,7 @@ public class AddressSpaceView : FrameView
         if (e == Key.Enter || e == Key.Space)
         {
             var selected = _treeView.SelectedObject;
-            if (selected != null && selected.NodeClass == LibUA.Core.NodeClass.Variable)
+            if (selected != null && selected.NodeClass == Opc.Ua.NodeClass.Variable)
             {
                 NodeSubscribeRequested?.Invoke(selected);
                 e.Handled = true;
@@ -114,7 +114,7 @@ public class AddressSpaceView : FrameView
 
     private void HandleObjectActivated(object? sender, ObjectActivatedEventArgs<BrowsedNode> e)
     {
-        if (e.ActivatedObject != null && e.ActivatedObject.NodeClass == LibUA.Core.NodeClass.Variable)
+        if (e.ActivatedObject != null && e.ActivatedObject.NodeClass == Opc.Ua.NodeClass.Variable)
         {
             NodeSubscribeRequested?.Invoke(e.ActivatedObject);
         }

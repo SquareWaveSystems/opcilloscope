@@ -259,7 +259,7 @@ public class MainWindow : Toplevel
             return;
         }
 
-        if (node.NodeClass != LibUA.Core.NodeClass.Variable)
+        if (node.NodeClass != Opc.Ua.NodeClass.Variable)
         {
             _logger.Warning($"Cannot subscribe to {node.NodeClass} nodes, only Variables");
             return;

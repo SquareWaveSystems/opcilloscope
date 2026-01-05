@@ -1,4 +1,4 @@
-using LibUA.Core;
+using Opc.Ua;
 
 namespace OpcScope.OpcUa.Models;
 
@@ -7,7 +7,7 @@ namespace OpcScope.OpcUa.Models;
 /// </summary>
 public class BrowsedNode
 {
-    public NodeId NodeId { get; init; } = NodeId.Zero;
+    public NodeId NodeId { get; init; } = ObjectIds.RootFolder;
     public string BrowseName { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public NodeClass NodeClass { get; init; } = NodeClass.Unspecified;
