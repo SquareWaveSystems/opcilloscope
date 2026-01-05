@@ -1,7 +1,7 @@
 # OpcScope Project Guide
 
 ## Overview
-OpcScope is a terminal-based OPC UA client/monitor application built with .NET 10, Terminal.Gui v2, and OPC Foundation Client SDK (`OPCFoundation.NetStandard.Opc.Ua.Client`).
+OpcScope is a terminal-based OPC UA client/monitor application built with .NET 8, Terminal.Gui v2, and OPC Foundation Client SDK (`OPCFoundation.NetStandard.Opc.Ua.Client`).
 
 ## Build & Run
 
