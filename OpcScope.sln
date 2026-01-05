@@ -1,0 +1,35 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpcScope", "OpcScope.csproj", "{4E2A8F99-A9A5-3CCC-02A4-8A18F90CE74A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpcScope.Tests", "tests\OpcScope.Tests\OpcScope.Tests.csproj", "{CCFD0A5B-8983-5414-07B9-728A32ED6185}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4E2A8F99-A9A5-3CCC-02A4-8A18F90CE74A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4E2A8F99-A9A5-3CCC-02A4-8A18F90CE74A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4E2A8F99-A9A5-3CCC-02A4-8A18F90CE74A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4E2A8F99-A9A5-3CCC-02A4-8A18F90CE74A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CCFD0A5B-8983-5414-07B9-728A32ED6185}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CCFD0A5B-8983-5414-07B9-728A32ED6185}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CCFD0A5B-8983-5414-07B9-728A32ED6185}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CCFD0A5B-8983-5414-07B9-728A32ED6185}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{CCFD0A5B-8983-5414-07B9-728A32ED6185} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {2B89358B-67FF-4D9C-8329-CBFF96D7B770}
+	EndGlobalSection
+EndGlobal
