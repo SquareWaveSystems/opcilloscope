@@ -1,4 +1,3 @@
-using LibUA;
 using LibUA.Core;
 using OpcScope.OpcUa.Models;
 using OpcScope.Utilities;
@@ -6,18 +5,18 @@ using OpcScope.Utilities;
 namespace OpcScope.OpcUa;
 
 /// <summary>
-/// Manages OPC UA subscriptions and monitored items with publish loop.
+/// Manages monitored items with polling-based value updates.
+/// Uses polling instead of OPC UA subscriptions for LibUA compatibility.
 /// </summary>
 public class SubscriptionManager : IDisposable
 {
     private readonly OpcUaClientWrapper _clientWrapper;
     private readonly Logger _logger;
-    private uint _subscriptionId;
     private readonly Dictionary<uint, MonitoredNode> _monitoredItems = new();
     private uint _nextClientHandle = 1;
-    private CancellationTokenSource? _publishCts;
-    private Task? _publishTask;
-    private int _publishingInterval = 1000;
+    private CancellationTokenSource? _pollCts;
+    private Task? _pollTask;
+    private int _pollingInterval = 1000;
     private bool _isInitialized;
     private readonly object _lock = new();
 
@@ -27,8 +26,8 @@ public class SubscriptionManager : IDisposable
 
     public int PublishingInterval
     {
-        get => _publishingInterval;
-        set => _publishingInterval = Math.Max(100, Math.Min(10000, value));
+        get => _pollingInterval;
+        set => _pollingInterval = Math.Max(100, Math.Min(10000, value));
     }
 
     public IReadOnlyCollection<MonitoredNode> MonitoredItems
@@ -58,35 +57,17 @@ public class SubscriptionManager : IDisposable
 
         try
         {
-            var client = _clientWrapper.UnderlyingClient;
-
-            // Create subscription
-            var result = client.CreateSubscription(
-                (double)_publishingInterval,
-                10,     // LifetimeCount
-                3,      // MaxKeepAliveCount
-                1000,   // MaxNotificationsPerPublish
-                true,   // PublishingEnabled
-                0,      // Priority
-                out _subscriptionId
-            );
-
-            if (result != StatusCode.Good)
-            {
-                throw new Exception($"CreateSubscription failed: 0x{result:X8}");
-            }
-
             _isInitialized = true;
-            _logger.Info($"Subscription created (ID: {_subscriptionId}, Interval: {_publishingInterval}ms)");
+            _logger.Info($"Subscription manager initialized (Polling Interval: {_pollingInterval}ms)");
 
-            // Start publish loop
-            StartPublishLoop();
+            // Start polling loop
+            StartPollingLoop();
 
             return true;
         }
         catch (Exception ex)
         {
-            _logger.Error($"Failed to create subscription: {ex.Message}");
+            _logger.Error($"Failed to initialize subscription manager: {ex.Message}");
             return false;
         }
     }
@@ -95,7 +76,7 @@ public class SubscriptionManager : IDisposable
     {
         if (!_isInitialized || _clientWrapper.UnderlyingClient == null)
         {
-            _logger.Error("Subscription not initialized");
+            _logger.Error("Subscription manager not initialized");
             return null;
         }
 
@@ -112,59 +93,29 @@ public class SubscriptionManager : IDisposable
         try
         {
             var clientHandle = _nextClientHandle++;
-            var client = _clientWrapper.UnderlyingClient;
 
-            client.CreateMonitoredItems(
-                _subscriptionId,
-                TimestampsToReturn.Both,
-                new[]
-                {
-                    new MonitoredItemCreateRequest(
-                        new ReadValueId(nodeId, NodeAttribute.Value, null, new QualifiedName(0, null)),
-                        MonitoringMode.Reporting,
-                        new MonitoringParameters(
-                            clientHandle,
-                            500,    // SamplingInterval
-                            null,   // Filter
-                            100,    // QueueSize
-                            true    // DiscardOldest
-                        )
-                    )
-                },
-                out var results
-            );
-
-            if (results != null && results.Length > 0 && results[0].StatusCode == StatusCode.Good)
+            var item = new MonitoredNode
             {
-                var item = new MonitoredNode
-                {
-                    ClientHandle = clientHandle,
-                    MonitoredItemId = results[0].MonitoredItemId,
-                    NodeId = nodeId,
-                    DisplayName = displayName,
-                    Value = "(pending)",
-                    StatusCode = StatusCode.Good
-                };
+                ClientHandle = clientHandle,
+                MonitoredItemId = clientHandle, // Use clientHandle as ID for polling approach
+                NodeId = nodeId,
+                DisplayName = displayName,
+                Value = "(pending)",
+                StatusCode = 0 // Good
+            };
 
-                lock (_lock)
-                {
-                    _monitoredItems[clientHandle] = item;
-                }
-
-                _logger.Info($"Subscribed to {displayName}");
-                ItemAdded?.Invoke(item);
-
-                // Read initial value
-                ReadInitialValue(item);
-
-                return item;
-            }
-            else
+            lock (_lock)
             {
-                var statusCode = results?.FirstOrDefault()?.StatusCode ?? StatusCode.Bad;
-                _logger.Error($"Failed to create monitored item for {displayName}: 0x{statusCode:X8}");
-                return null;
+                _monitoredItems[clientHandle] = item;
             }
+
+            _logger.Info($"Subscribed to {displayName}");
+            ItemAdded?.Invoke(item);
+
+            // Read initial value
+            ReadInitialValue(item);
+
+            return item;
         }
         catch (Exception ex)
         {
@@ -182,7 +133,8 @@ public class SubscriptionManager : IDisposable
             {
                 item.Value = FormatValue(value.Value);
                 item.Timestamp = value.SourceTimestamp;
-                item.StatusCode = value.StatusCode;
+                item.StatusCode = value.StatusCode.HasValue ? (uint)value.StatusCode.Value : 0;
+                ValueChanged?.Invoke(item);
             }
         }
         catch (Exception ex)
@@ -193,40 +145,18 @@ public class SubscriptionManager : IDisposable
 
     public bool RemoveNode(uint clientHandle)
     {
-        if (!_isInitialized || _clientWrapper.UnderlyingClient == null)
-            return false;
-
         MonitoredNode? item;
         lock (_lock)
         {
             if (!_monitoredItems.TryGetValue(clientHandle, out item))
                 return false;
+
+            _monitoredItems.Remove(clientHandle);
         }
 
-        try
-        {
-            var client = _clientWrapper.UnderlyingClient;
-
-            client.DeleteMonitoredItems(
-                _subscriptionId,
-                new[] { item.MonitoredItemId },
-                out _
-            );
-
-            lock (_lock)
-            {
-                _monitoredItems.Remove(clientHandle);
-            }
-
-            _logger.Info($"Unsubscribed from {item.DisplayName}");
-            ItemRemoved?.Invoke(clientHandle);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"Failed to remove monitored item: {ex.Message}");
-            return false;
-        }
+        _logger.Info($"Unsubscribed from {item.DisplayName}");
+        ItemRemoved?.Invoke(clientHandle);
+        return true;
     }
 
     public bool RemoveNodeByNodeId(NodeId nodeId)
@@ -244,13 +174,13 @@ public class SubscriptionManager : IDisposable
         return false;
     }
 
-    private void StartPublishLoop()
+    private void StartPollingLoop()
     {
-        _publishCts = new CancellationTokenSource();
-        _publishTask = Task.Run(async () => await PublishLoopAsync(_publishCts.Token));
+        _pollCts = new CancellationTokenSource();
+        _pollTask = Task.Run(async () => await PollingLoopAsync(_pollCts.Token));
     }
 
-    private async Task PublishLoopAsync(CancellationToken ct)
+    private async Task PollingLoopAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -258,17 +188,17 @@ public class SubscriptionManager : IDisposable
             {
                 if (_clientWrapper.IsConnected && _clientWrapper.UnderlyingClient != null)
                 {
-                    Poll();
+                    PollValues();
                 }
             }
             catch (Exception ex)
             {
-                _logger.Warning($"Publish error: {ex.Message}");
+                _logger.Warning($"Polling error: {ex.Message}");
             }
 
             try
             {
-                await Task.Delay(100, ct); // Poll every 100ms
+                await Task.Delay(_pollingInterval, ct);
             }
             catch (OperationCanceledException)
             {
@@ -277,61 +207,48 @@ public class SubscriptionManager : IDisposable
         }
     }
 
-    private void Poll()
+    private void PollValues()
     {
-        var client = _clientWrapper.UnderlyingClient;
-        if (client == null) return;
-
-        try
+        List<MonitoredNode> itemsToRead;
+        lock (_lock)
         {
-            client.Publish(
-                new[] { _subscriptionId },
-                out var statusCode,
-                out var results,
-                out var diagnosticInfos,
-                out var acknowledgeResults
-            );
+            itemsToRead = _monitoredItems.Values.ToList();
+        }
 
-            if (results != null)
+        if (itemsToRead.Count == 0)
+            return;
+
+        foreach (var item in itemsToRead)
+        {
+            try
             {
-                foreach (var notification in results)
+                var value = _clientWrapper.ReadValue(item.NodeId);
+                if (value != null)
                 {
-                    if (notification is DataChangeNotification dcn && dcn.MonitoredItems != null)
-                    {
-                        foreach (var monitoredItem in dcn.MonitoredItems)
-                        {
-                            ProcessValueChange(monitoredItem.ClientHandle, monitoredItem.Value);
-                        }
-                    }
+                    ProcessValueChange(item, value);
                 }
             }
-        }
-        catch
-        {
-            // Ignore poll errors - may be disconnecting
+            catch
+            {
+                // Ignore individual read errors
+            }
         }
     }
 
-    private void ProcessValueChange(uint clientHandle, DataValue dataValue)
+    private void ProcessValueChange(MonitoredNode item, DataValue dataValue)
     {
-        MonitoredNode? item;
-        lock (_lock)
-        {
-            if (!_monitoredItems.TryGetValue(clientHandle, out item))
-                return;
-        }
-
         var oldValue = item.Value;
-        item.Value = FormatValue(dataValue.Value);
-        item.Timestamp = dataValue.SourceTimestamp;
-        item.StatusCode = dataValue.StatusCode;
+        var newValue = FormatValue(dataValue.Value);
 
-        if (oldValue != item.Value)
+        item.Value = newValue;
+        item.Timestamp = dataValue.SourceTimestamp;
+        item.StatusCode = dataValue.StatusCode.HasValue ? (uint)dataValue.StatusCode.Value : 0;
+
+        if (oldValue != newValue)
         {
             item.LastChangeTime = DateTime.Now;
+            ValueChanged?.Invoke(item);
         }
-
-        ValueChanged?.Invoke(item);
     }
 
     private static string FormatValue(object? value)
@@ -358,25 +275,13 @@ public class SubscriptionManager : IDisposable
 
     public void Dispose()
     {
-        _publishCts?.Cancel();
+        _pollCts?.Cancel();
 
         try
         {
-            _publishTask?.Wait(1000);
+            _pollTask?.Wait(1000);
         }
         catch { }
-
-        if (_isInitialized && _clientWrapper.IsConnected && _clientWrapper.UnderlyingClient != null)
-        {
-            try
-            {
-                _clientWrapper.UnderlyingClient.DeleteSubscriptions(
-                    new[] { _subscriptionId },
-                    out _
-                );
-            }
-            catch { }
-        }
 
         _isInitialized = false;
         _monitoredItems.Clear();

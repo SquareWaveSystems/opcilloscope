@@ -39,11 +39,7 @@ public class SettingsDialog : Dialog
         {
             X = 1,
             Y = 4,
-            Text = "Range: 100 - 10000 ms",
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Attribute(Color.Gray, Color.Black)
-            }
+            Text = "Range: 100 - 10000 ms"
         };
 
         var applyButton = new Button
@@ -54,7 +50,7 @@ public class SettingsDialog : Dialog
             IsDefault = true
         };
 
-        applyButton.Accept += (s, e) =>
+        applyButton.Accepting += (s, e) =>
         {
             if (ValidateSettings())
             {
@@ -70,7 +66,7 @@ public class SettingsDialog : Dialog
             Text = "Cancel"
         };
 
-        cancelButton.Accept += (s, e) =>
+        cancelButton.Accepting += (s, e) =>
         {
             _confirmed = false;
             Application.RequestStop();
@@ -83,7 +79,7 @@ public class SettingsDialog : Dialog
 
     private bool ValidateSettings()
     {
-        var text = _publishIntervalField.Text?.ToString()?.Trim() ?? "";
+        var text = _publishIntervalField.Text?.Trim() ?? "";
 
         if (!int.TryParse(text, out var interval))
         {

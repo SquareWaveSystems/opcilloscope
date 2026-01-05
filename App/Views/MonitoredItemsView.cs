@@ -12,7 +12,6 @@ public class MonitoredItemsView : FrameView
     private readonly TableView _tableView;
     private readonly DataTable _dataTable;
     private readonly Dictionary<uint, DataRow> _rowsByHandle = new();
-    private string _filterText = string.Empty;
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
 
@@ -76,7 +75,7 @@ public class MonitoredItemsView : FrameView
         _dataTable.Rows.Add(row);
         _rowsByHandle[item.ClientHandle] = row;
 
-        _tableView.SetNeedsDisplay();
+        _tableView.Update();
     }
 
     public void UpdateItem(MonitoredNode item)
@@ -88,7 +87,7 @@ public class MonitoredItemsView : FrameView
         row["Time"] = item.TimestampString;
         row["Status"] = item.StatusString;
 
-        _tableView.SetNeedsDisplay();
+        _tableView.Update();
     }
 
     public void RemoveItem(uint clientHandle)
@@ -99,21 +98,14 @@ public class MonitoredItemsView : FrameView
         _dataTable.Rows.Remove(row);
         _rowsByHandle.Remove(clientHandle);
 
-        _tableView.SetNeedsDisplay();
+        _tableView.Update();
     }
 
     public void Clear()
     {
         _dataTable.Rows.Clear();
         _rowsByHandle.Clear();
-        _tableView.SetNeedsDisplay();
-    }
-
-    public void SetFilter(string filter)
-    {
-        _filterText = filter;
-        // For now, filtering is not implemented - could use DataView
-        _tableView.SetNeedsDisplay();
+        _tableView.Update();
     }
 
     private void HandleKeyDown(object? sender, Key e)
@@ -127,10 +119,5 @@ public class MonitoredItemsView : FrameView
                 e.Handled = true;
             }
         }
-    }
-
-    public void RefreshDisplay()
-    {
-        _tableView.SetNeedsDisplay();
     }
 }

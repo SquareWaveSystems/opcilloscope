@@ -10,7 +10,7 @@ public class ConnectDialog : Dialog
     private readonly TextField _endpointField;
     private bool _confirmed;
 
-    public string EndpointUrl => _endpointField.Text?.ToString() ?? string.Empty;
+    public string EndpointUrl => _endpointField.Text ?? string.Empty;
     public bool Confirmed => _confirmed;
 
     public ConnectDialog(string? lastEndpoint = null)
@@ -38,11 +38,7 @@ public class ConnectDialog : Dialog
         {
             X = 1,
             Y = 4,
-            Text = "Example: opc.tcp://192.168.1.50:4840",
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Attribute(Color.Gray, Color.Black)
-            }
+            Text = "Example: opc.tcp://192.168.1.50:4840"
         };
 
         var connectButton = new Button
@@ -53,7 +49,7 @@ public class ConnectDialog : Dialog
             IsDefault = true
         };
 
-        connectButton.Accept += (s, e) =>
+        connectButton.Accepting += (s, e) =>
         {
             if (ValidateEndpoint())
             {
@@ -69,7 +65,7 @@ public class ConnectDialog : Dialog
             Text = "Cancel"
         };
 
-        cancelButton.Accept += (s, e) =>
+        cancelButton.Accepting += (s, e) =>
         {
             _confirmed = false;
             Application.RequestStop();

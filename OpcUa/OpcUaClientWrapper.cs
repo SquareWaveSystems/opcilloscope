@@ -14,8 +14,9 @@ public class OpcUaClientWrapper : IDisposable
     private string? _currentEndpoint;
     private CancellationTokenSource? _reconnectCts;
     private bool _disposed;
+    private bool _isConnected;
 
-    public bool IsConnected => _client?.SessionID != null;
+    public bool IsConnected => _isConnected && _client != null;
     public string? CurrentEndpoint => _currentEndpoint;
     public Client? UnderlyingClient => _client;
 
@@ -54,7 +55,7 @@ public class OpcUaClientWrapper : IDisposable
             var connectResult = await Task.Run(() => _client.Connect());
             if (connectResult != StatusCode.Good)
             {
-                throw new Exception($"Connect failed: 0x{connectResult:X8}");
+                throw new Exception($"Connect failed: 0x{(uint)connectResult:X8}");
             }
 
             // Open secure channel (anonymous/none)
@@ -65,7 +66,7 @@ public class OpcUaClientWrapper : IDisposable
             ));
             if (openResult != StatusCode.Good)
             {
-                throw new Exception($"OpenSecureChannel failed: 0x{openResult:X8}");
+                throw new Exception($"OpenSecureChannel failed: 0x{(uint)openResult:X8}");
             }
 
             // Create session
@@ -76,7 +77,7 @@ public class OpcUaClientWrapper : IDisposable
             ));
             if (createResult != StatusCode.Good)
             {
-                throw new Exception($"CreateSession failed: 0x{createResult:X8}");
+                throw new Exception($"CreateSession failed: 0x{(uint)createResult:X8}");
             }
 
             // Activate session with anonymous identity
@@ -86,9 +87,10 @@ public class OpcUaClientWrapper : IDisposable
             ));
             if (activateResult != StatusCode.Good)
             {
-                throw new Exception($"ActivateSession failed: 0x{activateResult:X8}");
+                throw new Exception($"ActivateSession failed: 0x{(uint)activateResult:X8}");
             }
 
+            _isConnected = true;
             _currentEndpoint = endpointUrl;
             _logger.Info($"Connected to {endpointUrl}");
             Connected?.Invoke();
@@ -107,6 +109,7 @@ public class OpcUaClientWrapper : IDisposable
     {
         _reconnectCts?.Cancel();
         _reconnectCts = null;
+        _isConnected = false;
 
         if (_client != null)
         {
@@ -165,8 +168,6 @@ public class OpcUaClientWrapper : IDisposable
         if (_client == null)
             throw new InvalidOperationException("Not connected");
 
-        var results = Array.Empty<BrowseResult>();
-
         _client.Browse(
             new[]
             {
@@ -180,7 +181,7 @@ public class OpcUaClientWrapper : IDisposable
                 )
             },
             10000,
-            out results
+            out var results
         );
 
         if (results != null && results.Length > 0 && results[0].Refs != null)
@@ -221,7 +222,7 @@ public class OpcUaClientWrapper : IDisposable
         return results ?? Array.Empty<DataValue>();
     }
 
-    public uint WriteValue(NodeId nodeId, object value, NodeId dataType)
+    public StatusCode WriteValue(NodeId nodeId, object value, NodeId dataType)
     {
         if (_client == null)
             throw new InvalidOperationException("Not connected");
@@ -239,7 +240,11 @@ public class OpcUaClientWrapper : IDisposable
             out var results
         );
 
-        return results?.FirstOrDefault() ?? StatusCode.Bad;
+        if (results != null && results.Length > 0)
+        {
+            return (StatusCode)results[0];
+        }
+        return StatusCode.BadUnexpectedError;
     }
 
     public void Dispose()

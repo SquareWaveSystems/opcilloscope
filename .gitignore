@@ -1,7 +1,6 @@
-# .NET build outputs
+# Build outputs
 bin/
 obj/
-out/
 
 # IDE
 .vs/
@@ -9,18 +8,19 @@ out/
 *.user
 *.suo
 
-# Build results
-*.dll
-*.exe
-*.pdb
-
-# NuGet
-packages/
-*.nupkg
-
 # OS files
 .DS_Store
 Thumbs.db
+
+# NuGet packages (keep local packages)
+!packages/
+*.nupkg
+
+# Test results
+TestResults/
+
+# Node modules (test server)
+test-server/node_modules/
 
 # Logs
 *.log

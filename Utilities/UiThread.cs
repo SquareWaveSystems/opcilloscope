@@ -12,10 +12,7 @@ public static class UiThread
     /// </summary>
     public static void Run(Action action)
     {
-        if (Application.MainLoop != null)
-        {
-            Application.Invoke(action);
-        }
+        Application.Invoke(action);
     }
 
     /// <summary>
@@ -23,13 +20,10 @@ public static class UiThread
     /// </summary>
     public static void RunDelayed(Action action, TimeSpan delay)
     {
-        if (Application.MainLoop != null)
+        Application.AddTimeout(delay, () =>
         {
-            Application.AddTimeout(delay, () =>
-            {
-                action();
-                return false; // Don't repeat
-            });
-        }
+            action();
+            return false; // Don't repeat
+        });
     }
 }

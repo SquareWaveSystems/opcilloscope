@@ -1,5 +1,4 @@
 using Terminal.Gui;
-using LibUA.Core;
 
 namespace OpcScope.App.Dialogs;
 
@@ -67,7 +66,7 @@ public class WriteValueDialog : Dialog
             IsDefault = true
         };
 
-        writeButton.Accept += (s, e) =>
+        writeButton.Accepting += (s, e) =>
         {
             if (ValidateAndParse())
             {
@@ -92,7 +91,7 @@ public class WriteValueDialog : Dialog
             Text = "Cancel"
         };
 
-        cancelButton.Accept += (s, e) =>
+        cancelButton.Accepting += (s, e) =>
         {
             _confirmed = false;
             Application.RequestStop();
@@ -105,7 +104,7 @@ public class WriteValueDialog : Dialog
 
     private bool ValidateAndParse()
     {
-        var text = _valueField.Text?.ToString()?.Trim() ?? "";
+        var text = _valueField.Text?.Trim() ?? "";
 
         try
         {

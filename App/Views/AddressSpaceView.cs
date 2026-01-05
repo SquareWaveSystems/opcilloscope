@@ -1,7 +1,6 @@
 using Terminal.Gui;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
-using OpcScope.Utilities;
 
 namespace OpcScope.App.Views;
 
@@ -64,14 +63,12 @@ public class AddressSpaceView : FrameView
         _treeView.ClearObjects();
         _treeView.AddObject(_rootNode);
         _treeView.Expand(_rootNode);
-        _treeView.SetNeedsDisplay();
     }
 
     public void Clear()
     {
         _treeView.ClearObjects();
         _rootNode = null;
-        _treeView.SetNeedsDisplay();
     }
 
     private IEnumerable<BrowsedNode> GetChildrenForNode(BrowsedNode node)

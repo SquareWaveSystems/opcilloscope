@@ -73,15 +73,35 @@ public class NodeBrowser
 
             foreach (var r in refs)
             {
-                var targetNodeId = r.TargetId.NodeId;
+                // TargetId is an ExpandedNodeId - convert to NodeId
+                NodeId targetNodeId;
+                if (r.TargetId.NumericIdentifier != 0)
+                {
+                    targetNodeId = new NodeId(r.TargetId.NamespaceIndex, r.TargetId.NumericIdentifier);
+                }
+                else if (!string.IsNullOrEmpty(r.TargetId.StringIdentifier))
+                {
+                    targetNodeId = new NodeId(r.TargetId.NamespaceIndex, r.TargetId.StringIdentifier);
+                }
+                else
+                {
+                    targetNodeId = new NodeId(r.TargetId.NamespaceIndex, (uint)0);
+                }
+
+                // Get TypeDefinition NodeId
+                NodeId? typeDefNodeId = null;
+                if (r.TypeDefinition.NumericIdentifier != 0)
+                {
+                    typeDefNodeId = new NodeId(r.TypeDefinition.NamespaceIndex, r.TypeDefinition.NumericIdentifier);
+                }
 
                 var child = new BrowsedNode
                 {
                     NodeId = targetNodeId,
-                    BrowseName = r.BrowseName?.Name ?? string.Empty,
-                    DisplayName = r.DisplayName?.Text ?? r.BrowseName?.Name ?? "Unknown",
+                    BrowseName = r.BrowseName.Name ?? string.Empty,
+                    DisplayName = r.DisplayName.Text ?? r.BrowseName.Name ?? "Unknown",
                     NodeClass = r.NodeClass,
-                    DataType = r.TypeDefinition?.NodeId,
+                    DataType = typeDefNodeId,
                     Parent = parent
                 };
 
@@ -137,7 +157,7 @@ public class NodeBrowser
                 string? name = null;
 
                 // Check built-in types first
-                if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == NodeIdType.Numeric)
+                if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == NodeIdNetType.Numeric)
                 {
                     var id = (uint)(dataTypeId.NumericIdentifier);
                     if (BuiltInDataTypes.TryGetValue(id, out var builtIn))
@@ -209,7 +229,7 @@ public class NodeBrowser
 
     private string? GetDataTypeNameById(NodeId dataTypeId)
     {
-        if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == NodeIdType.Numeric)
+        if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == NodeIdNetType.Numeric)
         {
             var id = (uint)(dataTypeId.NumericIdentifier);
             if (BuiltInDataTypes.TryGetValue(id, out var name))

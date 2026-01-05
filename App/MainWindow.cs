@@ -23,7 +23,6 @@ public class MainWindow : Toplevel
     private readonly NodeDetailsView _nodeDetailsView;
     private readonly LogView _logView;
     private readonly StatusBar _statusBar;
-    private readonly Label _connectionStatusLabel;
 
     private string? _lastEndpoint;
 
@@ -63,7 +62,7 @@ public class MainWindow : Toplevel
             X = 0,
             Y = Pos.Bottom(_addressSpaceView),
             Width = Dim.Fill(),
-            Height = Dim.Sized(5)
+            Height = 5
         };
 
         _logView = new LogView
@@ -74,25 +73,16 @@ public class MainWindow : Toplevel
             Height = Dim.Fill(1)
         };
 
-        // Create status bar with connection indicator
-        _connectionStatusLabel = new Label
-        {
-            Text = " [Disconnected]"
-        };
-
+        // Create status bar with shortcuts
         _statusBar = new StatusBar
         {
             Visible = true
         };
-
-        _statusBar.Items = new StatusItem[]
-        {
-            new StatusItem(Key.F1, "~F1~ Help", ShowHelp),
-            new StatusItem(Key.F5, "~F5~ Refresh", RefreshTree),
-            new StatusItem(Key.Enter, "~Enter~ Subscribe", SubscribeSelected),
-            new StatusItem(Key.Delete, "~Del~ Unsubscribe", UnsubscribeSelected),
-            new StatusItem(Key.F10, "~F10~ Menu", () => _menuBar.OpenMenu())
-        };
+        _statusBar.Add(new Shortcut(Key.F1, "Help", ShowHelp));
+        _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
+        _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
+        _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
+        _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
         // Wire up view events
         _addressSpaceView.NodeSelected += OnNodeSelected;
@@ -120,29 +110,28 @@ public class MainWindow : Toplevel
     {
         return new MenuBar
         {
-            Menus = new[]
+            Menus = new MenuBarItem[]
             {
-                new MenuBarItem("_File", new[]
+                new MenuBarItem("_File", new MenuItem[]
                 {
-                    new MenuItem("_Export to CSV...", "", ExportToCsv, null, null, Key.CtrlMask | Key.E),
-                    null, // separator
-                    new MenuItem("E_xit", "", () => RequestStop(), null, null, Key.CtrlMask | Key.Q)
+                    new MenuItem("_Export to CSV...", "", ExportToCsv),
+                    new MenuItem("E_xit", "", () => RequestStop())
                 }),
-                new MenuBarItem("_Connection", new[]
+                new MenuBarItem("_Connection", new MenuItem[]
                 {
-                    new MenuItem("_Connect...", "", ShowConnectDialog, null, null, Key.CtrlMask | Key.O),
+                    new MenuItem("_Connect...", "", ShowConnectDialog),
                     new MenuItem("_Disconnect", "", Disconnect),
                     new MenuItem("_Reconnect", "", () => _ = ReconnectAsync())
                 }),
-                new MenuBarItem("_View", new[]
+                new MenuBarItem("_View", new MenuItem[]
                 {
-                    new MenuItem("_Refresh Tree", "", RefreshTree, null, null, Key.F5),
+                    new MenuItem("_Refresh Tree", "", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     new MenuItem("_Settings...", "", ShowSettings)
                 }),
-                new MenuBarItem("_Help", new[]
+                new MenuBarItem("_Help", new MenuItem[]
                 {
-                    new MenuItem("_Help", "", ShowHelp, null, null, Key.F1),
+                    new MenuItem("_Help", "", ShowHelp),
                     new MenuItem("_About", "", ShowAbout)
                 })
             }
@@ -319,7 +308,7 @@ public class MainWindow : Toplevel
     private void UpdateConnectionStatus(string status)
     {
         Title = $"OpcScope - {status}";
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     private void ShowSettings()
@@ -343,18 +332,18 @@ public class MainWindow : Toplevel
             return;
         }
 
-        var dialog = new SaveDialog("Export to CSV", "Choose export location")
+        var dialog = new SaveDialog
         {
-            FilePath = "opcscope_export.csv"
+            Title = "Export to CSV"
         };
 
         Application.Run(dialog);
 
-        if (!dialog.Canceled && dialog.FilePath != null)
+        if (!dialog.Canceled && dialog.Path != null)
         {
             try
             {
-                var path = dialog.FilePath.ToString();
+                var path = dialog.Path.ToString();
                 using var writer = new StreamWriter(path!);
                 writer.WriteLine("DisplayName,NodeId,Value,Timestamp,Status");
 

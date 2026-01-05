@@ -1,0 +1,15 @@
+{
+  "name": "opcscope-test-server",
+  "version": "1.0.0",
+  "description": "OPC UA test server for OpcScope integration testing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["opcua", "test", "opcscope"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "node-opcua": "^2.159.0"
+  }
+}
