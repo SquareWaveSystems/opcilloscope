@@ -656,66 +656,65 @@ public class TrendPlotView : View
         float range = _visibleMax - _visibleMin;
         if (range <= 0) range = 1;
 
-        // Calculate Y positions for each sample
-        int[] yPositions = new int[sampleCount];
+        // Use sub-cell precision: each cell has 2 vertical "pixels" (upper/lower half)
+        int subPixelHeight = plotHeight * 2;
+
+        // Calculate sub-pixel Y positions for each sample (0 = top, subPixelHeight-1 = bottom)
+        int[] subY = new int[sampleCount];
         for (int i = 0; i < sampleCount; i++)
         {
             float normalized = (samples[i] - _visibleMin) / range;
             normalized = Math.Clamp(normalized, 0, 1);
-            yPositions[i] = TopMargin + (int)((1 - normalized) * (plotHeight - 1));
+            // Invert: high values at top (low subY), low values at bottom (high subY)
+            subY[i] = (int)((1 - normalized) * (subPixelHeight - 1));
         }
 
-        // Draw the continuous waveform trace
-        Driver.SetAttribute(AmberBright);
+        // Draw the waveform with proper line interpolation
         for (int i = 0; i < sampleCount; i++)
         {
             int x = LeftMargin + (plotWidth - sampleCount) + i;
-            if (x < LeftMargin) continue;
+            if (x < LeftMargin || x >= LeftMargin + plotWidth) continue;
 
-            int y = yPositions[i];
+            int y1 = subY[i];
+            int y2 = (i < sampleCount - 1) ? subY[i + 1] : y1;
 
-            // Draw vertical line segment to connect to next point
-            if (i < sampleCount - 1)
+            // Get the sub-pixel range to fill for this column
+            int minSubY = Math.Min(y1, y2);
+            int maxSubY = Math.Max(y1, y2);
+
+            // Convert sub-pixel coords to cell coords and draw
+            int minCell = minSubY / 2;
+            int maxCell = maxSubY / 2;
+
+            for (int cellY = minCell; cellY <= maxCell; cellY++)
             {
-                int nextY = yPositions[i + 1];
-                int minY = Math.Min(y, nextY);
-                int maxY = Math.Max(y, nextY);
+                int screenY = TopMargin + cellY;
+                if (screenY < TopMargin || screenY >= TopMargin + plotHeight) continue;
 
-                // Fill in the vertical span between this point and the next
-                Driver.SetAttribute(AmberNormal);
-                for (int fillY = minY; fillY <= maxY; fillY++)
-                {
-                    Move(x, fillY);
-                    if (fillY == y || fillY == nextY)
-                    {
-                        // Main trace points - use block character for solid line
-                        AddRune((Rune)'█');
-                    }
-                    else
-                    {
-                        // Connecting vertical segment
-                        AddRune((Rune)'▌');
-                    }
-                }
-            }
-            else
-            {
-                // Last point
-                Move(x, y);
-                AddRune((Rune)'█');
-            }
-        }
+                // Determine which halves of this cell are filled
+                int cellTopSubY = cellY * 2;
+                int cellBottomSubY = cellY * 2 + 1;
 
-        // Bright glow effect on most recent points
-        if (sampleCount > 2 && !_isPaused)
-        {
-            Driver.SetAttribute(TraceGlow);
-            int lastX = LeftMargin + plotWidth - 1;
-            int lastY = yPositions[sampleCount - 1];
-            if (lastX >= LeftMargin && lastY >= TopMargin && lastY < TopMargin + plotHeight)
-            {
-                Move(lastX, lastY);
-                AddRune((Rune)'█');
+                bool fillTop = (cellTopSubY >= minSubY && cellTopSubY <= maxSubY);
+                bool fillBottom = (cellBottomSubY >= minSubY && cellBottomSubY <= maxSubY);
+
+                Move(x, screenY);
+
+                // Choose color based on position (brighter near the leading edge)
+                if (i >= sampleCount - 3 && !_isPaused)
+                    Driver.SetAttribute(TraceGlow);
+                else if (i >= sampleCount - 8)
+                    Driver.SetAttribute(AmberBright);
+                else
+                    Driver.SetAttribute(AmberNormal);
+
+                // Select the right block character
+                if (fillTop && fillBottom)
+                    AddRune((Rune)'█');  // Full block
+                else if (fillTop)
+                    AddRune((Rune)'▀');  // Upper half
+                else if (fillBottom)
+                    AddRune((Rune)'▄');  // Lower half
             }
         }
     }
