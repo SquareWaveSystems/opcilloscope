@@ -939,6 +939,7 @@ public class TrendPlotView : View
     {
         if (disposing)
         {
+            ThemeManager.ThemeChanged -= OnThemeChanged;
             StopUpdateTimer();
             UnbindCurrentNode();
         }
