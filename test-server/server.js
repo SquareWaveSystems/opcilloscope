@@ -7,8 +7,7 @@ const {
     OPCUAServer,
     Variant,
     DataType,
-    StatusCodes,
-    nodesets
+    StatusCodes
 } = require("node-opcua");
 
 let running = true;
@@ -38,7 +37,7 @@ async function startServer() {
 
     // Counter variable (increments every second)
     let counterValue = 0;
-    const counterVariable = namespace.addVariable({
+    namespace.addVariable({
         componentOf: simulationFolder,
         browseName: "Counter",
         dataType: "Int32",
@@ -49,7 +48,7 @@ async function startServer() {
 
     // Random value variable (random double)
     let randomValue = Math.random() * 100;
-    const randomVariable = namespace.addVariable({
+    namespace.addVariable({
         componentOf: simulationFolder,
         browseName: "RandomValue",
         dataType: "Double",
@@ -60,7 +59,7 @@ async function startServer() {
 
     // Sine wave variable
     let sineValue = 0;
-    const sineVariable = namespace.addVariable({
+    namespace.addVariable({
         componentOf: simulationFolder,
         browseName: "SineWave",
         dataType: "Double",

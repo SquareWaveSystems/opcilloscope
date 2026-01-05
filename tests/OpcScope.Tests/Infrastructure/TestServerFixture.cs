@@ -32,13 +32,18 @@ public class TestServerFixture : IAsyncLifetime
     /// </summary>
     public bool IsRunning => _server?.IsRunning ?? false;
 
-    public async Task InitializeAsync()
+    private static int AllocatePort()
     {
         // Allocate a unique port to avoid conflicts when running tests in parallel
         lock (_portLock)
         {
-            _port = _nextPort++;
+            return _nextPort++;
         }
+    }
+
+    public async Task InitializeAsync()
+    {
+        _port = AllocatePort();
 
         _server = new TestServer();
         await _server.StartAsync(_port);
