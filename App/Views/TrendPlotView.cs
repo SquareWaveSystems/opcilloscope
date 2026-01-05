@@ -2,12 +2,15 @@ using Terminal.Gui;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
 using OpcScope.Utilities;
+using System.Text;
+using Attribute = Terminal.Gui.Attribute;
+using Rune = System.Text.Rune;
 
 namespace OpcScope.App.Views;
 
 /// <summary>
 /// Real-time 2D scrolling line plot for visualizing monitored variable values over time.
-/// Uses Braille characters for sub-cell resolution rendering.
+/// Uses block characters for rendering.
 /// </summary>
 public class TrendPlotView : View
 {
@@ -20,8 +23,6 @@ public class TrendPlotView : View
     // Auto-scale tracking
     private float _visibleMin = float.MaxValue;
     private float _visibleMax = float.MinValue;
-    private float _manualMin;
-    private float _manualMax;
     private bool _autoScale = true;
     private float _scaleMultiplier = 1.0f;
 
@@ -32,10 +33,6 @@ public class TrendPlotView : View
     private Action<MonitoredNode>? _valueChangedHandler;
     private object? _timerToken;
     private float _demoPhase;
-
-    // Braille constants - each character is 2 dots wide x 4 dots high
-    private const int DotsPerCellX = 2;
-    private const int DotsPerCellY = 4;
 
     // Left margin for Y-axis labels
     private const int LeftMargin = 8;
@@ -67,7 +64,7 @@ public class TrendPlotView : View
     /// <summary>
     /// Adds a sample to the ring buffer. Thread-safe.
     /// </summary>
-    public void AddSample(float value)
+    private void AddSample(float value)
     {
         if (_isPaused) return;
 
@@ -100,28 +97,38 @@ public class TrendPlotView : View
         {
             AddSample(value);
         }
+        else
+        {
+            // Provide feedback when the bound node's value cannot be interpreted as numeric
+            var displayName = string.IsNullOrWhiteSpace(node.DisplayName)
+                ? "Selected node"
+                : node.DisplayName;
 
-        SetNeedsDisplay();
-    }
+            UiThread.Run(() =>
+            {
+                MessageBox.ErrorQuery(
+                    "Unsupported value type",
+                    $"{displayName} has a non-numeric value and cannot be plotted.",
+                    "OK");
+            });
+        }
 
-    /// <summary>
-    /// Binds using a callback for value changes (alternative binding method).
-    /// </summary>
-    public void BindToValueSource(Func<float> valueSource, string displayName)
-    {
-        UnbindCurrentNode();
-        _boundNode = new MonitoredNode { DisplayName = displayName };
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     private void OnBoundNodeValueChanged(MonitoredNode node)
     {
-        if (_boundNode != null && node.ClientHandle == _boundNode.ClientHandle)
+        MonitoredNode? currentBoundNode;
+        lock (_lock)
         {
-            if (TryParseValue(node.Value, out var value))
-            {
-                AddSample(value);
-            }
+            currentBoundNode = _boundNode;
+        }
+
+        if (currentBoundNode != null &&
+            node.ClientHandle == currentBoundNode.ClientHandle &&
+            TryParseValue(node.Value, out var value))
+        {
+            AddSample(value);
         }
     }
 
@@ -149,7 +156,7 @@ public class TrendPlotView : View
             _visibleMin = float.MaxValue;
             _visibleMax = float.MinValue;
         }
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     /// <summary>
@@ -190,7 +197,13 @@ public class TrendPlotView : View
 
     private bool OnTimerTick()
     {
-        if (!_isPaused && _boundNode?.DisplayName == "Demo Sine Wave")
+        string? displayName;
+        lock (_lock)
+        {
+            displayName = _boundNode?.DisplayName;
+        }
+
+        if (!_isPaused && displayName == "Demo Sine Wave")
         {
             // Generate demo sine wave
             _demoPhase += 0.15f;
@@ -198,7 +211,7 @@ public class TrendPlotView : View
             AddSample(value);
         }
 
-        SetNeedsDisplay();
+        SetNeedsLayout();
         return true; // Keep timer running
     }
 
@@ -209,7 +222,7 @@ public class TrendPlotView : View
     {
         _isPaused = !_isPaused;
         PauseStateChanged?.Invoke(_isPaused);
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     /// <summary>
@@ -219,7 +232,7 @@ public class TrendPlotView : View
     {
         _autoScale = false;
         _scaleMultiplier *= 1.2f;
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     /// <summary>
@@ -230,7 +243,7 @@ public class TrendPlotView : View
         _autoScale = false;
         _scaleMultiplier /= 1.2f;
         if (_scaleMultiplier < 0.1f) _scaleMultiplier = 0.1f;
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     /// <summary>
@@ -240,7 +253,7 @@ public class TrendPlotView : View
     {
         _autoScale = true;
         _scaleMultiplier = 1.0f;
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     protected override bool OnKeyDown(Key key)
@@ -271,18 +284,18 @@ public class TrendPlotView : View
         return base.OnKeyDown(key);
     }
 
-    protected override void OnDrawContent(Rectangle viewport)
+    protected override bool OnDrawingContent(DrawContext context)
     {
-        base.OnDrawContent(viewport);
+        base.OnDrawingContent(context);
 
-        var driver = Application.Driver;
-        if (driver == null) return;
+        // Get the viewport from the Frame
+        var viewport = Frame;
 
         // Calculate plot area
         int plotWidth = viewport.Width - LeftMargin - 1;
         int plotHeight = viewport.Height - 2; // Leave room for title and status
 
-        if (plotWidth < 4 || plotHeight < 2) return;
+        if (plotWidth < 4 || plotHeight < 2) return true;
 
         // Get samples to display
         float[] displaySamples;
@@ -351,18 +364,18 @@ public class TrendPlotView : View
         _visibleMax += padding;
 
         // Draw title/status
-        DrawTitle(driver, viewport);
+        DrawTitle(viewport.Width);
 
         // Draw Y-axis labels
-        DrawYAxisLabels(driver, viewport, plotHeight);
+        DrawYAxisLabels(plotHeight);
 
         // Draw plot border
-        DrawPlotBorder(driver, viewport, plotHeight);
+        DrawPlotBorder(viewport.Width, plotHeight);
 
         // Draw the data
         if (displayCount > 0)
         {
-            DrawPlotData(driver, viewport, displaySamples, displayCount, plotWidth, plotHeight);
+            DrawPlotData(viewport.Width, displaySamples, displayCount, plotWidth, plotHeight);
         }
         else
         {
@@ -371,34 +384,36 @@ public class TrendPlotView : View
             int x = LeftMargin + (plotWidth - noData.Length) / 2;
             int y = 1 + plotHeight / 2;
             Move(x, y);
-            driver.SetAttribute(new Attribute(Color.Gray, Color.Black));
-            driver.AddStr(noData);
+            Driver.SetAttribute(new Attribute(Color.Gray, Color.Black));
+            AddStr(noData);
         }
 
         // Draw status line
-        DrawStatusLine(driver, viewport);
+        DrawStatusLine(viewport.Width, viewport.Height);
+
+        return true;
     }
 
-    private void DrawTitle(IConsoleDriver driver, Rectangle viewport)
+    private void DrawTitle(int viewportWidth)
     {
         string title = _boundNode?.DisplayName ?? "Trend Plot";
         if (_isPaused) title += " [PAUSED]";
 
         Move(LeftMargin, 0);
-        driver.SetAttribute(new Attribute(Color.White, Color.Black));
-        driver.AddStr(title.Length > viewport.Width - LeftMargin
-            ? title[..(viewport.Width - LeftMargin - 3)] + "..."
+        Driver.SetAttribute(new Attribute(Color.White, Color.Black));
+        AddStr(title.Length > viewportWidth - LeftMargin
+            ? title[..(viewportWidth - LeftMargin - 3)] + "..."
             : title);
     }
 
-    private void DrawYAxisLabels(IConsoleDriver driver, Rectangle viewport, int plotHeight)
+    private void DrawYAxisLabels(int plotHeight)
     {
-        driver.SetAttribute(new Attribute(Color.Cyan, Color.Black));
+        Driver.SetAttribute(new Attribute(Color.Cyan, Color.Black));
 
         // Max value at top
         string maxStr = FormatAxisValue(_visibleMax);
         Move(0, 1);
-        driver.AddStr(maxStr.PadLeft(LeftMargin - 1));
+        AddStr(maxStr.PadLeft(LeftMargin - 1));
 
         // Mid value
         if (plotHeight > 4)
@@ -406,39 +421,39 @@ public class TrendPlotView : View
             float midVal = (_visibleMin + _visibleMax) / 2;
             string midStr = FormatAxisValue(midVal);
             Move(0, 1 + plotHeight / 2);
-            driver.AddStr(midStr.PadLeft(LeftMargin - 1));
+            AddStr(midStr.PadLeft(LeftMargin - 1));
         }
 
         // Min value at bottom
         string minStr = FormatAxisValue(_visibleMin);
         Move(0, plotHeight);
-        driver.AddStr(minStr.PadLeft(LeftMargin - 1));
+        AddStr(minStr.PadLeft(LeftMargin - 1));
     }
 
-    private void DrawPlotBorder(IConsoleDriver driver, Rectangle viewport, int plotHeight)
+    private void DrawPlotBorder(int viewportWidth, int plotHeight)
     {
-        driver.SetAttribute(new Attribute(Color.DarkGray, Color.Black));
+        Driver.SetAttribute(new Attribute(Color.DarkGray, Color.Black));
 
         // Left border
         for (int y = 1; y <= plotHeight; y++)
         {
             Move(LeftMargin - 1, y);
-            driver.AddRune((Rune)'│');
+            AddRune((Rune)'│');
         }
 
         // Bottom border
         Move(LeftMargin - 1, plotHeight + 1);
-        driver.AddRune((Rune)'└');
-        for (int x = LeftMargin; x < viewport.Width - 1; x++)
+        AddRune((Rune)'└');
+        for (int x = LeftMargin; x < viewportWidth - 1; x++)
         {
-            driver.AddRune((Rune)'─');
+            AddRune((Rune)'─');
         }
     }
 
-    private void DrawPlotData(IConsoleDriver driver, Rectangle viewport, float[] samples,
+    private void DrawPlotData(int viewportWidth, float[] samples,
         int sampleCount, int plotWidth, int plotHeight)
     {
-        driver.SetAttribute(new Attribute(Color.Green, Color.Black));
+        Driver.SetAttribute(new Attribute(Color.Green, Color.Black));
 
         float range = _visibleMax - _visibleMin;
         if (range <= 0) range = 1;
@@ -461,7 +476,7 @@ public class TrendPlotView : View
             int cellX = LeftMargin + i;
             int cellY = plotHeight - (dotY / 2);
 
-            if (cellX >= viewport.Width - 1 || cellY < 1 || cellY > plotHeight)
+            if (cellX >= viewportWidth - 1 || cellY < 1 || cellY > plotHeight)
                 continue;
 
             Move(cellX, cellY);
@@ -471,11 +486,11 @@ public class TrendPlotView : View
 
             if (upperHalf)
             {
-                driver.AddRune((Rune)'▀');
+                AddRune((Rune)'▀');
             }
             else
             {
-                driver.AddRune((Rune)'▄');
+                AddRune((Rune)'▄');
             }
         }
 
@@ -483,7 +498,7 @@ public class TrendPlotView : View
         // For better visualization, draw vertical lines between consecutive samples
         if (sampleCount > 1)
         {
-            driver.SetAttribute(new Attribute(Color.BrightGreen, Color.Black));
+            Driver.SetAttribute(new Attribute(Color.BrightGreen, Color.Black));
 
             for (int i = 0; i < sampleCount - 1 && i < plotWidth - 1; i++)
             {
@@ -503,16 +518,16 @@ public class TrendPlotView : View
 
                 for (int y = minY; y <= maxY; y++)
                 {
-                    if (y >= 1 && y <= plotHeight && cellX < viewport.Width - 1)
+                    if (y >= 1 && y <= plotHeight && cellX < viewportWidth - 1)
                     {
                         Move(cellX, y);
                         if (y == y1 || y == y2)
                         {
-                            driver.AddRune((Rune)'●');
+                            AddRune((Rune)'●');
                         }
                         else
                         {
-                            driver.AddRune((Rune)'│');
+                            AddRune((Rune)'│');
                         }
                     }
                 }
@@ -520,11 +535,11 @@ public class TrendPlotView : View
         }
     }
 
-    private void DrawStatusLine(IConsoleDriver driver, Rectangle viewport)
+    private void DrawStatusLine(int viewportWidth, int viewportHeight)
     {
-        driver.SetAttribute(new Attribute(Color.Gray, Color.Black));
+        Driver.SetAttribute(new Attribute(Color.Gray, Color.Black));
 
-        int y = viewport.Height - 1;
+        int y = viewportHeight - 1;
         Move(0, y);
 
         string status = $"[Space]=Pause [+/-]=Scale [R]=Reset";
@@ -538,7 +553,7 @@ public class TrendPlotView : View
             status += $" | Samples: {_sampleCount}";
         }
 
-        driver.AddStr(status.Length > viewport.Width ? status[..viewport.Width] : status);
+        AddStr(status.Length > viewportWidth ? status[..viewportWidth] : status);
     }
 
     private static string FormatAxisValue(float value)
