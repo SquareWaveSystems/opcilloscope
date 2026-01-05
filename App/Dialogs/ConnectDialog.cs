@@ -49,7 +49,7 @@ public class ConnectDialog : Dialog
             IsDefault = true
         };
 
-        connectButton.Accepting += (s, e) =>
+        connectButton.Accepting += (_, _) =>
         {
             if (ValidateEndpoint())
             {
@@ -65,7 +65,7 @@ public class ConnectDialog : Dialog
             Text = "Cancel"
         };
 
-        cancelButton.Accepting += (s, e) =>
+        cancelButton.Accepting += (_, _) =>
         {
             _confirmed = false;
             Application.RequestStop();
