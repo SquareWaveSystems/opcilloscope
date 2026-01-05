@@ -1,14 +1,17 @@
 using Terminal.Gui;
 using OpcScope.App.Views;
 using OpcScope.App.Dialogs;
+using OpcScope.App.Themes;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
 using OpcScope.Utilities;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App;
 
 /// <summary>
 /// Main application window with layout orchestration.
+/// Supports retro-futuristic themes inspired by cassette futurism.
 /// </summary>
 public class MainWindow : Toplevel
 {
@@ -36,6 +39,12 @@ public class MainWindow : Toplevel
         _client.Connected += OnClientConnected;
         _client.Disconnected += OnClientDisconnected;
         _client.ConnectionError += OnConnectionError;
+
+        // Subscribe to theme changes
+        ThemeManager.ThemeChanged += OnThemeChanged;
+
+        // Apply initial theme
+        ApplyTheme();
 
         // Create menu bar
         _menuBar = CreateMenuBar();
@@ -109,6 +118,14 @@ public class MainWindow : Toplevel
 
     private MenuBar CreateMenuBar()
     {
+        // Build theme menu items dynamically
+        var themeMenuItems = ThemeManager.AvailableThemes
+            .Select((theme, index) => new MenuItem(
+                $"_{theme.Name}",
+                theme.Description,
+                () => ThemeManager.SetThemeByIndex(index)))
+            .ToArray();
+
         return new MenuBar
         {
             Menus = new MenuBarItem[]
@@ -131,6 +148,7 @@ public class MainWindow : Toplevel
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     new MenuItem("_Settings...", "", ShowSettings)
                 }),
+                new MenuBarItem("_Theme", themeMenuItems),
                 new MenuBarItem("_Help", new MenuItem[]
                 {
                     new MenuItem("_Help", "", ShowHelp),
@@ -138,6 +156,22 @@ public class MainWindow : Toplevel
                 })
             }
         };
+    }
+
+    private void ApplyTheme()
+    {
+        var theme = ThemeManager.Current;
+        ColorScheme = theme.MainColorScheme;
+    }
+
+    private void OnThemeChanged(RetroTheme theme)
+    {
+        Application.Invoke(() =>
+        {
+            ApplyTheme();
+            _logger.Info($"Theme changed to: {theme.Name}");
+            SetNeedsLayout();
+        });
     }
 
     private void ShowConnectDialog()
@@ -412,16 +446,25 @@ Tips:
 
     private void ShowAbout()
     {
-        var about = @"OpcScope v1.0.0
+        var theme = ThemeManager.Current;
+        var about = $@"OpcScope v1.0.0
 
 A lightweight terminal-based OPC UA client
 for browsing, monitoring, and subscribing
 to industrial automation data.
 
+Current Theme: {theme.Name}
+  {theme.Description}
+
 Built with:
   - .NET 8
   - Terminal.Gui v2
   - OPC Foundation UA-.NETStandard
+
+Themes inspired by:
+  - Cassette Futurism (Alien, Blade Runner)
+  - github.com/Imetomi/retro-futuristic-ui-design
+  - squarewavesystems.github.io
 
 License: MIT
 ";
@@ -432,6 +475,7 @@ License: MIT
     {
         if (disposing)
         {
+            ThemeManager.ThemeChanged -= OnThemeChanged;
             _subscriptionManager?.Dispose();
             _client.Dispose();
         }
