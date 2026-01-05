@@ -1,0 +1,12 @@
+{
+  "name": "opcscope-test-server",
+  "version": "1.0.0",
+  "description": "Node-OPCUA test server for OpcScope development",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "node-opcua": "^2.131.0"
+  }
+}
