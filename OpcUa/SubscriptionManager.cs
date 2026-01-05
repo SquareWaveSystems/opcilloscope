@@ -173,7 +173,7 @@ public class SubscriptionManager : IDisposable
                 lock (_lock)
                 {
                     var matchingKvp = _opcMonitoredItems.Where(kvp => kvp.Value.ClientHandle == monitoredItem.ClientHandle).FirstOrDefault();
-                    if (matchingKvp.Value != null)
+                    if (!matchingKvp.Equals(default(KeyValuePair<uint, MonitoredItem>)))
                     {
                         _monitoredItems.TryGetValue(matchingKvp.Key, out item);
                     }
