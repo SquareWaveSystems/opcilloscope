@@ -58,6 +58,24 @@ public class TrendPlotView : View
     private const int BottomMargin = 3;
     private const int RightMargin = 2;
 
+    // === 3D Depth Effect ===
+    private const int MaxDepth = 20;
+    private const int MinDepth = 1;
+    private const int DefaultDepth = 8;
+
+    // Glyph ladder for depth fading (brightest to dimmest)
+    private static readonly char[] DepthGlyphs = { '█', '▓', '▒', '░', '·' };
+
+    // Frame history buffer: [depthIndex][sampleIndex]
+    private readonly float[][] _frameHistory;
+    private int _currentFrameIndex;
+    private int _depthCount = DefaultDepth;
+    private bool _3dEnabled = false;
+
+    // Preallocated arrays for rendering (avoid allocation in draw loop)
+    private readonly int[] _frameOrder;
+    private readonly HashSet<(int x, int y)> _cellsToFill = new();
+
     /// <summary>
     /// Event fired when pause state changes.
     /// </summary>
@@ -77,6 +95,14 @@ public class TrendPlotView : View
     {
         // Pre-allocate ring buffer for maximum expected width (200 samples)
         _samples = new float[200];
+
+        // Pre-allocate frame history for 3D depth effect
+        _frameHistory = new float[MaxDepth][];
+        for (int i = 0; i < MaxDepth; i++)
+        {
+            _frameHistory[i] = new float[200];
+        }
+        _frameOrder = new int[MaxDepth];
 
         // Initialize cached theme
         lock (_themeLock)
@@ -223,6 +249,13 @@ public class TrendPlotView : View
             _sampleCount = 0;
             _visibleMin = float.MaxValue;
             _visibleMax = float.MinValue;
+
+            // Clear frame history
+            for (int i = 0; i < MaxDepth; i++)
+            {
+                Array.Clear(_frameHistory[i]);
+            }
+            _currentFrameIndex = 0;
         }
         SetNeedsLayout();
     }
@@ -281,8 +314,29 @@ public class TrendPlotView : View
             AddSample(value);
         }
 
+        // Capture current frame for 3D depth effect
+        if (_3dEnabled && !_isPaused)
+        {
+            CaptureFrameHistory();
+        }
+
         SetNeedsLayout();
         return true; // Keep timer running
+    }
+
+    /// <summary>
+    /// Captures the current ring buffer state into the frame history for 3D rendering.
+    /// </summary>
+    private void CaptureFrameHistory()
+    {
+        lock (_lock)
+        {
+            // Copy current ring buffer to the current frame slot
+            Array.Copy(_samples, _frameHistory[_currentFrameIndex], _samples.Length);
+
+            // Advance to next frame slot (circular)
+            _currentFrameIndex = (_currentFrameIndex + 1) % _depthCount;
+        }
     }
 
     /// <summary>
@@ -326,6 +380,75 @@ public class TrendPlotView : View
         SetNeedsLayout();
     }
 
+    /// <summary>
+    /// Toggles 3D depth effect on/off.
+    /// </summary>
+    public void Toggle3DEffect()
+    {
+        _3dEnabled = !_3dEnabled;
+
+        // Initialize frame history when enabling 3D
+        if (_3dEnabled)
+        {
+            // Fill all frames with current buffer state
+            lock (_lock)
+            {
+                _currentFrameIndex = 0;
+                for (int i = 0; i < _depthCount; i++)
+                {
+                    Array.Copy(_samples, _frameHistory[i], _samples.Length);
+                }
+            }
+        }
+
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Increases 3D depth (more trailing frames).
+    /// </summary>
+    public void IncreaseDepth()
+    {
+        lock (_lock)
+        {
+            if (_depthCount < MaxDepth)
+            {
+                _depthCount++;
+            }
+        }
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Decreases 3D depth (fewer trailing frames).
+    /// </summary>
+    public void DecreaseDepth()
+    {
+        lock (_lock)
+        {
+            if (_depthCount > MinDepth)
+            {
+                _depthCount--;
+                // Ensure current frame index is within bounds
+                if (_currentFrameIndex >= _depthCount)
+                {
+                    _currentFrameIndex = 0;
+                }
+            }
+        }
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Gets whether 3D depth effect is enabled.
+    /// </summary>
+    public bool Is3DEnabled => _3dEnabled;
+
+    /// <summary>
+    /// Gets the current depth count.
+    /// </summary>
+    public int DepthCount => _depthCount;
+
     protected override bool OnKeyDown(Key key)
     {
         switch (key.KeyCode)
@@ -348,6 +471,20 @@ public class TrendPlotView : View
             case (KeyCode)'r':
             case (KeyCode)'R':
                 ResetScale();
+                return true;
+
+            // 3D depth effect controls
+            case (KeyCode)'d':
+            case (KeyCode)'D':
+                Toggle3DEffect();
+                return true;
+
+            case (KeyCode)'[':
+                DecreaseDepth();
+                return true;
+
+            case (KeyCode)']':
+                IncreaseDepth();
                 return true;
         }
 
@@ -447,7 +584,16 @@ public class TrendPlotView : View
 
         if (displayCount > 0)
         {
-            DrawWaveform(displaySamples, displayCount, plotWidth, plotHeight);
+            if (_3dEnabled && _depthCount > 1)
+            {
+                // Draw 3D depth effect: historical frames from oldest to newest (painter's algorithm)
+                Draw3DWaveform(plotWidth, plotHeight, displayCount);
+            }
+            else
+            {
+                // Standard 2D waveform
+                DrawWaveform(displaySamples, displayCount, plotWidth, plotHeight);
+            }
         }
         else
         {
@@ -543,6 +689,10 @@ public class TrendPlotView : View
             techInfo += $"SAMPLES:{_sampleCount,4}  ";
         }
         techInfo += $"RANGE:[{FormatAxisValue(_visibleMin)},{FormatAxisValue(_visibleMax)}]";
+        if (_3dEnabled)
+        {
+            techInfo += $"  3D:{_depthCount}";
+        }
 
         AddStr(techInfo.PadRight(width - 2));
 
@@ -833,6 +983,220 @@ public class TrendPlotView : View
         }
     }
 
+    /// <summary>
+    /// Draws the 3D depth effect with multiple historical frames.
+    /// Uses painter's algorithm: draws oldest frames first (furthest back), newest last (foreground).
+    /// </summary>
+    private void Draw3DWaveform(int plotWidth, int plotHeight, int displayCount)
+    {
+        float range = _visibleMax - _visibleMin;
+        if (range <= 0) range = 1;
+
+        // Copy frame indices and depth count under lock to avoid race conditions
+        int depthCount;
+        int currentFrameIndex;
+        lock (_lock)
+        {
+            depthCount = _depthCount;
+            currentFrameIndex = _currentFrameIndex;
+        }
+
+        // Calculate which frame indices to draw (oldest to newest)
+        // currentFrameIndex points to where the NEXT frame will be written,
+        // so the oldest frame is at currentFrameIndex, newest is at currentFrameIndex - 1
+        for (int i = 0; i < depthCount; i++)
+        {
+            // Start from oldest (at currentFrameIndex) going forward
+            _frameOrder[i] = (currentFrameIndex + i) % depthCount;
+        }
+
+        // Draw frames from oldest (most offset, dimmest) to newest (no offset, brightest)
+        for (int depthIdx = 0; depthIdx < depthCount; depthIdx++)
+        {
+            int frameIdx = _frameOrder[depthIdx];
+            int depth = depthCount - 1 - depthIdx; // depth=0 for newest, depth=depthCount-1 for oldest
+
+            // Calculate offset: each depth level offsets by (-1, +1)
+            int offsetX = -depth;
+            int offsetY = depth;
+
+            // Select glyph based on depth (fading effect)
+            char glyph = GetDepthGlyph(depth, depthCount);
+
+            // Select color attribute based on depth
+            Attribute colorAttr = GetDepthColor(depth, depthCount);
+
+            // Get samples for this frame
+            // Note: Reading from _frameHistory without lock is safe because:
+            // 1. Arrays are preallocated and never replaced
+            // 2. Float reads are atomic
+            // 3. Worst case is seeing a partially updated frame for one render (acceptable for visualization)
+            float[] frameSamples = _frameHistory[frameIdx];
+
+            // Draw this frame at the specified depth
+            DrawWaveformAtDepth(frameSamples, displayCount, plotWidth, plotHeight,
+                               offsetX, offsetY, glyph, colorAttr, range, depth == 0);
+        }
+    }
+
+    /// <summary>
+    /// Gets the appropriate glyph for the given depth level.
+    /// </summary>
+    private static char GetDepthGlyph(int depth, int maxDepth)
+    {
+        if (depth == 0) return '█'; // Current frame always uses full block
+
+        // Map depth to glyph ladder: █ ▓ ▒ ░ ·
+        // Skip first glyph (█) for historical frames; normalize depth to [0, 1)
+        float t = (float)depth / Math.Max(1, maxDepth);
+        int glyphIdx = 1 + (int)(t * (DepthGlyphs.Length - 1));
+        glyphIdx = Math.Clamp(glyphIdx, 1, DepthGlyphs.Length - 1);
+        return DepthGlyphs[glyphIdx];
+    }
+
+    /// <summary>
+    /// Gets the appropriate color attribute for the given depth level.
+    /// </summary>
+    private Attribute GetDepthColor(int depth, int maxDepth)
+    {
+        if (depth == 0) return _brightAttr;
+        if (depth == 1) return _normalAttr;
+
+        // Fade to dim for deeper frames
+        float t = (float)depth / Math.Max(1, maxDepth - 1);
+        if (t < 0.5f) return _normalAttr;
+        return _dimAttr;
+    }
+
+    /// <summary>
+    /// Draws a waveform at a specific depth with offset and custom glyph.
+    /// </summary>
+    private void DrawWaveformAtDepth(float[] samples, int sampleCount, int plotWidth, int plotHeight,
+                                     int offsetX, int offsetY, char glyph, Attribute colorAttr,
+                                     float range, bool isForeground)
+    {
+        // Reuse preallocated set to track which cells are filled for this frame
+        _cellsToFill.Clear();
+
+        int subPixelHeight = plotHeight * 2;
+
+        // Draw lines between consecutive samples
+        for (int i = 0; i < sampleCount - 1; i++)
+        {
+            // Calculate base screen X positions
+            int baseX1 = LeftMargin + (plotWidth - sampleCount) + i;
+            int baseX2 = LeftMargin + (plotWidth - sampleCount) + i + 1;
+
+            // Apply X offset
+            int x1 = baseX1 + offsetX;
+            int x2 = baseX2 + offsetX;
+
+            // Calculate sub-pixel Y positions
+            float normalized1 = Math.Clamp((samples[i] - _visibleMin) / range, 0, 1);
+            float normalized2 = Math.Clamp((samples[i + 1] - _visibleMin) / range, 0, 1);
+
+            int subY1 = (int)((1 - normalized1) * (subPixelHeight - 1));
+            int subY2 = (int)((1 - normalized2) * (subPixelHeight - 1));
+
+            // Apply Y offset (in sub-pixels, so multiply by 2)
+            subY1 += offsetY * 2;
+            subY2 += offsetY * 2;
+
+            // Bresenham line drawing
+            int dx = Math.Abs(x2 - x1);
+            int dy = Math.Abs(subY2 - subY1);
+            int sx = x1 < x2 ? 1 : -1;
+            int sy = subY1 < subY2 ? 1 : -1;
+            int err = dx - dy;
+
+            int x = x1;
+            int subY = subY1;
+
+            while (true)
+            {
+                // Convert sub-pixel Y to cell Y
+                int cellY = subY / 2;
+                int screenY = TopMargin + cellY;
+
+                // Check bounds (considering offset)
+                if (x >= LeftMargin && x < LeftMargin + plotWidth &&
+                    screenY >= TopMargin && screenY < TopMargin + plotHeight)
+                {
+                    _cellsToFill.Add((x, screenY));
+                }
+
+                if (x == x2 && subY == subY2) break;
+
+                int e2 = 2 * err;
+                if (e2 > -dy)
+                {
+                    err -= dy;
+                    x += sx;
+                }
+                if (e2 < dx)
+                {
+                    err += dx;
+                    subY += sy;
+                }
+            }
+        }
+
+        // Draw the last sample point
+        if (sampleCount > 0)
+        {
+            int x = LeftMargin + (plotWidth - sampleCount) + sampleCount - 1 + offsetX;
+            float normalized = Math.Clamp((samples[sampleCount - 1] - _visibleMin) / range, 0, 1);
+            int subY = (int)((1 - normalized) * (subPixelHeight - 1)) + offsetY * 2;
+            int cellY = subY / 2;
+            int screenY = TopMargin + cellY;
+
+            if (x >= LeftMargin && x < LeftMargin + plotWidth &&
+                screenY >= TopMargin && screenY < TopMargin + plotHeight)
+            {
+                _cellsToFill.Add((x, screenY));
+            }
+        }
+
+        // Render all cells
+        Driver.SetAttribute(colorAttr);
+        foreach (var cell in _cellsToFill)
+        {
+            Move(cell.x, cell.y);
+
+            if (isForeground)
+            {
+                // For foreground (current frame), use full blocks for solid appearance
+                AddRune((Rune)'█');
+            }
+            else
+            {
+                // For background frames, use the depth-specific glyph
+                AddRune((Rune)glyph);
+            }
+        }
+
+        // For the foreground frame, add glow effect on leading edge
+        if (isForeground && !_isPaused)
+        {
+            // Find the rightmost points and make them glow
+            int maxX = int.MinValue;
+            foreach (var cell in _cellsToFill)
+            {
+                if (cell.x > maxX) maxX = cell.x;
+            }
+
+            if (maxX > int.MinValue)
+            {
+                Driver.SetAttribute(_glowAttr);
+                foreach (var cell in _cellsToFill.Where(c => c.x >= maxX - 2))
+                {
+                    Move(cell.x, cell.y);
+                    AddRune((Rune)'█');
+                }
+            }
+        }
+    }
+
     private void DrawNoSignal(int plotWidth, int plotHeight)
     {
         // Animated "NO SIGNAL" message
@@ -885,8 +1249,22 @@ public class TrendPlotView : View
         Driver.SetAttribute(_autoScale ? _statusActiveAttr : _dimAttr);
         AddStr("Auto");
 
+        // 3D mode controls
+        Driver.SetAttribute(_dimAttr);
+        AddStr("  [D]");
+        Driver.SetAttribute(_3dEnabled ? _statusActiveAttr : _dimAttr);
+        AddStr("3D");
+
+        if (_3dEnabled)
+        {
+            Driver.SetAttribute(_dimAttr);
+            AddStr("  [/]");
+            Driver.SetAttribute(_statusActiveAttr);
+            AddStr($"Depth:{_depthCount,2}");
+        }
+
         // Fill rest with spaces and close border
-        int currentPos = 1 + keys.Length + 5 + 7 + 5 + 5 + 4;
+        int currentPos = 1 + keys.Length + 5 + 7 + 5 + 5 + 4 + 5 + 2 + (_3dEnabled ? 7 + 8 : 0);
         Driver.SetAttribute(_dimAttr);
 
         // Current value on the right
