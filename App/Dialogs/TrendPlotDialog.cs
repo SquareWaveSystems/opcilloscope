@@ -2,16 +2,22 @@ using Terminal.Gui;
 using OpcScope.App.Views;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
+using Attribute = Terminal.Gui.Attribute;
 
 namespace OpcScope.App.Dialogs;
 
 /// <summary>
-/// Dialog for displaying a real-time trend plot of monitored values.
+/// Industrial-themed dialog for displaying a real-time oscilloscope view.
+/// Features a retro-futuristic CRT aesthetic matching Square Wave Systems brand.
 /// </summary>
 public class TrendPlotDialog : Dialog
 {
+    // Industrial color scheme
+    private static readonly Attribute AmberOnBlack = new(Color.BrightYellow, Color.Black);
+    private static readonly Attribute AmberDimOnBlack = new(new Color(180, 100, 0), Color.Black);
+    private static readonly Attribute GreenOnBlack = new(Color.BrightGreen, Color.Black);
+
     private readonly TrendPlotView _trendPlotView;
-    private readonly Label _statusLabel;
     private readonly SubscriptionManager? _subscriptionManager;
     private readonly IReadOnlyCollection<MonitoredNode>? _availableNodes;
 
@@ -20,43 +26,45 @@ public class TrendPlotDialog : Dialog
         _subscriptionManager = subscriptionManager;
         _availableNodes = subscriptionManager?.MonitoredItems;
 
-        Title = "Trend Plot";
-        Width = Dim.Percent(80);
-        Height = Dim.Percent(80);
+        Title = "═══[ OSCILLOSCOPE ]═══";
+        Width = Dim.Percent(85);
+        Height = Dim.Percent(85);
 
-        // Create the trend plot view
+        // Apply dark industrial styling
+        ColorScheme = new ColorScheme
+        {
+            Normal = AmberDimOnBlack,
+            Focus = AmberOnBlack,
+            HotNormal = AmberOnBlack,
+            HotFocus = GreenOnBlack,
+            Disabled = new Attribute(Color.DarkGray, Color.Black)
+        };
+
+        // Create the trend plot view - takes up most of the dialog
         _trendPlotView = new TrendPlotView
         {
             X = 0,
             Y = 0,
             Width = Dim.Fill(),
-            Height = Dim.Fill(3)
+            Height = Dim.Fill(2)
         };
 
-        // Status label
-        _statusLabel = new Label
+        // Industrial-style button row
+        var buttonFrame = new View
         {
             X = 0,
             Y = Pos.Bottom(_trendPlotView),
             Width = Dim.Fill(),
-            Height = 1,
-            Text = ""
-        };
-
-        // Button row
-        var buttonFrame = new View
-        {
-            X = 0,
-            Y = Pos.Bottom(_statusLabel),
-            Width = Dim.Fill(),
-            Height = 2
+            Height = 2,
+            ColorScheme = ColorScheme
         };
 
         var selectNodeButton = new Button
         {
             X = 1,
             Y = 0,
-            Text = "Select Node..."
+            Text = "◄ NODE ►",
+            ColorScheme = ColorScheme
         };
         selectNodeButton.Accepting += OnSelectNode;
 
@@ -64,7 +72,8 @@ public class TrendPlotDialog : Dialog
         {
             X = Pos.Right(selectNodeButton) + 2,
             Y = 0,
-            Text = "Demo Mode"
+            Text = "◄ DEMO ►",
+            ColorScheme = ColorScheme
         };
         demoButton.Accepting += OnDemoMode;
 
@@ -72,7 +81,8 @@ public class TrendPlotDialog : Dialog
         {
             X = Pos.Right(demoButton) + 2,
             Y = 0,
-            Text = "Clear"
+            Text = "◄ CLR ►",
+            ColorScheme = ColorScheme
         };
         clearButton.Accepting += OnClear;
 
@@ -80,18 +90,16 @@ public class TrendPlotDialog : Dialog
         {
             X = Pos.Right(clearButton) + 2,
             Y = 0,
-            Text = "Close"
+            Text = "◄ EXIT ►",
+            ColorScheme = ColorScheme
         };
         closeButton.Accepting += (s, e) => Application.RequestStop();
 
         buttonFrame.Add(selectNodeButton, demoButton, clearButton, closeButton);
 
-        // Wire up events
-        _trendPlotView.PauseStateChanged += OnPauseStateChanged;
+        Add(_trendPlotView, buttonFrame);
 
-        Add(_trendPlotView, _statusLabel, buttonFrame);
-
-        // Start with initial node, demo mode, or prompt to select
+        // Start with initial node, demo mode, or wait for selection
         if (initialNode != null)
         {
             BindToNode(initialNode);
@@ -99,10 +107,6 @@ public class TrendPlotDialog : Dialog
         else if (_availableNodes == null || !_availableNodes.Any())
         {
             StartDemoMode();
-        }
-        else
-        {
-            UpdateStatus("Press 'Select Node...' to choose a monitored item to plot");
         }
 
         _trendPlotView.SetFocus();
@@ -112,19 +116,27 @@ public class TrendPlotDialog : Dialog
     {
         if (_availableNodes == null || !_availableNodes.Any())
         {
-            MessageBox.Query("No Nodes", "No monitored items available.\nSubscribe to a variable node first.", "OK");
+            MessageBox.Query("▶ NO NODES ◀", "No monitored items available.\nSubscribe to a variable node first.", "OK");
             return;
         }
 
-        // Create a simple selection dialog
         var nodeList = _availableNodes.ToList();
         var nodeNames = nodeList.Select(n => n.DisplayName).ToArray();
 
         var dialog = new Dialog
         {
-            Title = "Select Node to Plot",
+            Title = "═══[ SELECT SIGNAL ]═══",
             Width = 50,
-            Height = Math.Min(nodeList.Count + 6, 20)
+            Height = Math.Min(nodeList.Count + 7, 20),
+            ColorScheme = ColorScheme
+        };
+
+        var headerLabel = new Label
+        {
+            X = 1,
+            Y = 0,
+            Text = "▼ AVAILABLE SIGNALS ▼",
+            ColorScheme = ColorScheme
         };
 
         var listView = new ListView
@@ -132,7 +144,8 @@ public class TrendPlotDialog : Dialog
             X = 1,
             Y = 1,
             Width = Dim.Fill(1),
-            Height = Dim.Fill(3)
+            Height = Dim.Fill(4),
+            ColorScheme = ColorScheme
         };
         listView.SetSource(new System.Collections.ObjectModel.ObservableCollection<string>(nodeNames));
 
@@ -140,22 +153,25 @@ public class TrendPlotDialog : Dialog
         {
             X = 1,
             Y = Pos.Bottom(listView),
-            Text = "Only numeric values can be plotted"
+            Text = "[ Numeric values only ]",
+            ColorScheme = ColorScheme
         };
 
         var selectButton = new Button
         {
-            X = Pos.Center() - 10,
+            X = Pos.Center() - 12,
             Y = Pos.Bottom(hintLabel) + 1,
-            Text = "Select",
-            IsDefault = true
+            Text = "◄ SELECT ►",
+            IsDefault = true,
+            ColorScheme = ColorScheme
         };
 
         var cancelButton = new Button
         {
             X = Pos.Center() + 2,
             Y = Pos.Bottom(hintLabel) + 1,
-            Text = "Cancel"
+            Text = "◄ CANCEL ►",
+            ColorScheme = ColorScheme
         };
 
         MonitoredNode? selectedNode = null;
@@ -170,7 +186,7 @@ public class TrendPlotDialog : Dialog
 
         cancelButton.Accepting += (s, ev) => Application.RequestStop();
 
-        dialog.Add(listView, hintLabel, selectButton, cancelButton);
+        dialog.Add(headerLabel, listView, hintLabel, selectButton, cancelButton);
         listView.SetFocus();
 
         Application.Run(dialog);
@@ -190,7 +206,6 @@ public class TrendPlotDialog : Dialog
         if (_subscriptionManager != null)
         {
             _trendPlotView.BindToMonitoredNode(node, _subscriptionManager);
-            UpdateStatus($"Plotting: {node.DisplayName}");
         }
     }
 
@@ -203,7 +218,6 @@ public class TrendPlotDialog : Dialog
     {
         _trendPlotView.Clear();
         _trendPlotView.StartDemoMode();
-        UpdateStatus("Demo Mode: Sine wave generator");
     }
 
     private void OnClear(object? sender, CommandEventArgs e)
@@ -211,52 +225,10 @@ public class TrendPlotDialog : Dialog
         _trendPlotView.Clear();
     }
 
-    private void OnPauseStateChanged(bool isPaused)
-    {
-        if (isPaused)
-        {
-            UpdateStatus(_statusLabel.Text + " [PAUSED]");
-        }
-        else
-        {
-            var text = _statusLabel.Text?.ToString() ?? "";
-            UpdateStatus(text.Replace(" [PAUSED]", ""));
-        }
-    }
-
-    private void UpdateStatus(string message)
-    {
-        _statusLabel.Text = message;
-    }
-
-    private object? _updateToken;
-
-    private void StartUpdateTimer()
-    {
-        if (_updateToken != null) return;
-
-        // ~10 FPS refresh rate
-        _updateToken = Application.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
-        {
-            _trendPlotView.SetNeedsLayout();
-            return true; // Keep timer running
-        });
-    }
-
-    private void StopUpdateTimer()
-    {
-        if (_updateToken != null)
-        {
-            Application.RemoveTimeout(_updateToken);
-            _updateToken = null;
-        }
-    }
-
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
-            StopUpdateTimer();
             _trendPlotView.Dispose();
         }
         base.Dispose(disposing);

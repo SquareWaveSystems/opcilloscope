@@ -9,11 +9,22 @@ using Rune = System.Text.Rune;
 namespace OpcScope.App.Views;
 
 /// <summary>
-/// Real-time 2D scrolling line plot for visualizing monitored variable values over time.
-/// Uses block characters for rendering.
+/// Real-time 2D scrolling oscilloscope-style plot with retro-futuristic CRT aesthetic.
+/// Inspired by 1970s-80s industrial control displays and cassette futurism.
 /// </summary>
 public class TrendPlotView : View
 {
+    // === CRT Color Palette (Amber Phosphor) ===
+    private static readonly Attribute AmberBright = new(Color.BrightYellow, Color.Black);
+    private static readonly Attribute AmberNormal = new(Color.Yellow, Color.Black);
+    private static readonly Attribute AmberDim = new(new Color(128, 80, 0), Color.Black);
+    private static readonly Attribute GridColor = new(new Color(64, 40, 0), Color.Black);
+    private static readonly Attribute BorderColor = new(new Color(180, 100, 0), Color.Black);
+    private static readonly Attribute StatusActive = new(Color.BrightGreen, Color.Black);
+    private static readonly Attribute StatusInactive = new(Color.Gray, Color.Black);
+    private static readonly Attribute ScanlineColor = new(new Color(10, 10, 10), new Color(0, 0, 0));
+    private static readonly Attribute TraceGlow = new(Color.White, Color.Black);
+
     // Ring buffer for samples (preallocated)
     private readonly float[] _samples;
     private int _writeIndex;
@@ -33,9 +44,13 @@ public class TrendPlotView : View
     private Action<MonitoredNode>? _valueChangedHandler;
     private object? _timerToken;
     private float _demoPhase;
+    private int _frameCount;
 
-    // Left margin for Y-axis labels
-    private const int LeftMargin = 8;
+    // Layout constants
+    private const int LeftMargin = 10;
+    private const int TopMargin = 3;
+    private const int BottomMargin = 3;
+    private const int RightMargin = 2;
 
     /// <summary>
     /// Event fired when pause state changes.
@@ -169,7 +184,7 @@ public class TrendPlotView : View
     public void StartDemoMode()
     {
         UnbindCurrentNode();
-        _boundNode = new MonitoredNode { DisplayName = "Demo Sine Wave" };
+        _boundNode = new MonitoredNode { DisplayName = "SineWave" };
         _demoPhase = 0;
         StartUpdateTimer();
     }
@@ -201,13 +216,15 @@ public class TrendPlotView : View
 
     private bool OnTimerTick()
     {
+        _frameCount++;
+
         string? displayName;
         lock (_lock)
         {
             displayName = _boundNode?.DisplayName;
         }
 
-        if (!_isPaused && displayName == "Demo Sine Wave")
+        if (!_isPaused && displayName == "SineWave")
         {
             // Generate demo sine wave
             _demoPhase += 0.15f;
@@ -292,14 +309,21 @@ public class TrendPlotView : View
     {
         base.OnDrawingContent(context);
 
-        // Get the viewport from the Frame
         var viewport = Frame;
 
         // Calculate plot area
-        int plotWidth = viewport.Width - LeftMargin - 1;
-        int plotHeight = viewport.Height - 2; // Leave room for title and status
+        int plotWidth = viewport.Width - LeftMargin - RightMargin;
+        int plotHeight = viewport.Height - TopMargin - BottomMargin;
 
         if (plotWidth < 4 || plotHeight < 2) return true;
+
+        // Clear with black background
+        Driver.SetAttribute(new Attribute(Color.Black, Color.Black));
+        for (int y = 0; y < viewport.Height; y++)
+        {
+            Move(0, y);
+            AddStr(new string(' ', viewport.Width));
+        }
 
         // Get samples to display
         float[] displaySamples;
@@ -311,7 +335,6 @@ public class TrendPlotView : View
 
             if (displayCount > 0)
             {
-                // Copy samples from ring buffer (newest on right)
                 int startIdx = (_writeIndex - displayCount + _samples.Length) % _samples.Length;
                 for (int i = 0; i < displayCount; i++)
                 {
@@ -346,7 +369,6 @@ public class TrendPlotView : View
         }
         else
         {
-            // Use manual scale with multiplier
             float center = (minVal + maxVal) / 2;
             float range = (maxVal - minVal) / 2;
             range = Math.Max(range, 1f) / _scaleMultiplier;
@@ -361,208 +383,453 @@ public class TrendPlotView : View
             _visibleMax = maxVal + 1;
         }
 
-        // Add some padding to auto-scale
-        float padding = (_visibleMax - _visibleMin) * 0.05f;
+        // Add padding
+        float padding = (_visibleMax - _visibleMin) * 0.1f;
         if (padding < 0.1f) padding = 0.1f;
         _visibleMin -= padding;
         _visibleMax += padding;
 
-        // Draw title/status
-        DrawTitle(viewport.Width);
-
-        // Draw Y-axis labels
+        // Draw in order: grid, border, data, status
+        DrawScanlines(viewport.Width, viewport.Height);
+        DrawHeader(viewport.Width);
+        DrawIndustrialFrame(viewport.Width, viewport.Height, plotWidth, plotHeight);
+        DrawGrid(plotWidth, plotHeight);
         DrawYAxisLabels(plotHeight);
 
-        // Draw plot border
-        DrawPlotBorder(viewport.Width, plotHeight);
-
-        // Draw the data
         if (displayCount > 0)
         {
-            DrawPlotData(viewport.Width, displaySamples, displayCount, plotWidth, plotHeight);
+            DrawWaveform(displaySamples, displayCount, plotWidth, plotHeight);
         }
         else
         {
-            // No data message
-            string noData = "No data";
-            int x = LeftMargin + (plotWidth - noData.Length) / 2;
-            int y = 1 + plotHeight / 2;
-            Move(x, y);
-            Driver.SetAttribute(new Attribute(Color.Gray, Color.Black));
-            AddStr(noData);
+            DrawNoSignal(plotWidth, plotHeight);
         }
 
-        // Draw status line
-        DrawStatusLine(viewport.Width, viewport.Height);
+        DrawStatusBar(viewport.Width, viewport.Height);
 
         return true;
     }
 
-    private void DrawTitle(int viewportWidth)
+    private void DrawScanlines(int width, int height)
     {
-        string title = _boundNode?.DisplayName ?? "Trend Plot";
-        if (_isPaused) title += " [PAUSED]";
-
-        Move(LeftMargin, 0);
-        Driver.SetAttribute(new Attribute(Color.White, Color.Black));
-        AddStr(title.Length > viewportWidth - LeftMargin
-            ? title[..(viewportWidth - LeftMargin - 3)] + "..."
-            : title);
-    }
-
-    private void DrawYAxisLabels(int plotHeight)
-    {
-        Driver.SetAttribute(new Attribute(Color.Cyan, Color.Black));
-
-        // Max value at top
-        string maxStr = FormatAxisValue(_visibleMax);
-        Move(0, 1);
-        AddStr(maxStr.PadLeft(LeftMargin - 1));
-
-        // Mid value
-        if (plotHeight > 4)
+        // Subtle scanline effect on alternating rows
+        Driver.SetAttribute(ScanlineColor);
+        for (int y = 1; y < height; y += 2)
         {
-            float midVal = (_visibleMin + _visibleMax) / 2;
-            string midStr = FormatAxisValue(midVal);
-            Move(0, 1 + plotHeight / 2);
-            AddStr(midStr.PadLeft(LeftMargin - 1));
-        }
-
-        // Min value at bottom
-        string minStr = FormatAxisValue(_visibleMin);
-        Move(0, plotHeight);
-        AddStr(minStr.PadLeft(LeftMargin - 1));
-    }
-
-    private void DrawPlotBorder(int viewportWidth, int plotHeight)
-    {
-        Driver.SetAttribute(new Attribute(Color.DarkGray, Color.Black));
-
-        // Left border
-        for (int y = 1; y <= plotHeight; y++)
-        {
-            Move(LeftMargin - 1, y);
-            AddRune((Rune)'│');
-        }
-
-        // Bottom border
-        Move(LeftMargin - 1, plotHeight + 1);
-        AddRune((Rune)'└');
-        for (int x = LeftMargin; x < viewportWidth - 1; x++)
-        {
-            AddRune((Rune)'─');
-        }
-    }
-
-    private void DrawPlotData(int viewportWidth, float[] samples,
-        int sampleCount, int plotWidth, int plotHeight)
-    {
-        Driver.SetAttribute(new Attribute(Color.Green, Color.Black));
-
-        float range = _visibleMax - _visibleMin;
-        if (range <= 0) range = 1;
-
-        // We'll use simple block characters for now (█▀▄ )
-        // Each cell can represent: full block, upper half, lower half, or empty
-
-        // Calculate dots height (each cell is 2 dots vertically for our simple approach)
-        int dotsHeight = plotHeight * 2;
-
-        for (int i = 0; i < sampleCount && i < plotWidth; i++)
-        {
-            float normalized = (samples[i] - _visibleMin) / range;
-            normalized = Math.Clamp(normalized, 0, 1);
-
-            // Map to dot position (0 = bottom, dotsHeight-1 = top)
-            int dotY = (int)(normalized * (dotsHeight - 1));
-
-            // Convert to cell coordinates
-            int cellX = LeftMargin + i;
-            int cellY = plotHeight - (dotY / 2);
-
-            if (cellX >= viewportWidth - 1 || cellY < 1 || cellY > plotHeight)
-                continue;
-
-            Move(cellX, cellY);
-
-            // Determine which half of the cell the point is in
-            bool upperHalf = (dotY % 2) == 1;
-
-            if (upperHalf)
+            Move(0, y);
+            for (int x = 0; x < width; x++)
             {
-                AddRune((Rune)'▀');
+                AddRune((Rune)'░');
+            }
+        }
+    }
+
+    private void DrawHeader(int width)
+    {
+        // Industrial header bar
+        Driver.SetAttribute(BorderColor);
+        Move(0, 0);
+        AddRune((Rune)'╔');
+        for (int x = 1; x < width - 1; x++) AddRune((Rune)'═');
+        AddRune((Rune)'╗');
+
+        // Title with signal name
+        string title = _boundNode?.DisplayName?.ToUpperInvariant() ?? "SCOPE";
+        if (title.Length > 20) title = title[..20];
+
+        Move(2, 0);
+        Driver.SetAttribute(AmberBright);
+        AddStr($"╡ {title} ╞");
+
+        // Status indicators on right
+        int rightPos = width - 25;
+        if (rightPos > title.Length + 10)
+        {
+            Move(rightPos, 0);
+            Driver.SetAttribute(BorderColor);
+            AddStr("╡");
+
+            // LIVE/HOLD indicator
+            if (_isPaused)
+            {
+                Driver.SetAttribute(StatusInactive);
+                AddStr(" HOLD ");
             }
             else
             {
-                AddRune((Rune)'▄');
+                Driver.SetAttribute(StatusActive);
+                AddStr(" LIVE ");
             }
+
+            Driver.SetAttribute(BorderColor);
+            AddStr("│");
+
+            // Blinking activity indicator
+            if (!_isPaused && (_frameCount % 10) < 5)
+            {
+                Driver.SetAttribute(StatusActive);
+                AddStr("●");
+            }
+            else
+            {
+                Driver.SetAttribute(StatusInactive);
+                AddStr("○");
+            }
+
+            Driver.SetAttribute(BorderColor);
+            AddStr("╞");
         }
 
-        // Draw connecting lines between samples using a different approach
-        // For better visualization, draw vertical lines between consecutive samples
-        if (sampleCount > 1)
+        // Second header line with technical info
+        Move(0, 1);
+        Driver.SetAttribute(BorderColor);
+        AddRune((Rune)'║');
+
+        Driver.SetAttribute(AmberDim);
+        string techInfo = $" CH1  SCALE:{(_autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X")}  ";
+        lock (_lock)
         {
-            Driver.SetAttribute(new Attribute(Color.BrightGreen, Color.Black));
+            techInfo += $"SAMPLES:{_sampleCount,4}  ";
+        }
+        techInfo += $"RANGE:[{FormatAxisValue(_visibleMin)},{FormatAxisValue(_visibleMax)}]";
 
-            for (int i = 0; i < sampleCount - 1 && i < plotWidth - 1; i++)
+        AddStr(techInfo.PadRight(width - 2));
+
+        Move(width - 1, 1);
+        Driver.SetAttribute(BorderColor);
+        AddRune((Rune)'║');
+    }
+
+    private void DrawIndustrialFrame(int width, int height, int plotWidth, int plotHeight)
+    {
+        int plotTop = TopMargin - 1;
+        int plotBottom = TopMargin + plotHeight;
+        int plotLeft = LeftMargin - 1;
+        int plotRight = LeftMargin + plotWidth;
+
+        Driver.SetAttribute(BorderColor);
+
+        // Top border of plot area
+        Move(plotLeft, plotTop);
+        AddRune((Rune)'╔');
+        for (int x = plotLeft + 1; x < plotRight; x++)
+        {
+            // Tick marks every 10 columns
+            if ((x - LeftMargin) % 10 == 0 && x < plotRight - 1)
+                AddRune((Rune)'╤');
+            else
+                AddRune((Rune)'═');
+        }
+        AddRune((Rune)'╗');
+
+        // Side borders
+        for (int y = plotTop + 1; y < plotBottom; y++)
+        {
+            Move(plotLeft, y);
+            // Tick marks every 4 rows
+            if ((y - TopMargin) % 4 == 0)
+                AddRune((Rune)'╟');
+            else
+                AddRune((Rune)'║');
+
+            Move(plotRight, y);
+            if ((y - TopMargin) % 4 == 0)
+                AddRune((Rune)'╢');
+            else
+                AddRune((Rune)'║');
+        }
+
+        // Bottom border
+        Move(plotLeft, plotBottom);
+        AddRune((Rune)'╚');
+        for (int x = plotLeft + 1; x < plotRight; x++)
+        {
+            if ((x - LeftMargin) % 10 == 0 && x < plotRight - 1)
+                AddRune((Rune)'╧');
+            else
+                AddRune((Rune)'═');
+        }
+        AddRune((Rune)'╝');
+
+        // Corner ornaments
+        Driver.SetAttribute(AmberDim);
+        Move(plotLeft - 1, plotTop);
+        AddStr("▐");
+        Move(plotRight + 1, plotTop);
+        AddStr("▌");
+        Move(plotLeft - 1, plotBottom);
+        AddStr("▐");
+        Move(plotRight + 1, plotBottom);
+        AddStr("▌");
+    }
+
+    private void DrawGrid(int plotWidth, int plotHeight)
+    {
+        Driver.SetAttribute(GridColor);
+
+        // Horizontal grid lines
+        for (int y = 0; y < plotHeight; y++)
+        {
+            if (y % 4 == 0 && y > 0)
             {
-                float norm1 = (samples[i] - _visibleMin) / range;
-                float norm2 = (samples[i + 1] - _visibleMin) / range;
-                norm1 = Math.Clamp(norm1, 0, 1);
-                norm2 = Math.Clamp(norm2, 0, 1);
-
-                int y1 = plotHeight - (int)(norm1 * (plotHeight - 1));
-                int y2 = plotHeight - (int)(norm2 * (plotHeight - 1));
-
-                int cellX = LeftMargin + i;
-
-                // Draw vertical line segment if there's a gap
-                int minY = Math.Min(y1, y2);
-                int maxY = Math.Max(y1, y2);
-
-                for (int y = minY; y <= maxY; y++)
+                for (int x = 0; x < plotWidth; x++)
                 {
-                    if (y >= 1 && y <= plotHeight && cellX < viewportWidth - 1)
+                    // Dashed line pattern
+                    if (x % 3 < 2)
                     {
-                        Move(cellX, y);
-                        if (y == y1 || y == y2)
-                        {
-                            AddRune((Rune)'●');
-                        }
-                        else
-                        {
-                            AddRune((Rune)'│');
-                        }
+                        Move(LeftMargin + x, TopMargin + y);
+                        AddRune((Rune)'·');
                     }
                 }
             }
         }
+
+        // Vertical grid lines (lighter)
+        for (int x = 0; x < plotWidth; x++)
+        {
+            if ((x % 10) == 0 && x > 0)
+            {
+                for (int y = 0; y < plotHeight; y++)
+                {
+                    if (y % 4 != 0) // Don't overwrite horizontal lines
+                    {
+                        Move(LeftMargin + x, TopMargin + y);
+                        if (y % 2 == 0)
+                            AddRune((Rune)'·');
+                    }
+                }
+            }
+        }
+
+        // Center line (zero reference if applicable)
+        float zeroY = 1.0f - (0 - _visibleMin) / (_visibleMax - _visibleMin);
+        if (zeroY > 0 && zeroY < 1)
+        {
+            int centerRow = (int)(zeroY * (plotHeight - 1));
+            Driver.SetAttribute(AmberDim);
+            for (int x = 0; x < plotWidth; x++)
+            {
+                Move(LeftMargin + x, TopMargin + centerRow);
+                AddRune((Rune)'─');
+            }
+        }
     }
 
-    private void DrawStatusLine(int viewportWidth, int viewportHeight)
+    private void DrawYAxisLabels(int plotHeight)
     {
-        Driver.SetAttribute(new Attribute(Color.Gray, Color.Black));
+        Driver.SetAttribute(AmberNormal);
 
-        int y = viewportHeight - 1;
-        Move(0, y);
+        // Max value
+        string maxStr = FormatAxisValue(_visibleMax);
+        Move(1, TopMargin);
+        AddStr(maxStr.PadLeft(LeftMargin - 2));
 
-        string status = $"[Space]=Pause [+/-]=Scale [R]=Reset";
-        if (!_autoScale)
+        // Min value
+        string minStr = FormatAxisValue(_visibleMin);
+        Move(1, TopMargin + plotHeight - 1);
+        AddStr(minStr.PadLeft(LeftMargin - 2));
+
+        // Mid values
+        if (plotHeight > 8)
         {
-            status += $" | Scale: {_scaleMultiplier:F1}x";
+            float midVal = (_visibleMin + _visibleMax) / 2;
+            string midStr = FormatAxisValue(midVal);
+            Move(1, TopMargin + plotHeight / 2);
+            AddStr(midStr.PadLeft(LeftMargin - 2));
         }
 
+        if (plotHeight > 12)
+        {
+            float q1 = _visibleMin + (_visibleMax - _visibleMin) * 0.25f;
+            float q3 = _visibleMin + (_visibleMax - _visibleMin) * 0.75f;
+
+            Driver.SetAttribute(AmberDim);
+            Move(1, TopMargin + plotHeight * 3 / 4);
+            AddStr(FormatAxisValue(q1).PadLeft(LeftMargin - 2));
+            Move(1, TopMargin + plotHeight / 4);
+            AddStr(FormatAxisValue(q3).PadLeft(LeftMargin - 2));
+        }
+    }
+
+    private void DrawWaveform(float[] samples, int sampleCount, int plotWidth, int plotHeight)
+    {
+        float range = _visibleMax - _visibleMin;
+        if (range <= 0) range = 1;
+
+        // Calculate Y positions for each sample
+        int[] yPositions = new int[sampleCount];
+        for (int i = 0; i < sampleCount; i++)
+        {
+            float normalized = (samples[i] - _visibleMin) / range;
+            normalized = Math.Clamp(normalized, 0, 1);
+            yPositions[i] = TopMargin + (int)((1 - normalized) * (plotHeight - 1));
+        }
+
+        // Draw connecting lines first (dimmer)
+        Driver.SetAttribute(AmberDim);
+        for (int i = 0; i < sampleCount - 1; i++)
+        {
+            int x = LeftMargin + (plotWidth - sampleCount) + i;
+            if (x < LeftMargin) continue;
+
+            int y1 = yPositions[i];
+            int y2 = yPositions[i + 1];
+
+            // Draw vertical connection between points
+            int minY = Math.Min(y1, y2);
+            int maxY = Math.Max(y1, y2);
+
+            for (int y = minY + 1; y < maxY; y++)
+            {
+                Move(x, y);
+                AddRune((Rune)'│');
+            }
+        }
+
+        // Draw the trace points (brighter)
+        Driver.SetAttribute(AmberBright);
+        for (int i = 0; i < sampleCount; i++)
+        {
+            int x = LeftMargin + (plotWidth - sampleCount) + i;
+            if (x < LeftMargin) continue;
+
+            int y = yPositions[i];
+            Move(x, y);
+
+            // Use different characters based on slope
+            if (i > 0 && i < sampleCount - 1)
+            {
+                int prevY = yPositions[i - 1];
+                int nextY = yPositions[i + 1];
+
+                if (prevY > y && nextY > y)
+                    AddRune((Rune)'▀'); // Peak
+                else if (prevY < y && nextY < y)
+                    AddRune((Rune)'▄'); // Trough
+                else if (prevY > y)
+                    AddRune((Rune)'╱'); // Rising
+                else if (prevY < y)
+                    AddRune((Rune)'╲'); // Falling
+                else
+                    AddRune((Rune)'─'); // Flat
+            }
+            else
+            {
+                AddRune((Rune)'●');
+            }
+        }
+
+        // Glow effect on most recent points
+        if (sampleCount > 2 && !_isPaused)
+        {
+            Driver.SetAttribute(TraceGlow);
+            int lastX = LeftMargin + plotWidth - 1;
+            int lastY = yPositions[sampleCount - 1];
+            if (lastX >= LeftMargin && lastY >= TopMargin && lastY < TopMargin + plotHeight)
+            {
+                Move(lastX, lastY);
+                AddRune((Rune)'█');
+            }
+        }
+    }
+
+    private void DrawNoSignal(int plotWidth, int plotHeight)
+    {
+        // Animated "NO SIGNAL" message
+        Driver.SetAttribute((_frameCount % 20) < 10 ? AmberBright : AmberDim);
+
+        string msg = "▶ NO SIGNAL ◀";
+        int x = LeftMargin + (plotWidth - msg.Length) / 2;
+        int y = TopMargin + plotHeight / 2;
+
+        Move(x, y);
+        AddStr(msg);
+
+        Driver.SetAttribute(AmberDim);
+        string hint = "Select a node to begin plotting";
+        x = LeftMargin + (plotWidth - hint.Length) / 2;
+        Move(x, y + 2);
+        AddStr(hint);
+    }
+
+    private void DrawStatusBar(int width, int height)
+    {
+        int y = height - 2;
+
+        // Status bar background
+        Driver.SetAttribute(BorderColor);
+        Move(0, y);
+        AddRune((Rune)'╠');
+        for (int x = 1; x < width - 1; x++) AddRune((Rune)'═');
+        AddRune((Rune)'╣');
+
+        // Status text
+        Move(0, y + 1);
+        AddRune((Rune)'║');
+
+        Driver.SetAttribute(AmberDim);
+
+        // Key hints
+        string keys = " [SPACE]";
+        AddStr(keys);
+        Driver.SetAttribute(_isPaused ? StatusActive : AmberDim);
+        AddStr("Pause");
+
+        Driver.SetAttribute(AmberDim);
+        AddStr("  [+/-]");
+        Driver.SetAttribute(!_autoScale ? StatusActive : AmberDim);
+        AddStr("Scale");
+
+        Driver.SetAttribute(AmberDim);
+        AddStr("  [R]");
+        Driver.SetAttribute(_autoScale ? StatusActive : AmberDim);
+        AddStr("Auto");
+
+        // Fill rest with spaces and close border
+        int currentPos = 1 + keys.Length + 5 + 7 + 5 + 5 + 4;
+        Driver.SetAttribute(AmberDim);
+
+        // Current value on the right
+        float currentValue = 0;
         lock (_lock)
         {
-            status += $" | Samples: {_sampleCount}";
+            if (_sampleCount > 0)
+            {
+                int lastIdx = (_writeIndex - 1 + _samples.Length) % _samples.Length;
+                currentValue = _samples[lastIdx];
+            }
         }
 
-        AddStr(status.Length > viewportWidth ? status[..viewportWidth] : status);
+        string valueStr = $"VALUE: {currentValue:F2}";
+        int valuePos = width - valueStr.Length - 3;
+
+        // Fill gap
+        for (int x = currentPos; x < valuePos; x++)
+        {
+            Move(x, y + 1);
+            AddStr(" ");
+        }
+
+        Move(valuePos, y + 1);
+        Driver.SetAttribute(AmberBright);
+        AddStr(valueStr);
+
+        Move(width - 1, y + 1);
+        Driver.SetAttribute(BorderColor);
+        AddRune((Rune)'║');
+
+        // Bottom border
+        Move(0, height - 1);
+        AddRune((Rune)'╚');
+        for (int x = 1; x < width - 1; x++) AddRune((Rune)'═');
+        AddRune((Rune)'╝');
     }
 
     private static string FormatAxisValue(float value)
     {
-        if (Math.Abs(value) >= 1000)
+        if (float.IsNaN(value) || float.IsInfinity(value))
+            return "---";
+        if (Math.Abs(value) >= 10000)
             return value.ToString("0.0e0");
         if (Math.Abs(value) >= 100)
             return value.ToString("F0");
@@ -577,12 +844,9 @@ public class TrendPlotView : View
         if (string.IsNullOrWhiteSpace(valueStr))
             return false;
 
-        // Handle common formats
         var str = valueStr.Trim();
-
-        // Remove common prefixes
         if (str.StartsWith("(") && str.EndsWith(")"))
-            return false; // e.g., "(pending)"
+            return false;
 
         return float.TryParse(str, out value);
     }
@@ -597,4 +861,3 @@ public class TrendPlotView : View
         base.Dispose(disposing);
     }
 }
-
