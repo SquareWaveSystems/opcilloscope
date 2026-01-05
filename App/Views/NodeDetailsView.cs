@@ -1,11 +1,14 @@
 using Terminal.Gui;
 using Opc.Ua;
 using OpcScope.OpcUa.Models;
+using OpcScope.App.Themes;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
 /// <summary>
 /// Panel showing detailed attributes of the selected node.
+/// Uses Terminal.Gui v2 layout features for cleaner presentation.
 /// </summary>
 public class NodeDetailsView : FrameView
 {
@@ -14,15 +17,20 @@ public class NodeDetailsView : FrameView
 
     public NodeDetailsView()
     {
-        Title = "Node Details";
+        Title = " Node Details ";
+
+        // Apply theme styling
+        var theme = AppThemeManager.Current;
+        BorderStyle = theme.FrameLineStyle;
 
         _detailsLabel = new Label
         {
-            X = 0,
+            X = 1,
             Y = 0,
-            Width = Dim.Fill(),
+            Width = Dim.Fill(1),
             Height = Dim.Fill(),
-            Text = "Select a node to view details"
+            Text = "Select a node to view details",
+            TextAlignment = Alignment.Start
         };
 
         Add(_detailsLabel);
@@ -49,27 +57,26 @@ public class NodeDetailsView : FrameView
             return;
         }
 
-        var lines = new List<string>
+        // Build a cleaner inline format for the details bar
+        var parts = new List<string>
         {
             $"NodeId: {attrs.NodeId}",
-            $"NodeClass: {attrs.NodeClass}",
-            $"BrowseName: {attrs.BrowseName ?? "N/A"}",
-            $"DisplayName: {attrs.DisplayName ?? "N/A"}"
+            $"Class: {attrs.NodeClass}",
+            $"Name: {attrs.DisplayName ?? attrs.BrowseName ?? "N/A"}"
         };
-
-        if (!string.IsNullOrEmpty(attrs.Description))
-        {
-            lines.Add($"Description: {attrs.Description}");
-        }
 
         if (attrs.NodeClass == NodeClass.Variable)
         {
-            lines.Add($"DataType: {attrs.DataType ?? "N/A"}");
-            lines.Add($"ValueRank: {FormatValueRank(attrs.ValueRank)}");
-            lines.Add($"AccessLevel: {attrs.AccessLevelString}");
+            parts.Add($"Type: {attrs.DataType ?? "N/A"}");
+            parts.Add($"Access: {attrs.AccessLevelString}");
         }
 
-        _detailsLabel.Text = string.Join("\n", lines);
+        if (!string.IsNullOrEmpty(attrs.Description))
+        {
+            parts.Add($"Desc: {TruncateString(attrs.Description, 40)}");
+        }
+
+        _detailsLabel.Text = string.Join("  │  ", parts);
     }
 
     public void Clear()
@@ -89,5 +96,14 @@ public class NodeDetailsView : FrameView
             1 => "OneDimension",
             _ => $"{valueRank}D Array"
         };
+    }
+
+    private static string TruncateString(string str, int maxLength)
+    {
+        if (string.IsNullOrEmpty(str))
+            return string.Empty;
+        if (str.Length <= maxLength)
+            return str;
+        return str[..(maxLength - 3)] + "...";
     }
 }

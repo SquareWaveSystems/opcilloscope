@@ -78,7 +78,7 @@ public class ThemeManagerTests
         var currentTheme = ThemeManager.Current;
 
         // Act
-        ThemeManager.SetTheme((RetroTheme?)null);
+        ThemeManager.SetTheme((RetroTheme)null!);
 
         // Assert
         Assert.Same(currentTheme, ThemeManager.Current);
@@ -181,7 +181,7 @@ public class ThemeManagerTests
     }
 
     [Fact]
-    public void ThemeManager_ConcurrentAccess_IsThreadSafe()
+    public async Task ThemeManager_ConcurrentAccess_IsThreadSafe()
     {
         // Arrange
         var themes = new RetroTheme[]
@@ -222,7 +222,7 @@ public class ThemeManagerTests
             }));
         }
 
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
 
         // Assert
         Assert.Empty(exceptions);

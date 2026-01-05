@@ -351,9 +351,11 @@ public class TrendPlotView : View
         return base.OnKeyDown(key);
     }
 
-    protected override bool OnDrawingContent(DrawContext context)
+    protected override bool OnDrawingContent(DrawContext? context)
     {
         base.OnDrawingContent(context);
+
+        if (Driver is null) return true;
 
         var viewport = Frame;
 
@@ -458,7 +460,7 @@ public class TrendPlotView : View
     private void DrawHeader(int width)
     {
         // Industrial header bar
-        Driver.SetAttribute(_borderAttr);
+        Driver!.SetAttribute(_borderAttr);
         Move(0, 0);
         AddRune((Rune)_currentTheme.BoxTopLeft);
         for (int x = 1; x < width - 1; x++) AddRune((Rune)_currentTheme.BoxHorizontal);
@@ -538,7 +540,7 @@ public class TrendPlotView : View
         int plotLeft = LeftMargin - 1;
         int plotRight = LeftMargin + plotWidth;
 
-        Driver.SetAttribute(_borderAttr);
+        Driver!.SetAttribute(_borderAttr);
 
         // Top border of plot area
         Move(plotLeft, plotTop);
@@ -596,7 +598,7 @@ public class TrendPlotView : View
 
     private void DrawGrid(int plotWidth, int plotHeight)
     {
-        Driver.SetAttribute(_gridAttr);
+        Driver!.SetAttribute(_gridAttr);
 
         // Horizontal grid lines
         for (int y = 0; y < plotHeight; y++)
@@ -648,7 +650,7 @@ public class TrendPlotView : View
 
     private void DrawYAxisLabels(int plotHeight)
     {
-        Driver.SetAttribute(_normalAttr);
+        Driver!.SetAttribute(_normalAttr);
 
         // Max value
         string maxStr = FormatAxisValue(_visibleMax);
@@ -768,7 +770,7 @@ public class TrendPlotView : View
 
             if (colorIndex != lastColorIndex)
             {
-                Driver.SetAttribute(colorIndex == 2 ? _glowAttr : colorIndex == 1 ? _brightAttr : _normalAttr);
+                Driver!.SetAttribute(colorIndex == 2 ? _glowAttr : colorIndex == 1 ? _brightAttr : _normalAttr);
                 lastColorIndex = colorIndex;
             }
 
@@ -780,7 +782,7 @@ public class TrendPlotView : View
     private void DrawNoSignal(int plotWidth, int plotHeight)
     {
         // Animated "NO SIGNAL" message
-        Driver.SetAttribute((_frameCount % 20) < 10 ? _brightAttr : _dimAttr);
+        Driver!.SetAttribute((_frameCount % 20) < 10 ? _brightAttr : _dimAttr);
 
         string msg = _currentTheme.NoSignalMessage;
         int x = LeftMargin + (plotWidth - msg.Length) / 2;
@@ -801,7 +803,7 @@ public class TrendPlotView : View
         int y = height - 2;
 
         // Status bar background
-        Driver.SetAttribute(_borderAttr);
+        Driver!.SetAttribute(_borderAttr);
         Move(0, y);
         AddRune((Rune)_currentTheme.BoxLeftT);
         for (int x = 1; x < width - 1; x++) AddRune((Rune)_currentTheme.BoxHorizontal);

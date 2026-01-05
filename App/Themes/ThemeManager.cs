@@ -16,7 +16,9 @@ public static class ThemeManager
         new AmberTheme(),
         new GreenTheme(),
         new BlueTheme(),
-        new GreyTheme()
+        new GreyTheme(),
+        new SeveranceTheme(),
+        new WhiteTheme()
     };
 
     /// <summary>
