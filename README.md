@@ -27,7 +27,7 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 │ File   View   Connection   Help                                    [Status] │
 ├───────────────────────────────┬─────────────────────────────────────────────┤
 │ Address Space                 │ Monitored Items                             │
-│ ─────────────────────────────│─────────────────────────────────────────────│
+│ ─────────────────────────────│──────────────────────────────────────────────│
 │ ▾ Root                        │ Name           │ Value    │ Time   │ Status │
 │   ▾ Objects                   │────────────────┼──────────┼────────┼────────│
 │     ▸ Server                  │ Temperature    │ 47.3     │ 12:34  │ Good   │
@@ -39,12 +39,12 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 │                               │                │          │        │        │
 ├───────────────────────────────┴─────────────────────────────────────────────┤
 │ Node Details                                                                │
-│ NodeId: ns=2;s=Temperature  DataType: Double  AccessLevel: CurrentRead     │
+│ NodeId: ns=2;s=Temperature  DataType: Double  AccessLevel: CurrentRead      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Log                                                                         │
-│ [12:30:01] Connected to opc.tcp://localhost:4840                           │
-│ [12:30:02] Subscription created (ID: 1, Interval: 1000ms)                  │
-│ [12:30:15] Subscribed to ns=2;s=Temperature                                │
+│ [12:30:01] Connected to opc.tcp://localhost:4840                            │
+│ [12:30:02] Subscription created (ID: 1, Interval: 1000ms)                   │
+│ [12:30:15] Subscribed to ns=2;s=Temperature                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
  F1 Help │ F5 Refresh │ Enter Subscribe │ Del Unsubscribe │ F10 Menu
 ```
@@ -59,7 +59,7 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/OpcScope.git
+git clone https://github.com/BrettKinny/OpcScope.git
 cd OpcScope
 
 # Restore packages and build
