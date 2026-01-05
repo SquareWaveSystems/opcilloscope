@@ -3,6 +3,7 @@ using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
 using System.Data;
 using Attribute = Terminal.Gui.Attribute;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -38,7 +39,7 @@ public class MonitoredItemsView : FrameView
         CanFocus = true;
 
         // Apply theme styling
-        var theme = ThemeManager.Current;
+        var theme = AppThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
         _dataTable = new DataTable();
@@ -67,36 +68,9 @@ public class MonitoredItemsView : FrameView
         _tableView.Style.ShowVerticalHeaderLines = false;
         _tableView.Style.ExpandLastColumn = true;
 
-        // Row color getter for status-based coloring
-        _tableView.Style.RowColorGetter = GetRowColor;
-
         _tableView.KeyDown += HandleKeyDown;
 
         Add(_tableView);
-    }
-
-    /// <summary>
-    /// Returns row color based on the item's status.
-    /// </summary>
-    private Attribute? GetRowColor(RowColorGetterArgs args)
-    {
-        if (args.RowIndex < 0 || args.RowIndex >= _dataTable.Rows.Count)
-            return null;
-
-        var row = _dataTable.Rows[args.RowIndex];
-        var status = row["Status"] as string;
-        var theme = ThemeManager.Current;
-
-        // Color based on status
-        if (status != null)
-        {
-            if (status.Contains("Bad") || status.Contains("Error"))
-                return theme.ErrorAttr;
-            if (status.Contains("Uncertain"))
-                return theme.WarningAttr;
-        }
-
-        return null; // Use default color
     }
 
     public void AddItem(MonitoredNode item)

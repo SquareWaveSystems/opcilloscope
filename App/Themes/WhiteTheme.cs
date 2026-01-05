@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Attribute = Terminal.Gui.Attribute;
 
 namespace OpcScope.App.Themes;
 

@@ -1,5 +1,6 @@
 using Terminal.Gui;
 using OpcScope.App.Themes;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Dialogs;
 
@@ -19,7 +20,7 @@ public class WriteValueDialog : Dialog
 
     public WriteValueDialog(string nodeName, string? dataType, string? currentValue)
     {
-        var theme = ThemeManager.Current;
+        var theme = AppThemeManager.Current;
 
         Title = " Write Value ";
         Width = 50;

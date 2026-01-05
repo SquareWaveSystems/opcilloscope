@@ -1,7 +1,9 @@
+using System.Text;
 using Terminal.Gui;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -26,7 +28,7 @@ public class AddressSpaceView : FrameView
         CanFocus = true;
 
         // Apply initial theme styling
-        var theme = ThemeManager.Current;
+        var theme = AppThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
         _treeView = new TreeView<BrowsedNode>

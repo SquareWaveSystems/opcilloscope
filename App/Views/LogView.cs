@@ -3,6 +3,7 @@ using OpcScope.Utilities;
 using OpcScope.App.Themes;
 using System.Collections.ObjectModel;
 using Attribute = Terminal.Gui.Attribute;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -22,7 +23,7 @@ public class LogView : FrameView
         Title = " Log ";
 
         // Apply theme styling
-        var theme = ThemeManager.Current;
+        var theme = AppThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
         _listView = new ListView
@@ -33,31 +34,9 @@ public class LogView : FrameView
             Height = Dim.Fill()
         };
 
-        // Use row color getter for log level coloring
-        _listView.RowColorGetter = GetRowColor;
-
         _listView.SetSource(_displayedEntries);
 
         Add(_listView);
-    }
-
-    /// <summary>
-    /// Returns color for log row based on severity level.
-    /// </summary>
-    private Attribute? GetRowColor(ListViewRowColorGetterArgs args)
-    {
-        if (args.Item < 0 || args.Item >= _entries.Count)
-            return null;
-
-        var entry = _entries[args.Item];
-        var theme = ThemeManager.Current;
-
-        return entry.Level switch
-        {
-            LogLevel.Error => theme.ErrorAttr,
-            LogLevel.Warning => theme.WarningAttr,
-            _ => null // Use default
-        };
     }
 
     public void Initialize(Logger logger)

@@ -1,5 +1,6 @@
 using Terminal.Gui;
 using OpcScope.App.Themes;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Dialogs;
 
@@ -17,7 +18,7 @@ public class ConnectDialog : Dialog
 
     public ConnectDialog(string? lastEndpoint = null)
     {
-        var theme = ThemeManager.Current;
+        var theme = AppThemeManager.Current;
 
         Title = " Connect to Server ";
         Width = 60;
