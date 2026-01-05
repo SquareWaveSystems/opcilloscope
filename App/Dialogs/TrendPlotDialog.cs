@@ -1,44 +1,35 @@
 using Terminal.Gui;
 using OpcScope.App.Views;
+using OpcScope.App.Themes;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
-using Attribute = Terminal.Gui.Attribute;
 
 namespace OpcScope.App.Dialogs;
 
 /// <summary>
 /// Industrial-themed dialog for displaying a real-time oscilloscope view.
-/// Features a retro-futuristic CRT aesthetic matching Square Wave Systems brand.
+/// Features a retro-futuristic CRT aesthetic with theme support.
 /// </summary>
 public class TrendPlotDialog : Dialog
 {
-    // Industrial color scheme
-    private static readonly Attribute AmberOnBlack = new(Color.BrightYellow, Color.Black);
-    private static readonly Attribute AmberDimOnBlack = new(new Color(180, 100, 0), Color.Black);
-    private static readonly Attribute GreenOnBlack = new(Color.BrightGreen, Color.Black);
-
     private readonly TrendPlotView _trendPlotView;
     private readonly SubscriptionManager? _subscriptionManager;
     private readonly IReadOnlyCollection<MonitoredNode>? _availableNodes;
+
+    // Theme-aware accessor
+    private static RetroTheme Theme => ThemeManager.Current;
 
     public TrendPlotDialog(SubscriptionManager? subscriptionManager = null, MonitoredNode? initialNode = null)
     {
         _subscriptionManager = subscriptionManager;
         _availableNodes = subscriptionManager?.MonitoredItems;
 
-        Title = "═══[ OSCILLOSCOPE ]═══";
+        Title = $"{Theme.TitleDecoration}[ OSCILLOSCOPE ]{Theme.TitleDecoration}";
         Width = Dim.Percent(85);
         Height = Dim.Percent(85);
 
-        // Apply dark industrial styling
-        ColorScheme = new ColorScheme
-        {
-            Normal = AmberDimOnBlack,
-            Focus = AmberOnBlack,
-            HotNormal = AmberOnBlack,
-            HotFocus = GreenOnBlack,
-            Disabled = new Attribute(Color.DarkGray, Color.Black)
-        };
+        // Apply theme-based styling
+        ColorScheme = Theme.DialogColorScheme;
 
         // Create the trend plot view - takes up most of the dialog
         _trendPlotView = new TrendPlotView
@@ -63,8 +54,8 @@ public class TrendPlotDialog : Dialog
         {
             X = 1,
             Y = 0,
-            Text = "◄ NODE ►",
-            ColorScheme = ColorScheme
+            Text = $"{Theme.ButtonPrefix}NODE{Theme.ButtonSuffix}",
+            ColorScheme = Theme.ButtonColorScheme
         };
         selectNodeButton.Accepting += OnSelectNode;
 
@@ -72,8 +63,8 @@ public class TrendPlotDialog : Dialog
         {
             X = Pos.Right(selectNodeButton) + 2,
             Y = 0,
-            Text = "◄ DEMO ►",
-            ColorScheme = ColorScheme
+            Text = $"{Theme.ButtonPrefix}DEMO{Theme.ButtonSuffix}",
+            ColorScheme = Theme.ButtonColorScheme
         };
         demoButton.Accepting += OnDemoMode;
 
@@ -81,8 +72,8 @@ public class TrendPlotDialog : Dialog
         {
             X = Pos.Right(demoButton) + 2,
             Y = 0,
-            Text = "◄ CLR ►",
-            ColorScheme = ColorScheme
+            Text = $"{Theme.ButtonPrefix}CLR{Theme.ButtonSuffix}",
+            ColorScheme = Theme.ButtonColorScheme
         };
         clearButton.Accepting += OnClear;
 
@@ -90,8 +81,8 @@ public class TrendPlotDialog : Dialog
         {
             X = Pos.Right(clearButton) + 2,
             Y = 0,
-            Text = "◄ EXIT ►",
-            ColorScheme = ColorScheme
+            Text = $"{Theme.ButtonPrefix}EXIT{Theme.ButtonSuffix}",
+            ColorScheme = Theme.ButtonColorScheme
         };
         closeButton.Accepting += (s, e) => Application.RequestStop();
 
@@ -116,7 +107,7 @@ public class TrendPlotDialog : Dialog
     {
         if (_availableNodes == null || !_availableNodes.Any())
         {
-            MessageBox.Query("▶ NO NODES ◀", "No monitored items available.\nSubscribe to a variable node first.", "OK");
+            MessageBox.Query(Theme.NoSignalMessage, "No monitored items available.\nSubscribe to a variable node first.", "OK");
             return;
         }
 
@@ -125,10 +116,10 @@ public class TrendPlotDialog : Dialog
 
         var dialog = new Dialog
         {
-            Title = "═══[ SELECT SIGNAL ]═══",
+            Title = $"{Theme.TitleDecoration}[ SELECT SIGNAL ]{Theme.TitleDecoration}",
             Width = 50,
             Height = Math.Min(nodeList.Count + 7, 20),
-            ColorScheme = ColorScheme
+            ColorScheme = Theme.DialogColorScheme
         };
 
         var headerLabel = new Label
@@ -136,7 +127,7 @@ public class TrendPlotDialog : Dialog
             X = 1,
             Y = 0,
             Text = "▼ AVAILABLE SIGNALS ▼",
-            ColorScheme = ColorScheme
+            ColorScheme = Theme.DialogColorScheme
         };
 
         var listView = new ListView
@@ -145,7 +136,7 @@ public class TrendPlotDialog : Dialog
             Y = 1,
             Width = Dim.Fill(1),
             Height = Dim.Fill(4),
-            ColorScheme = ColorScheme
+            ColorScheme = Theme.DialogColorScheme
         };
         listView.SetSource(new System.Collections.ObjectModel.ObservableCollection<string>(nodeNames));
 
@@ -154,24 +145,24 @@ public class TrendPlotDialog : Dialog
             X = 1,
             Y = Pos.Bottom(listView),
             Text = "[ Numeric values only ]",
-            ColorScheme = ColorScheme
+            ColorScheme = Theme.DialogColorScheme
         };
 
         var selectButton = new Button
         {
             X = Pos.Center() - 12,
             Y = Pos.Bottom(hintLabel) + 1,
-            Text = "◄ SELECT ►",
+            Text = $"{Theme.ButtonPrefix}SELECT{Theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = ColorScheme
+            ColorScheme = Theme.ButtonColorScheme
         };
 
         var cancelButton = new Button
         {
             X = Pos.Center() + 2,
             Y = Pos.Bottom(hintLabel) + 1,
-            Text = "◄ CANCEL ►",
-            ColorScheme = ColorScheme
+            Text = $"{Theme.ButtonPrefix}CANCEL{Theme.ButtonSuffix}",
+            ColorScheme = Theme.ButtonColorScheme
         };
 
         MonitoredNode? selectedNode = null;
