@@ -99,7 +99,9 @@ public class NodeDetailsView : FrameView
 
     private static string TruncateString(string str, int maxLength)
     {
-        if (string.IsNullOrEmpty(str) || str.Length <= maxLength)
+        if (string.IsNullOrEmpty(str))
+            return string.Empty;
+        if (str.Length <= maxLength)
             return str;
         return str[..(maxLength - 3)] + "...";
     }
