@@ -682,73 +682,98 @@ public class TrendPlotView : View
         }
     }
 
+    /// <summary>
+    /// Draws the waveform using Braille characters for smooth sub-pixel rendering.
+    /// Each Braille character provides a 2×4 dot matrix, giving 4x vertical resolution.
+    /// </summary>
     private void DrawWaveform(float[] samples, int sampleCount, int plotWidth, int plotHeight)
     {
         float range = _visibleMax - _visibleMin;
         if (range <= 0) range = 1;
 
-        int subPixelHeight = plotHeight * 2;
+        // Braille gives us 4 sub-pixels per cell vertically
+        int subPixelHeight = plotHeight * 4;
         int startX = LeftMargin + (plotWidth - sampleCount);
 
-        // Draw connected line segments between samples
+        // Pre-calculate all sub-pixel Y positions
+        int[] subYPositions = new int[sampleCount];
+        for (int i = 0; i < sampleCount; i++)
+        {
+            float norm = Math.Clamp((samples[i] - _visibleMin) / range, 0, 1);
+            subYPositions[i] = (int)((1 - norm) * (subPixelHeight - 1));
+        }
+
+        // Build a sparse map of (x, cellY) -> braille dot pattern
+        // This allows us to combine multiple dots into single characters
+        var cellPatterns = new Dictionary<(int x, int cellY), int>();
+
         for (int i = 0; i < sampleCount; i++)
         {
             int x = startX + i;
             if (x < LeftMargin || x >= LeftMargin + plotWidth) continue;
 
-            // Calculate sub-pixel Y for current sample
-            float norm = Math.Clamp((samples[i] - _visibleMin) / range, 0, 1);
-            int subY = (int)((1 - norm) * (subPixelHeight - 1));
+            int subY = subYPositions[i];
 
-            // Determine vertical span by interpolating with adjacent samples
+            // Determine vertical span to connect with previous sample (Bresenham-style)
             int minSubY = subY, maxSubY = subY;
-
             if (i > 0)
             {
-                float prevNorm = Math.Clamp((samples[i - 1] - _visibleMin) / range, 0, 1);
-                int prevSubY = (int)((1 - prevNorm) * (subPixelHeight - 1));
-                int midY = (subY + prevSubY + 1) / 2; // Midpoint, biased up
-                minSubY = Math.Min(minSubY, midY);
-                maxSubY = Math.Max(maxSubY, midY);
+                int prevSubY = subYPositions[i - 1];
+                minSubY = Math.Min(subY, prevSubY);
+                maxSubY = Math.Max(subY, prevSubY);
             }
-            if (i < sampleCount - 1)
+
+            // Fill in all sub-pixels in the vertical span
+            for (int sy = minSubY; sy <= maxSubY; sy++)
             {
-                float nextNorm = Math.Clamp((samples[i + 1] - _visibleMin) / range, 0, 1);
-                int nextSubY = (int)((1 - nextNorm) * (subPixelHeight - 1));
-                int midY = (subY + nextSubY + 1) / 2;
-                minSubY = Math.Min(minSubY, midY);
-                maxSubY = Math.Max(maxSubY, midY);
+                int cellY = sy / 4;
+                int dotRow = sy % 4;
+
+                // Braille dot pattern: dots are numbered 1-8 in a 2x4 grid
+                // We use column 0 (left column): dots 1,2,3,7 for rows 0,1,2,3
+                // Bit positions: row0=0x01, row1=0x02, row2=0x04, row3=0x40
+                int dotBit = dotRow switch
+                {
+                    0 => 0x01,
+                    1 => 0x02,
+                    2 => 0x04,
+                    3 => 0x40,
+                    _ => 0
+                };
+
+                var key = (x, cellY);
+                cellPatterns.TryGetValue(key, out int existing);
+                cellPatterns[key] = existing | dotBit;
             }
+        }
 
-            // Select color based on distance from leading edge
-            Attribute attr = i >= sampleCount - 3 && !_isPaused && _currentTheme.EnableGlow ? _glowAttr
-                           : i >= sampleCount - 8 ? _brightAttr
-                           : _normalAttr;
-            Driver.SetAttribute(attr);
+        // Render all cells
+        const int BrailleBase = 0x2800;
+        int lastColorIndex = -1;
 
-            // Render each cell that contains part of the line
-            int minCell = minSubY / 2;
-            int maxCell = maxSubY / 2;
+        foreach (var kvp in cellPatterns.OrderBy(k => k.Key.x).ThenBy(k => k.Key.cellY))
+        {
+            int x = kvp.Key.x;
+            int cellY = kvp.Key.cellY;
+            int pattern = kvp.Value;
 
-            for (int cellY = minCell; cellY <= maxCell; cellY++)
+            int screenY = TopMargin + cellY;
+            if (screenY < TopMargin || screenY >= TopMargin + plotHeight) continue;
+
+            // Calculate distance from leading edge for color selection
+            int sampleIndex = x - startX;
+            int colorIndex = sampleIndex >= sampleCount - 3 && !_isPaused && _currentTheme.EnableGlow ? 2
+                           : sampleIndex >= sampleCount - 8 ? 1
+                           : 0;
+
+            if (colorIndex != lastColorIndex)
             {
-                int screenY = TopMargin + cellY;
-                if (screenY < TopMargin || screenY >= TopMargin + plotHeight) continue;
-
-                // Determine which half-blocks are lit in this cell
-                int cellTop = cellY * 2;
-                int cellBottom = cellTop + 1;
-                bool fillTop = maxSubY >= cellTop && minSubY <= cellTop;
-                bool fillBottom = maxSubY >= cellBottom && minSubY <= cellBottom;
-
-                // Select the right block character
-                if (fillTop && fillBottom)
-                    AddRune((Rune)'█');
-                else if (fillTop)
-                    AddRune((Rune)'▀');
-                else if (fillBottom)
-                    AddRune((Rune)'▄');
+                Driver.SetAttribute(colorIndex == 2 ? _glowAttr : colorIndex == 1 ? _brightAttr : _normalAttr);
+                lastColorIndex = colorIndex;
             }
+
+            Move(x, screenY);
+            AddRune(new Rune(BrailleBase + pattern));
         }
     }
 
