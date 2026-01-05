@@ -125,6 +125,7 @@ public class MainWindow : Toplevel
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
+                    new MenuItem("_Trend Plot...", "", ShowTrendPlot),
                     new MenuItem("_Refresh Tree", "", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     new MenuItem("_Settings...", "", ShowSettings)
@@ -324,6 +325,12 @@ public class MainWindow : Toplevel
         }
     }
 
+    private void ShowTrendPlot()
+    {
+        var dialog = new TrendPlotDialog(_subscriptionManager);
+        Application.Run(dialog);
+    }
+
     private void ExportToCsv()
     {
         if (_subscriptionManager == null || !_subscriptionManager.MonitoredItems.Any())
@@ -381,10 +388,16 @@ Navigation:
   Arrow Keys - Navigate within panel
   Space     - Expand/collapse tree node
 
+Trend Plot (in dialog):
+  Space     - Pause/resume plotting
+  +/-       - Adjust vertical scale
+  R         - Reset to auto-scale
+
 Tips:
   - Only Variable nodes can be subscribed
   - Double-click a node to subscribe
   - Values update in real-time via subscription
+  - Use View > Trend Plot to visualize values
 ";
         MessageBox.Query("Help", help, "OK");
     }
