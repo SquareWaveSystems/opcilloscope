@@ -14,9 +14,6 @@ dotnet run
 
 # Run tests
 dotnet test
-
-# Or use the test script
-./scripts/run-tests.sh --all
 ```
 
 ## Project Structure
@@ -53,9 +50,6 @@ OpcScope/
 │       └── Integration/        # Integration tests
 ├── test-server/                # Node-OPCUA test server (legacy)
 ├── packages/                   # Local NuGet packages
-└── scripts/
-    ├── download-packages.sh    # Offline package download
-    └── run-tests.sh            # Test runner
 ```
 
 ## Key Technical Details
@@ -149,7 +143,7 @@ Key classes:
 - `IntegrationTestBase` - Base class with auto-connected client
 
 ### Test Server Nodes
-Available test nodes (same for both in-process and Node-OPCUA servers):
+Available test nodes:
 
 **Simulation folder** (values update every second):
 - `Counter` - Int32, increments every second
@@ -165,14 +159,6 @@ Available test nodes (same for both in-process and Node-OPCUA servers):
 - `Version` - String ("1.0.0")
 - `ArrayOfInts` - Int32[] ([1, 2, 3, 4, 5])
 
-### Legacy Node-OPCUA Server
-For manual testing, the Node-OPCUA server can still be used:
-```bash
-cd test-server
-npm start
-```
-Server runs at `opc.tcp://localhost:4840/UA/OpcScopeTest`
-
 ## Common Issues
 
 1. **NuGet restore fails**: Use local package source or `scripts/download-packages.sh`
@@ -180,12 +166,3 @@ Server runs at `opc.tcp://localhost:4840/UA/OpcScopeTest`
 3. **UI thread exceptions**: Always use `Application.Invoke()` for UI updates from background threads
 4. **Ambiguous NodeBrowser reference**: OPC Foundation has its own `Browser` class - use fully qualified names if needed
 5. **Certificate validation errors**: Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
-
-## Why OPC Foundation over LibUA
-
-The project was refactored from LibUA to OPC Foundation because:
-- LibUA lacks proper Publish/Subscribe mechanism (required polling workaround)
-- OPC Foundation is the official, certified stack
-- Full subscription support with server-pushed notifications
-- Better documentation and community support
-- More complete OPC UA feature coverage
