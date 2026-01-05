@@ -1,6 +1,6 @@
 # OpcScope
 
-A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data. Built with .NET 8, Terminal.Gui, and LibUA.
+A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data. Built with .NET 8, Terminal.Gui, and OPC Foundation UA-.NETStandard.
 
 ![Terminal UI](https://img.shields.io/badge/UI-Terminal.Gui-blue)
 ![.NET 8](https://img.shields.io/badge/.NET-8.0-purple)
@@ -113,9 +113,9 @@ OpcScope/
 │       ├── WriteValueDialog.cs # Write to node (P1)
 │       └── SettingsDialog.cs   # Subscription settings
 ├── OpcUa/
-│   ├── OpcUaClientWrapper.cs   # Wrapper around LibUA Client
+│   ├── OpcUaClientWrapper.cs   # Wrapper around OPC Foundation Session
 │   ├── NodeBrowser.cs          # Address space navigation logic
-│   ├── SubscriptionManager.cs  # Subscription lifecycle with publish loop
+│   ├── SubscriptionManager.cs  # OPC UA Subscription with server-pushed notifications
 │   └── Models/
 │       ├── MonitoredNode.cs    # ViewModel for monitored items
 │       └── BrowsedNode.cs      # ViewModel for tree nodes
@@ -127,7 +127,7 @@ OpcScope/
 ## Dependencies
 
 - **Terminal.Gui v2.x** - Cross-platform terminal UI framework
-- **nauful-LibUA-core** - Open source OPC UA implementation (Apache 2.0)
+- **OPC Foundation UA-.NETStandard** - Official OPC UA stack with full subscription support
 
 ## Testing
 
@@ -139,13 +139,13 @@ For testing, you can use:
 ## Technical Notes
 
 ### Thread Safety
-LibUA callbacks arrive on background threads. All UI updates are marshalled to the UI thread via `Application.Invoke()`.
+OPC Foundation callbacks arrive on background threads. All UI updates are marshalled to the UI thread via `Application.Invoke()`.
 
 ### Lazy Loading
 The address space tree uses lazy loading - child nodes are only fetched when a parent is expanded, preventing memory issues with large address spaces.
 
-### Publish Loop
-LibUA requires explicit polling for subscription notifications. A background task polls every 100ms to receive value changes.
+### OPC UA Subscriptions
+Uses proper OPC UA Publish/Subscribe with `MonitoredItem.Notification` events - values are pushed by the server, no polling required.
 
 ### Error Handling
 - Connection errors display in the log panel without crashing
