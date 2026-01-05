@@ -57,6 +57,9 @@ public abstract class RetroTheme
     // Highlight effect for active elements
     public Attribute GlowAttr => _glowAttr ??= new(Color.White, Background);
 
+    // Whether to enable the glow effect on the leading edge of the plot
+    public virtual bool EnableGlow => true;
+
     // === Cached Color Schemes for Terminal.Gui Widgets ===
     private ColorScheme? _mainColorScheme;
     private ColorScheme? _dialogColorScheme;

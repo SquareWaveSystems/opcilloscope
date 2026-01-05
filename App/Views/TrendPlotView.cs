@@ -741,16 +741,7 @@ public class TrendPlotView : View
                 bool fillTop = maxSubY >= cellTop && minSubY <= cellTop;
                 bool fillBottom = maxSubY >= cellBottom && minSubY <= cellBottom;
 
-                // Choose color based on position (brighter near the leading edge)
-                if (sampleIdx >= sampleCount - 3 && !_isPaused)
-                    Driver.SetAttribute(_glowAttr);
-                else if (sampleIdx >= sampleCount - 8)
-                    Driver.SetAttribute(_brightAttr);
-                else
-                    Driver.SetAttribute(_normalAttr);
-
                 // Select the right block character
-                var (fillTop, fillBottom) = cell.Value;
                 if (fillTop && fillBottom)
                     AddRune((Rune)'█');
                 else if (fillTop)
