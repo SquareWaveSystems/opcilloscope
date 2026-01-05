@@ -113,6 +113,9 @@ public class TrendPlotView : View
             });
         }
 
+        // Start the refresh timer to redraw the plot as new samples arrive
+        StartUpdateTimer();
+
         SetNeedsLayout();
     }
 
@@ -134,6 +137,7 @@ public class TrendPlotView : View
 
     private void UnbindCurrentNode()
     {
+        StopUpdateTimer();
         if (_valueChangedHandler != null && _subscriptionManager != null)
         {
             _subscriptionManager.ValueChanged -= _valueChangedHandler;
