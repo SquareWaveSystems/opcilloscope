@@ -5,7 +5,7 @@ namespace OpcScope.App.Themes;
 /// </summary>
 public static class ThemeManager
 {
-    private static RetroTheme _currentTheme = new AmberTheme();
+    private static RetroTheme _currentTheme = new DarkTheme();
     private static readonly object _lock = new();
 
     /// <summary>
@@ -13,12 +13,8 @@ public static class ThemeManager
     /// </summary>
     public static IReadOnlyList<RetroTheme> AvailableThemes { get; } = new RetroTheme[]
     {
-        new AmberTheme(),
-        new GreenTheme(),
-        new BlueTheme(),
-        new GreyTheme(),
-        new SeveranceTheme(),
-        new WhiteTheme()
+        new DarkTheme(),
+        new LightTheme()
     };
 
     /// <summary>

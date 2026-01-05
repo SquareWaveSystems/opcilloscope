@@ -3,12 +3,12 @@ using Terminal.Gui;
 namespace OpcScope.App.Themes;
 
 /// <summary>
-/// Classic green monochrome terminal theme.
-/// The quintessential terminal aesthetic from the golden age of computing.
+/// Dark theme with classic green monochrome terminal aesthetic.
+/// The quintessential terminal look from the golden age of computing.
 /// </summary>
-public class GreenTheme : RetroTheme
+public class DarkTheme : RetroTheme
 {
-    public override string Name => "Green";
+    public override string Name => "Dark";
     public override string Description => "Classic green monochrome terminal";
 
     public override Color Background => Color.Black;
