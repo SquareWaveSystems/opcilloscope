@@ -5,6 +5,7 @@ using OpcScope.App.Themes;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
 using OpcScope.Utilities;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App;
 
@@ -463,7 +464,7 @@ Built with:
 Themes inspired by:
   - Cassette Futurism (Alien, Blade Runner)
   - github.com/Imetomi/retro-futuristic-ui-design
-  - squarewavesystems.com.au
+  - squarewavesystems.github.io
 
 License: MIT
 ";

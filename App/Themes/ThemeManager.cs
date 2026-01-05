@@ -7,6 +7,7 @@ namespace OpcScope.App.Themes;
 public static class ThemeManager
 {
     private static RetroTheme _currentTheme = new AmberCrtTheme();
+    private static readonly object _lock = new();
 
     /// <summary>
     /// Available themes in the application.
@@ -23,7 +24,16 @@ public static class ThemeManager
     /// <summary>
     /// Gets the currently active theme.
     /// </summary>
-    public static RetroTheme Current => _currentTheme;
+    public static RetroTheme Current
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _currentTheme;
+            }
+        }
+    }
 
     /// <summary>
     /// Event fired when the theme changes.
@@ -51,7 +61,10 @@ public static class ThemeManager
     {
         if (theme == null) return;
 
-        _currentTheme = theme;
+        lock (_lock)
+        {
+            _currentTheme = theme;
+        }
         ThemeChanged?.Invoke(theme);
     }
 
@@ -68,12 +81,15 @@ public static class ThemeManager
     /// </summary>
     public static int GetCurrentThemeIndex()
     {
-        for (int i = 0; i < AvailableThemes.Count; i++)
+        lock (_lock)
         {
-            if (AvailableThemes[i].Name == _currentTheme.Name)
-                return i;
+            for (int i = 0; i < AvailableThemes.Count; i++)
+            {
+                if (AvailableThemes[i].Name == _currentTheme.Name)
+                    return i;
+            }
+            return 0;
         }
-        return 0;
     }
 
     /// <summary>

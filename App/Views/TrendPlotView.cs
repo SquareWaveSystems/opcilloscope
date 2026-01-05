@@ -6,6 +6,7 @@ using OpcScope.Utilities;
 using System.Text;
 using Attribute = Terminal.Gui.Attribute;
 using Rune = System.Text.Rune;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -17,17 +18,17 @@ namespace OpcScope.App.Views;
 public class TrendPlotView : View
 {
     // === Theme-aware color accessors ===
-    private static RetroTheme Theme => ThemeManager.Current;
-    private static Attribute BrightAttr => Theme.BrightAttr;
-    private static Attribute NormalAttr => Theme.NormalAttr;
-    private static Attribute DimAttr => Theme.DimAttr;
-    private static Attribute GridAttr => Theme.GridAttr;
-    private static Attribute BorderAttr => Theme.BorderAttr;
-    private static Attribute StatusActiveAttr => Theme.StatusActiveAttr;
-    private static Attribute StatusInactiveAttr => Theme.StatusInactiveAttr;
-    private static Attribute ScanlineAttr => Theme.ScanlineAttr;
-    private static Attribute GlowAttr => Theme.GlowAttr;
-    private static Attribute BackgroundAttr => new(Theme.Background, Theme.Background);
+    private RetroTheme Theme => ThemeManager.Current;
+    private Attribute BrightAttr => Theme.BrightAttr;
+    private Attribute NormalAttr => Theme.NormalAttr;
+    private Attribute DimAttr => Theme.DimAttr;
+    private Attribute GridAttr => Theme.GridAttr;
+    private Attribute BorderAttr => Theme.BorderAttr;
+    private Attribute StatusActiveAttr => Theme.StatusActiveAttr;
+    private Attribute StatusInactiveAttr => Theme.StatusInactiveAttr;
+    private Attribute ScanlineAttr => Theme.ScanlineAttr;
+    private Attribute GlowAttr => Theme.GlowAttr;
+    private Attribute BackgroundAttr => new(Theme.Background, Theme.Background);
 
     // Ring buffer for samples (preallocated)
     private readonly float[] _samples;
@@ -540,7 +541,7 @@ public class TrendPlotView : View
 
             Move(plotRight, y);
             if ((y - TopMargin) % 4 == 0)
-                AddRune((Rune)'╢');
+                AddRune((Rune)Theme.TickVerticalRight);
             else
                 AddRune((Rune)Theme.BoxVertical);
         }
@@ -551,7 +552,7 @@ public class TrendPlotView : View
         for (int x = plotLeft + 1; x < plotRight; x++)
         {
             if ((x - LeftMargin) % 10 == 0 && x < plotRight - 1)
-                AddRune((Rune)'╧');
+                AddRune((Rune)Theme.TickHorizontalBottom);
             else
                 AddRune((Rune)Theme.BoxHorizontal);
         }
@@ -765,9 +766,9 @@ public class TrendPlotView : View
         // Status bar background
         Driver.SetAttribute(BorderAttr);
         Move(0, y);
-        AddRune((Rune)'╠');
+        AddRune((Rune)Theme.BoxLeftT);
         for (int x = 1; x < width - 1; x++) AddRune((Rune)Theme.BoxHorizontal);
-        AddRune((Rune)'╣');
+        AddRune((Rune)Theme.BoxRightT);
 
         // Status text
         Move(0, y + 1);

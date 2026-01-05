@@ -48,8 +48,14 @@ public abstract class RetroTheme
     // Scanline effect (subtle darkening)
     public virtual Attribute ScanlineAttr => new(new Color(10, 10, 10), Background);
 
-    // === Color Schemes for Terminal.Gui Widgets ===
-    public virtual ColorScheme MainColorScheme => new()
+    // === Cached Color Schemes for Terminal.Gui Widgets ===
+    private ColorScheme? _mainColorScheme;
+    private ColorScheme? _dialogColorScheme;
+    private ColorScheme? _menuColorScheme;
+    private ColorScheme? _buttonColorScheme;
+    private ColorScheme? _frameColorScheme;
+
+    public virtual ColorScheme MainColorScheme => _mainColorScheme ??= new()
     {
         Normal = NormalAttr,
         Focus = BrightAttr,
@@ -58,7 +64,7 @@ public abstract class RetroTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public virtual ColorScheme DialogColorScheme => new()
+    public virtual ColorScheme DialogColorScheme => _dialogColorScheme ??= new()
     {
         Normal = DimAttr,
         Focus = BrightAttr,
@@ -67,7 +73,7 @@ public abstract class RetroTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public virtual ColorScheme MenuColorScheme => new()
+    public virtual ColorScheme MenuColorScheme => _menuColorScheme ??= new()
     {
         Normal = NormalAttr,
         Focus = new Attribute(Background, Foreground),
@@ -76,7 +82,7 @@ public abstract class RetroTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public virtual ColorScheme ButtonColorScheme => new()
+    public virtual ColorScheme ButtonColorScheme => _buttonColorScheme ??= new()
     {
         Normal = BorderAttr,
         Focus = BrightAttr,
@@ -85,7 +91,7 @@ public abstract class RetroTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public virtual ColorScheme FrameColorScheme => new()
+    public virtual ColorScheme FrameColorScheme => _frameColorScheme ??= new()
     {
         Normal = BorderAttr,
         Focus = BrightAttr,
@@ -109,6 +115,10 @@ public abstract class RetroTheme
     public virtual char BoxTitleRight => '╞';
     public virtual char TickHorizontal => '╤';
     public virtual char TickVertical => '╟';
+    public virtual char TickHorizontalBottom => '╧';
+    public virtual char TickVerticalRight => '╢';
+    public virtual char BoxLeftT => '╠';
+    public virtual char BoxRightT => '╣';
 
     // === UI Element Decorations ===
     public virtual string ButtonPrefix => "◄ ";
