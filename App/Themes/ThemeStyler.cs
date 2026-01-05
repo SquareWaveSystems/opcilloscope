@@ -48,9 +48,6 @@ public static class ThemeStyler
 
         // Apply base styling
         ApplyTo(frame, theme);
-
-        // FrameViews use the frame line style
-        frame.BorderStyle = theme.FrameLineStyle;
     }
 
     /// <summary>

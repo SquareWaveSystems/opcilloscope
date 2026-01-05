@@ -5,16 +5,16 @@ namespace OpcScope.App.Themes;
 /// <summary>
 /// Inverted light theme inspired by Severance/Lumon corporate aesthetic.
 /// White background with dark text - sterile, institutional feel.
-/// Uses Terminal.Gui v2 LineStyle.Rounded for softer appearance.
+/// Uses single-line box drawing characters for a clean corporate appearance.
 /// </summary>
 public class WhiteTheme : RetroTheme
 {
     public override string Name => "White";
     public override string Description => "Light corporate (Outie)";
 
-    // Use rounded borders for softer corporate look
-    public override LineStyle BorderLineStyle => LineStyle.Rounded;
-    public override LineStyle FrameLineStyle => LineStyle.Rounded;
+    // Use single-line borders for clean corporate look
+    public override LineStyle BorderLineStyle => LineStyle.Single;
+    public override LineStyle FrameLineStyle => LineStyle.Single;
 
     // Off-white background - slightly warm for reduced harshness
     public override Color Background => new(245, 245, 242);
