@@ -88,6 +88,7 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSelected += OnNodeSelected;
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
+        _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -331,6 +332,12 @@ public class MainWindow : Toplevel
         Application.Run(dialog);
     }
 
+    private void OnTrendPlotRequested(MonitoredNode node)
+    {
+        var dialog = new TrendPlotDialog(_subscriptionManager, node);
+        Application.Run(dialog);
+    }
+
     private void ExportToCsv()
     {
         if (_subscriptionManager == null || !_subscriptionManager.MonitoredItems.Any())
@@ -379,6 +386,7 @@ Keyboard Shortcuts:
   F5        - Refresh address space tree
   F10       - Open menu
   Enter     - Subscribe to selected node
+  Space     - Show trend plot for selected item
   Delete    - Unsubscribe from selected item
   Ctrl+O    - Connect to server
   Ctrl+Q    - Quit
@@ -386,7 +394,7 @@ Keyboard Shortcuts:
 Navigation:
   Tab       - Move between panels
   Arrow Keys - Navigate within panel
-  Space     - Expand/collapse tree node
+  Space     - Expand/collapse tree node (in tree view)
 
 Trend Plot (in dialog):
   Space     - Pause/resume plotting
