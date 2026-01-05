@@ -79,7 +79,7 @@ public class ThemeManagerTests
         var currentTheme = ThemeManager.Current;
 
         // Act
-        ThemeManager.SetTheme((RetroTheme)null!);
+        ThemeManager.SetTheme((RetroTheme?)null);
 
         // Assert
         Assert.Same(currentTheme, ThemeManager.Current);

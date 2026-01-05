@@ -79,8 +79,11 @@ public class TrendPlotView : View
         _samples = new float[200];
 
         // Initialize cached theme
-        _currentTheme = ThemeManager.Current;
-        CacheThemeAttributes();
+        lock (_themeLock)
+        {
+            _currentTheme = ThemeManager.Current;
+            CacheThemeAttributes();
+        }
 
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
@@ -91,19 +94,17 @@ public class TrendPlotView : View
 
     private void CacheThemeAttributes()
     {
-        lock (_themeLock)
-        {
-            _brightAttr = _currentTheme.BrightAttr;
-            _normalAttr = _currentTheme.NormalAttr;
-            _dimAttr = _currentTheme.DimAttr;
-            _gridAttr = _currentTheme.GridAttr;
-            _borderAttr = _currentTheme.BorderAttr;
-            _statusActiveAttr = _currentTheme.StatusActiveAttr;
-            _statusInactiveAttr = _currentTheme.StatusInactiveAttr;
-            _scanlineAttr = _currentTheme.ScanlineAttr;
-            _glowAttr = _currentTheme.GlowAttr;
-            _backgroundAttr = new(_currentTheme.Background, _currentTheme.Background);
-        }
+        // Note: Must be called inside _themeLock to ensure atomic updates
+        _brightAttr = _currentTheme.BrightAttr;
+        _normalAttr = _currentTheme.NormalAttr;
+        _dimAttr = _currentTheme.DimAttr;
+        _gridAttr = _currentTheme.GridAttr;
+        _borderAttr = _currentTheme.BorderAttr;
+        _statusActiveAttr = _currentTheme.StatusActiveAttr;
+        _statusInactiveAttr = _currentTheme.StatusInactiveAttr;
+        _scanlineAttr = _currentTheme.ScanlineAttr;
+        _glowAttr = _currentTheme.GlowAttr;
+        _backgroundAttr = new(_currentTheme.Background, _currentTheme.Background);
     }
 
     private void OnThemeChanged(RetroTheme newTheme)
@@ -111,9 +112,17 @@ public class TrendPlotView : View
         lock (_themeLock)
         {
             _currentTheme = newTheme;
+            CacheThemeAttributes();
         }
-        CacheThemeAttributes();
-        Application.Invoke(() => SetNeedsLayout());
+        
+        try
+        {
+            Application.Invoke(() => SetNeedsLayout());
+        }
+        catch
+        {
+            // Application may not be initialized yet
+        }
     }
 
     /// <summary>
