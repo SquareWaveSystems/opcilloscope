@@ -3,19 +3,18 @@ using Terminal.Gui;
 namespace OpcScope.App.Themes;
 
 /// <summary>
-/// Blue phosphor CRT theme inspired by aerospace and military displays.
-/// This color was common in radar systems, oscilloscopes, and
-/// early graphics terminals. Evokes a scientific/military aesthetic.
+/// Blue monochrome terminal theme.
+/// Inspired by aerospace displays and scientific instruments.
 /// </summary>
-public class BlueCrtTheme : RetroTheme
+public class BlueTheme : RetroTheme
 {
-    public override string Name => "Blue CRT";
-    public override string Description => "Aerospace/military phosphor display";
+    public override string Name => "Blue";
+    public override string Description => "Blue monochrome terminal";
 
     public override Color Background => Color.Black;
 
-    // Blue phosphor color range (cool blue tones)
-    public override Color Foreground => new(100, 180, 255);     // Bright blue phosphor
+    // Blue color range (cool blue tones)
+    public override Color Foreground => new(100, 180, 255);     // Bright blue
     public override Color ForegroundBright => new(150, 200, 255);
     public override Color ForegroundDim => new(50, 100, 150);   // Dim blue
     public override Color Accent => new(0, 200, 255);           // Cyan accent

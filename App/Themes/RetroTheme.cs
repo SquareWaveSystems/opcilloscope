@@ -4,10 +4,8 @@ using Attribute = Terminal.Gui.Attribute;
 namespace OpcScope.App.Themes;
 
 /// <summary>
-/// Retro-futuristic theme inspired by 1970s-80s industrial control displays
-/// and cassette futurism aesthetics (Alien, Blade Runner, Signalis).
-/// Based on: https://github.com/Imetomi/retro-futuristic-ui-design
-///           https://squarewavesystems.github.io/
+/// Base theme class for terminal display aesthetics.
+/// Inspired by classic computing displays and industrial control systems.
 /// </summary>
 public abstract class RetroTheme
 {
@@ -42,7 +40,6 @@ public abstract class RetroTheme
     private Attribute? _errorAttr;
     private Attribute? _warningAttr;
     private Attribute? _glowAttr;
-    private Attribute? _scanlineAttr;
 
     // === Derived Attributes (for direct drawing) ===
     public Attribute NormalAttr => _normalAttr ??= new(Foreground, Background);
@@ -57,11 +54,8 @@ public abstract class RetroTheme
     public Attribute ErrorAttr => _errorAttr ??= new(Error, Background);
     public Attribute WarningAttr => _warningAttr ??= new(Warning, Background);
 
-    // Glow/highlight effect for active elements
+    // Highlight effect for active elements
     public Attribute GlowAttr => _glowAttr ??= new(Color.White, Background);
-
-    // Scanline effect (subtle darkening)
-    public virtual Attribute ScanlineAttr => _scanlineAttr ??= new(new Color(10, 10, 10), Background);
 
     // === Cached Color Schemes for Terminal.Gui Widgets ===
     private ColorScheme? _mainColorScheme;
@@ -115,11 +109,7 @@ public abstract class RetroTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    // === CRT Effect Settings ===
-    public virtual bool EnableScanlines => true;
-    public virtual bool EnableGlow => true;
-
-    // === Box Drawing Characters (industrial style) ===
+    // === Box Drawing Characters ===
     public virtual char BoxTopLeft => '╔';
     public virtual char BoxTopRight => '╗';
     public virtual char BoxBottomLeft => '╚';

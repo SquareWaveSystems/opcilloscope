@@ -8,8 +8,7 @@ using ThemeManager = OpcScope.App.Themes.ThemeManager;
 namespace OpcScope.App.Dialogs;
 
 /// <summary>
-/// Industrial-themed dialog for displaying a real-time oscilloscope view.
-/// Features a retro-futuristic CRT aesthetic with theme support.
+/// Dialog for displaying a real-time oscilloscope view with theme support.
 /// </summary>
 public class TrendPlotDialog : Dialog
 {

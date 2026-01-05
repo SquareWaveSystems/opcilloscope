@@ -3,19 +3,18 @@ using Terminal.Gui;
 namespace OpcScope.App.Themes;
 
 /// <summary>
-/// Classic green phosphor CRT theme inspired by IBM terminals and early computing.
-/// The quintessential "hacker" terminal aesthetic, also seen in The Matrix.
-/// Primary: #00ff41 (vibrant green), Secondary: #006600 (dim green)
+/// Classic green monochrome terminal theme.
+/// The quintessential terminal aesthetic from the golden age of computing.
 /// </summary>
-public class GreenCrtTheme : RetroTheme
+public class GreenTheme : RetroTheme
 {
-    public override string Name => "Green CRT";
-    public override string Description => "Classic green phosphor terminal (IBM style)";
+    public override string Name => "Green";
+    public override string Description => "Classic green monochrome terminal";
 
     public override Color Background => Color.Black;
 
     // Green phosphor color range
-    public override Color Foreground => new(0, 255, 65);        // Bright green phosphor
+    public override Color Foreground => new(0, 255, 65);        // Bright green
     public override Color ForegroundBright => Color.BrightGreen;
     public override Color ForegroundDim => new(0, 128, 32);     // Dim green
     public override Color Accent => new(0, 255, 128);           // Cyan-green accent
