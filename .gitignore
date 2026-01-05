@@ -1,0 +1,26 @@
+# Build outputs
+bin/
+obj/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# NuGet packages (keep local packages)
+!packages/
+*.nupkg
+
+# Test results
+TestResults/
+
+# Node modules (test server)
+test-server/node_modules/
+
+# Logs
+*.log
