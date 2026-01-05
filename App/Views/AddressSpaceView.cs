@@ -35,7 +35,7 @@ public class AddressSpaceView : FrameView
             )
         };
 
-        _treeView.SelectionChanged += (sender, args) =>
+        _treeView.SelectionChanged += (_, args) =>
         {
             if (args.NewValue != null)
             {
@@ -94,7 +94,7 @@ public class AddressSpaceView : FrameView
         return node.HasChildren;
     }
 
-    private void HandleKeyDown(object? sender, Key e)
+    private void HandleKeyDown(object? _, Key e)
     {
         if (e == Key.Enter || e == Key.Space)
         {
@@ -112,7 +112,7 @@ public class AddressSpaceView : FrameView
         }
     }
 
-    private void HandleObjectActivated(object? sender, ObjectActivatedEventArgs<BrowsedNode> e)
+    private void HandleObjectActivated(object? _, ObjectActivatedEventArgs<BrowsedNode> e)
     {
         if (e.ActivatedObject != null && e.ActivatedObject.NodeClass == Opc.Ua.NodeClass.Variable)
         {

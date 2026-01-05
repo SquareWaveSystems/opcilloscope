@@ -66,7 +66,7 @@ public class WriteValueDialog : Dialog
             IsDefault = true
         };
 
-        writeButton.Accepting += (s, e) =>
+        writeButton.Accepting += (_, _) =>
         {
             if (ValidateAndParse())
             {
@@ -91,7 +91,7 @@ public class WriteValueDialog : Dialog
             Text = "Cancel"
         };
 
-        cancelButton.Accepting += (s, e) =>
+        cancelButton.Accepting += (_, _) =>
         {
             _confirmed = false;
             Application.RequestStop();

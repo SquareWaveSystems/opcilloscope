@@ -50,7 +50,7 @@ public class SettingsDialog : Dialog
             IsDefault = true
         };
 
-        applyButton.Accepting += (s, e) =>
+        applyButton.Accepting += (_, _) =>
         {
             if (ValidateSettings())
             {
@@ -66,7 +66,7 @@ public class SettingsDialog : Dialog
             Text = "Cancel"
         };
 
-        cancelButton.Accepting += (s, e) =>
+        cancelButton.Accepting += (_, _) =>
         {
             _confirmed = false;
             Application.RequestStop();
