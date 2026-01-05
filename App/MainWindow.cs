@@ -43,9 +43,6 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
-        // Apply initial theme
-        ApplyTheme();
-
         // Create menu bar
         _menuBar = CreateMenuBar();
 
@@ -110,6 +107,9 @@ public class MainWindow : Toplevel
         Add(_nodeDetailsView);
         Add(_logView);
         Add(_statusBar);
+
+        // Apply initial theme (after all controls are created)
+        ApplyTheme();
 
         // Log startup
         _logger.Info("OpcScope started");
