@@ -8,8 +8,7 @@ using ThemeManager = OpcScope.App.Themes.ThemeManager;
 namespace OpcScope.App.Dialogs;
 
 /// <summary>
-/// Industrial-themed dialog for displaying a real-time oscilloscope view.
-/// Features a retro-futuristic CRT aesthetic with theme support.
+/// Dialog for displaying a real-time oscilloscope view with theme support.
 /// </summary>
 public class TrendPlotDialog : Dialog
 {
@@ -89,7 +88,7 @@ public class TrendPlotDialog : Dialog
             Text = $"{Theme.ButtonPrefix}EXIT{Theme.ButtonSuffix}",
             ColorScheme = Theme.ButtonColorScheme
         };
-        _closeButton.Accepting += (s, e) => Application.RequestStop();
+        _closeButton.Accepting += (_, _) => Application.RequestStop();
 
         buttonFrame.Add(_selectNodeButton, _demoButton, _clearButton, _closeButton);
 
@@ -111,7 +110,7 @@ public class TrendPlotDialog : Dialog
         _trendPlotView.SetFocus();
     }
 
-    private void OnSelectNode(object? sender, CommandEventArgs e)
+    private void OnSelectNode(object? _, CommandEventArgs _1)
     {
         if (_availableNodes == null || !_availableNodes.Any())
         {
@@ -174,7 +173,7 @@ public class TrendPlotDialog : Dialog
         };
 
         MonitoredNode? selectedNode = null;
-        selectButton.Accepting += (s, ev) =>
+        selectButton.Accepting += (_, _) =>
         {
             if (listView.SelectedItem >= 0 && listView.SelectedItem < nodeList.Count)
             {
@@ -183,7 +182,7 @@ public class TrendPlotDialog : Dialog
             }
         };
 
-        cancelButton.Accepting += (s, ev) => Application.RequestStop();
+        cancelButton.Accepting += (_, _) => Application.RequestStop();
 
         dialog.Add(headerLabel, listView, hintLabel, selectButton, cancelButton);
         listView.SetFocus();
@@ -208,7 +207,7 @@ public class TrendPlotDialog : Dialog
         }
     }
 
-    private void OnDemoMode(object? sender, CommandEventArgs e)
+    private void OnDemoMode(object? _, CommandEventArgs _1)
     {
         StartDemoMode();
     }
@@ -219,7 +218,7 @@ public class TrendPlotDialog : Dialog
         _trendPlotView.StartDemoMode();
     }
 
-    private void OnClear(object? sender, CommandEventArgs e)
+    private void OnClear(object? _, CommandEventArgs _1)
     {
         _trendPlotView.Clear();
     }

@@ -2,11 +2,10 @@ namespace OpcScope.App.Themes;
 
 /// <summary>
 /// Manages application themes and provides global access to the current theme.
-/// Themes are inspired by retro-futuristic "Cassette Futurism" aesthetics.
 /// </summary>
 public static class ThemeManager
 {
-    private static RetroTheme _currentTheme = new AmberCrtTheme();
+    private static RetroTheme _currentTheme = new AmberTheme();
     private static readonly object _lock = new();
 
     /// <summary>
@@ -14,11 +13,10 @@ public static class ThemeManager
     /// </summary>
     public static IReadOnlyList<RetroTheme> AvailableThemes { get; } = new RetroTheme[]
     {
-        new AmberCrtTheme(),
-        new GreenCrtTheme(),
-        new BlueCrtTheme(),
-        new LcdSurveillanceTheme(),
-        new SquareWaveTheme()
+        new AmberTheme(),
+        new GreenTheme(),
+        new BlueTheme(),
+        new GreyTheme()
     };
 
     /// <summary>

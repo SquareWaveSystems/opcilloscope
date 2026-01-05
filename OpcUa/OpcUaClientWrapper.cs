@@ -53,7 +53,7 @@ public class OpcUaClientWrapper : IDisposable
 
         // Accept all certificates for simplicity
         var certificateValidator = new CertificateValidator();
-        certificateValidator.CertificateValidation += (sender, e) =>
+        certificateValidator.CertificateValidation += (_, e) =>
         {
             e.Accept = true;
         };

@@ -11,8 +11,7 @@ using ThemeManager = OpcScope.App.Themes.ThemeManager;
 namespace OpcScope.App.Views;
 
 /// <summary>
-/// Real-time 2D scrolling oscilloscope-style plot with retro-futuristic CRT aesthetic.
-/// Inspired by 1970s-80s industrial control displays and cassette futurism.
+/// Real-time 2D scrolling oscilloscope-style plot.
 /// Supports multiple themes via ThemeManager.
 /// </summary>
 public class TrendPlotView : View
@@ -26,7 +25,6 @@ public class TrendPlotView : View
     private Attribute _borderAttr;
     private Attribute _statusActiveAttr;
     private Attribute _statusInactiveAttr;
-    private Attribute _scanlineAttr;
     private Attribute _glowAttr;
     private Attribute _backgroundAttr;
     private readonly object _themeLock = new();
@@ -102,7 +100,6 @@ public class TrendPlotView : View
         _borderAttr = _currentTheme.BorderAttr;
         _statusActiveAttr = _currentTheme.StatusActiveAttr;
         _statusInactiveAttr = _currentTheme.StatusInactiveAttr;
-        _scanlineAttr = _currentTheme.ScanlineAttr;
         _glowAttr = _currentTheme.GlowAttr;
         _backgroundAttr = new(_currentTheme.Background, _currentTheme.Background);
     }
@@ -438,8 +435,7 @@ public class TrendPlotView : View
         _visibleMin -= padding;
         _visibleMax += padding;
 
-        // Draw in order: grid, border, data, status
-        DrawScanlines(viewport.Width, viewport.Height);
+        // Draw in order: header, frame, grid, data, status
         DrawHeader(viewport.Width);
         DrawIndustrialFrame(viewport.Width, viewport.Height, plotWidth, plotHeight);
         DrawGrid(plotWidth, plotHeight);
@@ -457,22 +453,6 @@ public class TrendPlotView : View
         DrawStatusBar(viewport.Width, viewport.Height);
 
         return true;
-    }
-
-    private void DrawScanlines(int width, int height)
-    {
-        // Subtle scanline effect on alternating rows (if theme enables it)
-        if (!_currentTheme.EnableScanlines) return;
-
-        Driver.SetAttribute(_scanlineAttr);
-        for (int y = 1; y < height; y += 2)
-        {
-            Move(0, y);
-            for (int x = 0; x < width; x++)
-            {
-                AddRune((Rune)'░');
-            }
-        }
     }
 
     private void DrawHeader(int width)
@@ -761,7 +741,16 @@ public class TrendPlotView : View
                 bool fillTop = maxSubY >= cellTop && minSubY <= cellTop;
                 bool fillBottom = maxSubY >= cellBottom && minSubY <= cellBottom;
 
-                Move(x, screenY);
+                // Choose color based on position (brighter near the leading edge)
+                if (sampleIdx >= sampleCount - 3 && !_isPaused)
+                    Driver.SetAttribute(_glowAttr);
+                else if (sampleIdx >= sampleCount - 8)
+                    Driver.SetAttribute(_brightAttr);
+                else
+                    Driver.SetAttribute(_normalAttr);
+
+                // Select the right block character
+                var (fillTop, fillBottom) = cell.Value;
                 if (fillTop && fillBottom)
                     AddRune((Rune)'█');
                 else if (fillTop)

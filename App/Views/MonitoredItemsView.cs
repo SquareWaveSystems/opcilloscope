@@ -109,7 +109,7 @@ public class MonitoredItemsView : FrameView
         _tableView.Update();
     }
 
-    private void HandleKeyDown(object? sender, Key e)
+    private void HandleKeyDown(object? _, Key e)
     {
         if (e == Key.Delete || e == Key.Backspace)
         {
