@@ -14,6 +14,7 @@ public class MonitoredItemsView : FrameView
     private readonly Dictionary<uint, DataRow> _rowsByHandle = new();
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
+    public event Action<MonitoredNode>? TrendPlotRequested;
 
     public MonitoredNode? SelectedItem
     {
@@ -116,6 +117,15 @@ public class MonitoredItemsView : FrameView
             if (selected != null)
             {
                 UnsubscribeRequested?.Invoke(selected);
+                e.Handled = true;
+            }
+        }
+        else if (e == Key.Space)
+        {
+            var selected = SelectedItem;
+            if (selected != null)
+            {
+                TrendPlotRequested?.Invoke(selected);
                 e.Handled = true;
             }
         }

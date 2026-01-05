@@ -15,7 +15,7 @@ public class TrendPlotDialog : Dialog
     private readonly SubscriptionManager? _subscriptionManager;
     private readonly IReadOnlyCollection<MonitoredNode>? _availableNodes;
 
-    public TrendPlotDialog(SubscriptionManager? subscriptionManager = null)
+    public TrendPlotDialog(SubscriptionManager? subscriptionManager = null, MonitoredNode? initialNode = null)
     {
         _subscriptionManager = subscriptionManager;
         _availableNodes = subscriptionManager?.MonitoredItems;
