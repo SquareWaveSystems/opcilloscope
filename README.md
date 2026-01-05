@@ -1,9 +1,9 @@
 # OpcScope
 
-A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data. Built with .NET 8, Terminal.Gui, and OPC Foundation UA-.NETStandard.
+A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data. Built with .NET 10, Terminal.Gui, and OPC Foundation UA-.NETStandard.
 
 ![Terminal UI](https://img.shields.io/badge/UI-Terminal.Gui-blue)
-![.NET 8](https://img.shields.io/badge/.NET-8.0-purple)
+![.NET 10](https://img.shields.io/badge/.NET-10.0-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Features
@@ -53,7 +53,7 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 
 ### Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ### Build and Run
 

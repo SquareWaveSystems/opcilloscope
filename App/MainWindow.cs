@@ -457,7 +457,7 @@ Current Theme: {theme.Name}
   {theme.Description}
 
 Built with:
-  - .NET 8
+  - .NET 10
   - Terminal.Gui v2
   - OPC Foundation UA-.NETStandard
 
