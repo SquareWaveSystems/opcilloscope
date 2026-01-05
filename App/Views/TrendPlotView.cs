@@ -73,7 +73,8 @@ public class TrendPlotView : View
     private bool _3dEnabled = false;
 
     // Preallocated arrays for rendering (avoid allocation in draw loop)
-    private readonly float[] _tempDisplaySamples;
+    private readonly int[] _frameOrder;
+    private readonly HashSet<(int x, int y)> _cellsToFill = new();
 
     /// <summary>
     /// Event fired when pause state changes.
@@ -101,7 +102,7 @@ public class TrendPlotView : View
         {
             _frameHistory[i] = new float[200];
         }
-        _tempDisplaySamples = new float[200];
+        _frameOrder = new int[MaxDepth];
 
         // Initialize cached theme
         lock (_themeLock)
@@ -389,10 +390,10 @@ public class TrendPlotView : View
         // Initialize frame history when enabling 3D
         if (_3dEnabled)
         {
-            _currentFrameIndex = 0;
             // Fill all frames with current buffer state
             lock (_lock)
             {
+                _currentFrameIndex = 0;
                 for (int i = 0; i < _depthCount; i++)
                 {
                     Array.Copy(_samples, _frameHistory[i], _samples.Length);
@@ -408,11 +409,14 @@ public class TrendPlotView : View
     /// </summary>
     public void IncreaseDepth()
     {
-        if (_depthCount < MaxDepth)
+        lock (_lock)
         {
-            _depthCount++;
-            SetNeedsLayout();
+            if (_depthCount < MaxDepth)
+            {
+                _depthCount++;
+            }
         }
+        SetNeedsLayout();
     }
 
     /// <summary>
@@ -420,16 +424,19 @@ public class TrendPlotView : View
     /// </summary>
     public void DecreaseDepth()
     {
-        if (_depthCount > MinDepth)
+        lock (_lock)
         {
-            _depthCount--;
-            // Ensure current frame index is within bounds
-            if (_currentFrameIndex >= _depthCount)
+            if (_depthCount > MinDepth)
             {
-                _currentFrameIndex = 0;
+                _depthCount--;
+                // Ensure current frame index is within bounds
+                if (_currentFrameIndex >= _depthCount)
+                {
+                    _currentFrameIndex = 0;
+                }
             }
-            SetNeedsLayout();
         }
+        SetNeedsLayout();
     }
 
     /// <summary>
@@ -985,33 +992,45 @@ public class TrendPlotView : View
         float range = _visibleMax - _visibleMin;
         if (range <= 0) range = 1;
 
-        // Calculate which frame indices to draw (oldest to newest)
-        // _currentFrameIndex points to where the NEXT frame will be written,
-        // so the oldest frame is at _currentFrameIndex, newest is at _currentFrameIndex - 1
-        int[] frameOrder = new int[_depthCount];
-        for (int i = 0; i < _depthCount; i++)
+        // Copy frame indices and depth count under lock to avoid race conditions
+        int depthCount;
+        int currentFrameIndex;
+        lock (_lock)
         {
-            // Start from oldest (at _currentFrameIndex) going forward
-            frameOrder[i] = (_currentFrameIndex + i) % _depthCount;
+            depthCount = _depthCount;
+            currentFrameIndex = _currentFrameIndex;
+        }
+
+        // Calculate which frame indices to draw (oldest to newest)
+        // currentFrameIndex points to where the NEXT frame will be written,
+        // so the oldest frame is at currentFrameIndex, newest is at currentFrameIndex - 1
+        for (int i = 0; i < depthCount; i++)
+        {
+            // Start from oldest (at currentFrameIndex) going forward
+            _frameOrder[i] = (currentFrameIndex + i) % depthCount;
         }
 
         // Draw frames from oldest (most offset, dimmest) to newest (no offset, brightest)
-        for (int depthIdx = 0; depthIdx < _depthCount; depthIdx++)
+        for (int depthIdx = 0; depthIdx < depthCount; depthIdx++)
         {
-            int frameIdx = frameOrder[depthIdx];
-            int depth = _depthCount - 1 - depthIdx; // depth=0 for newest, depth=depthCount-1 for oldest
+            int frameIdx = _frameOrder[depthIdx];
+            int depth = depthCount - 1 - depthIdx; // depth=0 for newest, depth=depthCount-1 for oldest
 
             // Calculate offset: each depth level offsets by (-1, +1)
             int offsetX = -depth;
             int offsetY = depth;
 
             // Select glyph based on depth (fading effect)
-            char glyph = GetDepthGlyph(depth, _depthCount);
+            char glyph = GetDepthGlyph(depth, depthCount);
 
             // Select color attribute based on depth
-            Attribute colorAttr = GetDepthColor(depth, _depthCount);
+            Attribute colorAttr = GetDepthColor(depth, depthCount);
 
             // Get samples for this frame
+            // Note: Reading from _frameHistory without lock is safe because:
+            // 1. Arrays are preallocated and never replaced
+            // 2. Float reads are atomic
+            // 3. Worst case is seeing a partially updated frame for one render (acceptable for visualization)
             float[] frameSamples = _frameHistory[frameIdx];
 
             // Draw this frame at the specified depth
@@ -1028,9 +1047,9 @@ public class TrendPlotView : View
         if (depth == 0) return '█'; // Current frame always uses full block
 
         // Map depth to glyph ladder: █ ▓ ▒ ░ ·
-        // Skip first glyph (█) for historical frames
-        float t = (float)depth / Math.Max(1, maxDepth - 1);
-        int glyphIdx = 1 + (int)(t * (DepthGlyphs.Length - 2));
+        // Skip first glyph (█) for historical frames; normalize depth to [0, 1)
+        float t = (float)depth / Math.Max(1, maxDepth);
+        int glyphIdx = 1 + (int)(t * (DepthGlyphs.Length - 1));
         glyphIdx = Math.Clamp(glyphIdx, 1, DepthGlyphs.Length - 1);
         return DepthGlyphs[glyphIdx];
     }
@@ -1056,8 +1075,8 @@ public class TrendPlotView : View
                                      int offsetX, int offsetY, char glyph, Attribute colorAttr,
                                      float range, bool isForeground)
     {
-        // Track which cells are filled for this frame
-        var cellsToFill = new Dictionary<(int x, int y), bool>();
+        // Reuse preallocated set to track which cells are filled for this frame
+        _cellsToFill.Clear();
 
         int subPixelHeight = plotHeight * 2;
 
@@ -1103,7 +1122,7 @@ public class TrendPlotView : View
                 if (x >= LeftMargin && x < LeftMargin + plotWidth &&
                     screenY >= TopMargin && screenY < TopMargin + plotHeight)
                 {
-                    cellsToFill[(x, screenY)] = true;
+                    _cellsToFill.Add((x, screenY));
                 }
 
                 if (x == x2 && subY == subY2) break;
@@ -1134,13 +1153,13 @@ public class TrendPlotView : View
             if (x >= LeftMargin && x < LeftMargin + plotWidth &&
                 screenY >= TopMargin && screenY < TopMargin + plotHeight)
             {
-                cellsToFill[(x, screenY)] = true;
+                _cellsToFill.Add((x, screenY));
             }
         }
 
         // Render all cells
         Driver.SetAttribute(colorAttr);
-        foreach (var cell in cellsToFill.Keys)
+        foreach (var cell in _cellsToFill)
         {
             Move(cell.x, cell.y);
 
@@ -1161,7 +1180,7 @@ public class TrendPlotView : View
         {
             // Find the rightmost points and make them glow
             int maxX = int.MinValue;
-            foreach (var cell in cellsToFill.Keys)
+            foreach (var cell in _cellsToFill)
             {
                 if (cell.x > maxX) maxX = cell.x;
             }
@@ -1169,13 +1188,10 @@ public class TrendPlotView : View
             if (maxX > int.MinValue)
             {
                 Driver.SetAttribute(_glowAttr);
-                foreach (var cell in cellsToFill.Keys)
+                foreach (var cell in _cellsToFill.Where(c => c.x >= maxX - 2))
                 {
-                    if (cell.x >= maxX - 2)
-                    {
-                        Move(cell.x, cell.y);
-                        AddRune((Rune)'█');
-                    }
+                    Move(cell.x, cell.y);
+                    AddRune((Rune)'█');
                 }
             }
         }
@@ -1242,7 +1258,7 @@ public class TrendPlotView : View
         if (_3dEnabled)
         {
             Driver.SetAttribute(_dimAttr);
-            AddStr("  [[/]]");
+            AddStr("  [/]");
             Driver.SetAttribute(_statusActiveAttr);
             AddStr($"Depth:{_depthCount,2}");
         }
