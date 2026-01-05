@@ -14,8 +14,6 @@ public class TrendPlotDialog : Dialog
     private readonly Label _statusLabel;
     private readonly SubscriptionManager? _subscriptionManager;
     private readonly IReadOnlyCollection<MonitoredNode>? _availableNodes;
-    private MonitoredNode? _selectedNode;
-    private bool _isDemoMode;
 
     public TrendPlotDialog(SubscriptionManager? subscriptionManager = null)
     {
@@ -130,9 +128,9 @@ public class TrendPlotDialog : Dialog
             X = 1,
             Y = 1,
             Width = Dim.Fill(1),
-            Height = Dim.Fill(3),
-            Source = new ListWrapper<string>(nodeNames)
+            Height = Dim.Fill(3)
         };
+        listView.SetSource(new System.Collections.ObjectModel.ObservableCollection<string>(nodeNames));
 
         var hintLabel = new Label
         {
@@ -156,13 +154,12 @@ public class TrendPlotDialog : Dialog
             Text = "Cancel"
         };
 
-        bool selected = false;
+        MonitoredNode? selectedNode = null;
         selectButton.Accepting += (s, ev) =>
         {
             if (listView.SelectedItem >= 0 && listView.SelectedItem < nodeList.Count)
             {
-                _selectedNode = nodeList[listView.SelectedItem];
-                selected = true;
+                selectedNode = nodeList[listView.SelectedItem];
                 Application.RequestStop();
             }
         };
@@ -173,16 +170,16 @@ public class TrendPlotDialog : Dialog
         listView.SetFocus();
 
         Application.Run(dialog);
+        dialog.Dispose();
 
-        if (selected && _selectedNode != null)
+        if (selectedNode != null)
         {
-            BindToNode(_selectedNode);
+            BindToNode(selectedNode);
         }
     }
 
     private void BindToNode(MonitoredNode node)
     {
-        _isDemoMode = false;
         _trendPlotView.StopDemoMode();
         _trendPlotView.Clear();
 
@@ -191,9 +188,6 @@ public class TrendPlotDialog : Dialog
             _trendPlotView.BindToMonitoredNode(node, _subscriptionManager);
             UpdateStatus($"Plotting: {node.DisplayName}");
         }
-
-        // Start the update timer for refresh
-        StartUpdateTimer();
     }
 
     private void OnDemoMode(object? sender, CommandEventArgs e)
@@ -203,8 +197,6 @@ public class TrendPlotDialog : Dialog
 
     private void StartDemoMode()
     {
-        _isDemoMode = true;
-        _selectedNode = null;
         _trendPlotView.Clear();
         _trendPlotView.StartDemoMode();
         UpdateStatus("Demo Mode: Sine wave generator");
@@ -242,7 +234,7 @@ public class TrendPlotDialog : Dialog
         // ~10 FPS refresh rate
         _updateToken = Application.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
         {
-            _trendPlotView.SetNeedsDisplay();
+            _trendPlotView.SetNeedsLayout();
             return true; // Keep timer running
         });
     }
