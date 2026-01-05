@@ -665,28 +665,7 @@ public class TrendPlotView : View
             yPositions[i] = TopMargin + (int)((1 - normalized) * (plotHeight - 1));
         }
 
-        // Draw connecting lines first (dimmer)
-        Driver.SetAttribute(AmberDim);
-        for (int i = 0; i < sampleCount - 1; i++)
-        {
-            int x = LeftMargin + (plotWidth - sampleCount) + i;
-            if (x < LeftMargin) continue;
-
-            int y1 = yPositions[i];
-            int y2 = yPositions[i + 1];
-
-            // Draw vertical connection between points
-            int minY = Math.Min(y1, y2);
-            int maxY = Math.Max(y1, y2);
-
-            for (int y = minY + 1; y < maxY; y++)
-            {
-                Move(x, y);
-                AddRune((Rune)'│');
-            }
-        }
-
-        // Draw the trace points (brighter)
+        // Draw the continuous waveform trace
         Driver.SetAttribute(AmberBright);
         for (int i = 0; i < sampleCount; i++)
         {
@@ -694,32 +673,40 @@ public class TrendPlotView : View
             if (x < LeftMargin) continue;
 
             int y = yPositions[i];
-            Move(x, y);
 
-            // Use different characters based on slope
-            if (i > 0 && i < sampleCount - 1)
+            // Draw vertical line segment to connect to next point
+            if (i < sampleCount - 1)
             {
-                int prevY = yPositions[i - 1];
                 int nextY = yPositions[i + 1];
+                int minY = Math.Min(y, nextY);
+                int maxY = Math.Max(y, nextY);
 
-                if (prevY > y && nextY > y)
-                    AddRune((Rune)'▀'); // Peak
-                else if (prevY < y && nextY < y)
-                    AddRune((Rune)'▄'); // Trough
-                else if (prevY > y)
-                    AddRune((Rune)'╱'); // Rising
-                else if (prevY < y)
-                    AddRune((Rune)'╲'); // Falling
-                else
-                    AddRune((Rune)'─'); // Flat
+                // Fill in the vertical span between this point and the next
+                Driver.SetAttribute(AmberNormal);
+                for (int fillY = minY; fillY <= maxY; fillY++)
+                {
+                    Move(x, fillY);
+                    if (fillY == y || fillY == nextY)
+                    {
+                        // Main trace points - use block character for solid line
+                        AddRune((Rune)'█');
+                    }
+                    else
+                    {
+                        // Connecting vertical segment
+                        AddRune((Rune)'▌');
+                    }
+                }
             }
             else
             {
-                AddRune((Rune)'●');
+                // Last point
+                Move(x, y);
+                AddRune((Rune)'█');
             }
         }
 
-        // Glow effect on most recent points
+        // Bright glow effect on most recent points
         if (sampleCount > 2 && !_isPaused)
         {
             Driver.SetAttribute(TraceGlow);
