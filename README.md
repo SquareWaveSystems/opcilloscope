@@ -49,13 +49,36 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
  F1 Help │ F5 Refresh │ Enter Subscribe │ Del Unsubscribe │ F10 Menu
 ```
 
-## Getting Started
+## Installation
 
-### Prerequisites
+### Quick Install (Recommended)
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+**Linux / macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/BrettKinny/OpcScope/main/install.sh | bash
+```
 
-### Build and Run
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/BrettKinny/OpcScope/main/install.ps1 | iex
+```
+
+### Download Binary
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/BrettKinny/OpcScope/releases):
+
+| Platform | Download |
+|----------|----------|
+| Windows x64 | `opcscope-win-x64.zip` |
+| Windows ARM64 | `opcscope-win-arm64.zip` |
+| Linux x64 | `opcscope-linux-x64.tar.gz` |
+| Linux ARM64 | `opcscope-linux-arm64.tar.gz` |
+| macOS x64 (Intel) | `opcscope-osx-x64.tar.gz` |
+| macOS ARM64 (Apple Silicon) | `opcscope-osx-arm64.tar.gz` |
+
+### Build from Source
+
+**Prerequisites:** [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 ```bash
 # Clone the repository
