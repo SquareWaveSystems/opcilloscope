@@ -161,7 +161,20 @@ public class MainWindow : Toplevel
     private void ApplyTheme()
     {
         var theme = ThemeManager.Current;
+
+        // Apply main window styling
         ColorScheme = theme.MainColorScheme;
+        BorderStyle = theme.BorderLineStyle;
+
+        // Apply styling to menu and status bar
+        ThemeStyler.ApplyToMenuBar(_menuBar, theme);
+        ThemeStyler.ApplyToStatusBar(_statusBar, theme);
+
+        // Apply to all child views
+        ThemeStyler.ApplyToFrame(_addressSpaceView, theme);
+        ThemeStyler.ApplyToFrame(_monitoredItemsView, theme);
+        ThemeStyler.ApplyToFrame(_nodeDetailsView, theme);
+        ThemeStyler.ApplyToFrame(_logView, theme);
     }
 
     private void OnThemeChanged(RetroTheme theme)

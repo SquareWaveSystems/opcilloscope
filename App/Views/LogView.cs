@@ -1,11 +1,14 @@
 using Terminal.Gui;
 using OpcScope.Utilities;
+using OpcScope.App.Themes;
 using System.Collections.ObjectModel;
+using Attribute = Terminal.Gui.Attribute;
 
 namespace OpcScope.App.Views;
 
 /// <summary>
 /// Scrolling event log panel with color-coded severity.
+/// Uses Terminal.Gui v2 ColorGetter for per-row coloring.
 /// </summary>
 public class LogView : FrameView
 {
@@ -16,7 +19,11 @@ public class LogView : FrameView
 
     public LogView()
     {
-        Title = "Log";
+        Title = " Log ";
+
+        // Apply theme styling
+        var theme = ThemeManager.Current;
+        BorderStyle = theme.FrameLineStyle;
 
         _listView = new ListView
         {
@@ -26,9 +33,31 @@ public class LogView : FrameView
             Height = Dim.Fill()
         };
 
+        // Use row color getter for log level coloring
+        _listView.RowColorGetter = GetRowColor;
+
         _listView.SetSource(_displayedEntries);
 
         Add(_listView);
+    }
+
+    /// <summary>
+    /// Returns color for log row based on severity level.
+    /// </summary>
+    private Attribute? GetRowColor(ListViewRowColorGetterArgs args)
+    {
+        if (args.Item < 0 || args.Item >= _entries.Count)
+            return null;
+
+        var entry = _entries[args.Item];
+        var theme = ThemeManager.Current;
+
+        return entry.Level switch
+        {
+            LogLevel.Error => theme.ErrorAttr,
+            LogLevel.Warning => theme.WarningAttr,
+            _ => null // Use default
+        };
     }
 
     public void Initialize(Logger logger)

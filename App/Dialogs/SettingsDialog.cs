@@ -1,9 +1,11 @@
 using Terminal.Gui;
+using OpcScope.App.Themes;
 
 namespace OpcScope.App.Dialogs;
 
 /// <summary>
 /// Dialog for configuring subscription settings.
+/// Uses Terminal.Gui v2 styling with theme support.
 /// </summary>
 public class SettingsDialog : Dialog
 {
@@ -15,10 +17,16 @@ public class SettingsDialog : Dialog
 
     public SettingsDialog(int currentInterval)
     {
-        Title = "Subscription Settings";
+        var theme = ThemeManager.Current;
+
+        Title = " Settings ";
         Width = 45;
         Height = 10;
         PublishingInterval = currentInterval;
+
+        // Apply theme styling
+        ColorScheme = theme.DialogColorScheme;
+        BorderStyle = theme.BorderLineStyle;
 
         var intervalLabel = new Label
         {
@@ -39,15 +47,17 @@ public class SettingsDialog : Dialog
         {
             X = 1,
             Y = 4,
-            Text = "Range: 100 - 10000 ms"
+            Text = "Range: 100 - 10000 ms",
+            ColorScheme = theme.MainColorScheme
         };
 
         var applyButton = new Button
         {
             X = Pos.Center() - 10,
             Y = 6,
-            Text = "Apply",
-            IsDefault = true
+            Text = $"{theme.ButtonPrefix}Apply{theme.ButtonSuffix}",
+            IsDefault = true,
+            ColorScheme = theme.ButtonColorScheme
         };
 
         applyButton.Accepting += (_, _) =>
@@ -61,9 +71,10 @@ public class SettingsDialog : Dialog
 
         var cancelButton = new Button
         {
-            X = Pos.Center() + 2,
+            X = Pos.Center() + 4,
             Y = 6,
-            Text = "Cancel"
+            Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
+            ColorScheme = theme.ButtonColorScheme
         };
 
         cancelButton.Accepting += (_, _) =>

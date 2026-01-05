@@ -1,11 +1,14 @@
 using Terminal.Gui;
 using OpcScope.OpcUa.Models;
+using OpcScope.App.Themes;
 using System.Data;
+using Attribute = Terminal.Gui.Attribute;
 
 namespace OpcScope.App.Views;
 
 /// <summary>
 /// TableView for displaying subscribed/monitored items with real-time updates.
+/// Features theme-aware styling and row coloring based on status.
 /// </summary>
 public class MonitoredItemsView : FrameView
 {
@@ -31,8 +34,12 @@ public class MonitoredItemsView : FrameView
 
     public MonitoredItemsView()
     {
-        Title = "Monitored Items";
+        Title = " Monitored Items ";
         CanFocus = true;
+
+        // Apply theme styling
+        var theme = ThemeManager.Current;
+        BorderStyle = theme.FrameLineStyle;
 
         _dataTable = new DataTable();
         _dataTable.Columns.Add("Name", typeof(string));
@@ -51,14 +58,45 @@ public class MonitoredItemsView : FrameView
             FullRowSelect = true
         };
 
-        // Configure columns
+        // Configure table style for cleaner look
         _tableView.Style.ShowHorizontalHeaderOverline = false;
         _tableView.Style.ShowHorizontalHeaderUnderline = true;
+        _tableView.Style.ShowHorizontalBottomline = false;
         _tableView.Style.AlwaysShowHeaders = true;
+        _tableView.Style.ShowVerticalCellLines = false;
+        _tableView.Style.ShowVerticalHeaderLines = false;
+        _tableView.Style.ExpandLastColumn = true;
+
+        // Row color getter for status-based coloring
+        _tableView.Style.RowColorGetter = GetRowColor;
 
         _tableView.KeyDown += HandleKeyDown;
 
         Add(_tableView);
+    }
+
+    /// <summary>
+    /// Returns row color based on the item's status.
+    /// </summary>
+    private Attribute? GetRowColor(RowColorGetterArgs args)
+    {
+        if (args.RowIndex < 0 || args.RowIndex >= _dataTable.Rows.Count)
+            return null;
+
+        var row = _dataTable.Rows[args.RowIndex];
+        var status = row["Status"] as string;
+        var theme = ThemeManager.Current;
+
+        // Color based on status
+        if (status != null)
+        {
+            if (status.Contains("Bad") || status.Contains("Error"))
+                return theme.ErrorAttr;
+            if (status.Contains("Uncertain"))
+                return theme.WarningAttr;
+        }
+
+        return null; // Use default color
     }
 
     public void AddItem(MonitoredNode item)

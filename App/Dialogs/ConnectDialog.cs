@@ -1,9 +1,11 @@
 using Terminal.Gui;
+using OpcScope.App.Themes;
 
 namespace OpcScope.App.Dialogs;
 
 /// <summary>
 /// Dialog for entering OPC UA server connection details.
+/// Uses Terminal.Gui v2 styling with theme support.
 /// </summary>
 public class ConnectDialog : Dialog
 {
@@ -15,9 +17,15 @@ public class ConnectDialog : Dialog
 
     public ConnectDialog(string? lastEndpoint = null)
     {
-        Title = "Connect to OPC UA Server";
+        var theme = ThemeManager.Current;
+
+        Title = " Connect to Server ";
         Width = 60;
         Height = 10;
+
+        // Apply theme styling
+        ColorScheme = theme.DialogColorScheme;
+        BorderStyle = theme.BorderLineStyle;
 
         var endpointLabel = new Label
         {
@@ -38,15 +46,17 @@ public class ConnectDialog : Dialog
         {
             X = 1,
             Y = 4,
-            Text = "Example: opc.tcp://192.168.1.50:4840"
+            Text = "Example: opc.tcp://192.168.1.50:4840",
+            ColorScheme = theme.MainColorScheme
         };
 
         var connectButton = new Button
         {
             X = Pos.Center() - 10,
             Y = 6,
-            Text = "Connect",
-            IsDefault = true
+            Text = $"{theme.ButtonPrefix}Connect{theme.ButtonSuffix}",
+            IsDefault = true,
+            ColorScheme = theme.ButtonColorScheme
         };
 
         connectButton.Accepting += (_, _) =>
@@ -60,9 +70,10 @@ public class ConnectDialog : Dialog
 
         var cancelButton = new Button
         {
-            X = Pos.Center() + 2,
+            X = Pos.Center() + 4,
             Y = 6,
-            Text = "Cancel"
+            Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
+            ColorScheme = theme.ButtonColorScheme
         };
 
         cancelButton.Accepting += (_, _) =>

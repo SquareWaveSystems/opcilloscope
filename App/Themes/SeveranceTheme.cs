@@ -6,11 +6,16 @@ namespace OpcScope.App.Themes;
 /// Severance-inspired theme with clinical, minimal aesthetic.
 /// Clean teal accents on dark background with single-line borders.
 /// Inspired by the Lumon Industries computer interfaces.
+/// Uses Terminal.Gui v2 LineStyle.Single for clean borders.
 /// </summary>
 public class SeveranceTheme : RetroTheme
 {
     public override string Name => "Severance";
     public override string Description => "Clinical minimal (Lumon)";
+
+    // Use Terminal.Gui v2 single-line borders for clean look
+    public override LineStyle BorderLineStyle => LineStyle.Single;
+    public override LineStyle FrameLineStyle => LineStyle.Single;
 
     // Deep black background for stark contrast
     public override Color Background => Color.Black;
