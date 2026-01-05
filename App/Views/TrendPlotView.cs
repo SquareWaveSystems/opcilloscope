@@ -29,6 +29,7 @@ public class TrendPlotView : View
     private Attribute _scanlineAttr;
     private Attribute _glowAttr;
     private Attribute _backgroundAttr;
+    private readonly object _themeLock = new();
 
     // Ring buffer for samples (preallocated)
     private readonly float[] _samples;
@@ -90,21 +91,27 @@ public class TrendPlotView : View
 
     private void CacheThemeAttributes()
     {
-        _brightAttr = _currentTheme.BrightAttr;
-        _normalAttr = _currentTheme.NormalAttr;
-        _dimAttr = _currentTheme.DimAttr;
-        _gridAttr = _currentTheme.GridAttr;
-        _borderAttr = _currentTheme.BorderAttr;
-        _statusActiveAttr = _currentTheme.StatusActiveAttr;
-        _statusInactiveAttr = _currentTheme.StatusInactiveAttr;
-        _scanlineAttr = _currentTheme.ScanlineAttr;
-        _glowAttr = _currentTheme.GlowAttr;
-        _backgroundAttr = new(_currentTheme.Background, _currentTheme.Background);
+        lock (_themeLock)
+        {
+            _brightAttr = _currentTheme.BrightAttr;
+            _normalAttr = _currentTheme.NormalAttr;
+            _dimAttr = _currentTheme.DimAttr;
+            _gridAttr = _currentTheme.GridAttr;
+            _borderAttr = _currentTheme.BorderAttr;
+            _statusActiveAttr = _currentTheme.StatusActiveAttr;
+            _statusInactiveAttr = _currentTheme.StatusInactiveAttr;
+            _scanlineAttr = _currentTheme.ScanlineAttr;
+            _glowAttr = _currentTheme.GlowAttr;
+            _backgroundAttr = new(_currentTheme.Background, _currentTheme.Background);
+        }
     }
 
     private void OnThemeChanged(RetroTheme newTheme)
     {
-        _currentTheme = newTheme;
+        lock (_themeLock)
+        {
+            _currentTheme = newTheme;
+        }
         CacheThemeAttributes();
         Application.Invoke(() => SetNeedsLayout());
     }

@@ -198,7 +198,6 @@ public class ThemeManagerTests
         // Act - Multiple threads reading and writing concurrently
         for (int i = 0; i < 10; i++)
         {
-            var index = i;
             tasks.Add(Task.Run(() =>
             {
                 try
