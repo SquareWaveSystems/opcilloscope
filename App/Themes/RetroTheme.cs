@@ -29,24 +29,39 @@ public abstract class RetroTheme
     public abstract Color Error { get; }
     public abstract Color Warning { get; }
 
+    // === Cached Attribute objects to avoid allocations ===
+    private Attribute? _normalAttr;
+    private Attribute? _brightAttr;
+    private Attribute? _dimAttr;
+    private Attribute? _accentAttr;
+    private Attribute? _accentBrightAttr;
+    private Attribute? _borderAttr;
+    private Attribute? _gridAttr;
+    private Attribute? _statusActiveAttr;
+    private Attribute? _statusInactiveAttr;
+    private Attribute? _errorAttr;
+    private Attribute? _warningAttr;
+    private Attribute? _glowAttr;
+    private Attribute? _scanlineAttr;
+
     // === Derived Attributes (for direct drawing) ===
-    public Attribute NormalAttr => new(Foreground, Background);
-    public Attribute BrightAttr => new(ForegroundBright, Background);
-    public Attribute DimAttr => new(ForegroundDim, Background);
-    public Attribute AccentAttr => new(Accent, Background);
-    public Attribute AccentBrightAttr => new(AccentBright, Background);
-    public Attribute BorderAttr => new(Border, Background);
-    public Attribute GridAttr => new(Grid, Background);
-    public Attribute StatusActiveAttr => new(StatusActive, Background);
-    public Attribute StatusInactiveAttr => new(StatusInactive, Background);
-    public Attribute ErrorAttr => new(Error, Background);
-    public Attribute WarningAttr => new(Warning, Background);
+    public Attribute NormalAttr => _normalAttr ??= new(Foreground, Background);
+    public Attribute BrightAttr => _brightAttr ??= new(ForegroundBright, Background);
+    public Attribute DimAttr => _dimAttr ??= new(ForegroundDim, Background);
+    public Attribute AccentAttr => _accentAttr ??= new(Accent, Background);
+    public Attribute AccentBrightAttr => _accentBrightAttr ??= new(AccentBright, Background);
+    public Attribute BorderAttr => _borderAttr ??= new(Border, Background);
+    public Attribute GridAttr => _gridAttr ??= new(Grid, Background);
+    public Attribute StatusActiveAttr => _statusActiveAttr ??= new(StatusActive, Background);
+    public Attribute StatusInactiveAttr => _statusInactiveAttr ??= new(StatusInactive, Background);
+    public Attribute ErrorAttr => _errorAttr ??= new(Error, Background);
+    public Attribute WarningAttr => _warningAttr ??= new(Warning, Background);
 
     // Glow/highlight effect for active elements
-    public Attribute GlowAttr => new(Color.White, Background);
+    public Attribute GlowAttr => _glowAttr ??= new(Color.White, Background);
 
     // Scanline effect (subtle darkening)
-    public virtual Attribute ScanlineAttr => new(new Color(10, 10, 10), Background);
+    public virtual Attribute ScanlineAttr => _scanlineAttr ??= new(new Color(10, 10, 10), Background);
 
     // === Cached Color Schemes for Terminal.Gui Widgets ===
     private ColorScheme? _mainColorScheme;

@@ -17,18 +17,18 @@ namespace OpcScope.App.Views;
 /// </summary>
 public class TrendPlotView : View
 {
-    // === Theme-aware color accessors ===
-    private RetroTheme Theme => ThemeManager.Current;
-    private Attribute BrightAttr => Theme.BrightAttr;
-    private Attribute NormalAttr => Theme.NormalAttr;
-    private Attribute DimAttr => Theme.DimAttr;
-    private Attribute GridAttr => Theme.GridAttr;
-    private Attribute BorderAttr => Theme.BorderAttr;
-    private Attribute StatusActiveAttr => Theme.StatusActiveAttr;
-    private Attribute StatusInactiveAttr => Theme.StatusInactiveAttr;
-    private Attribute ScanlineAttr => Theme.ScanlineAttr;
-    private Attribute GlowAttr => Theme.GlowAttr;
-    private Attribute BackgroundAttr => new(Theme.Background, Theme.Background);
+    // === Cached theme and attributes ===
+    private RetroTheme _currentTheme;
+    private Attribute _brightAttr;
+    private Attribute _normalAttr;
+    private Attribute _dimAttr;
+    private Attribute _gridAttr;
+    private Attribute _borderAttr;
+    private Attribute _statusActiveAttr;
+    private Attribute _statusInactiveAttr;
+    private Attribute _scanlineAttr;
+    private Attribute _glowAttr;
+    private Attribute _backgroundAttr;
 
     // Ring buffer for samples (preallocated)
     private readonly float[] _samples;
@@ -77,8 +77,36 @@ public class TrendPlotView : View
         // Pre-allocate ring buffer for maximum expected width (200 samples)
         _samples = new float[200];
 
+        // Initialize cached theme
+        _currentTheme = ThemeManager.Current;
+        CacheThemeAttributes();
+
+        // Subscribe to theme changes
+        ThemeManager.ThemeChanged += OnThemeChanged;
+
         CanFocus = true;
         WantMousePositionReports = false;
+    }
+
+    private void CacheThemeAttributes()
+    {
+        _brightAttr = _currentTheme.BrightAttr;
+        _normalAttr = _currentTheme.NormalAttr;
+        _dimAttr = _currentTheme.DimAttr;
+        _gridAttr = _currentTheme.GridAttr;
+        _borderAttr = _currentTheme.BorderAttr;
+        _statusActiveAttr = _currentTheme.StatusActiveAttr;
+        _statusInactiveAttr = _currentTheme.StatusInactiveAttr;
+        _scanlineAttr = _currentTheme.ScanlineAttr;
+        _glowAttr = _currentTheme.GlowAttr;
+        _backgroundAttr = new(_currentTheme.Background, _currentTheme.Background);
+    }
+
+    private void OnThemeChanged(RetroTheme newTheme)
+    {
+        _currentTheme = newTheme;
+        CacheThemeAttributes();
+        Application.Invoke(() => SetNeedsLayout());
     }
 
     /// <summary>
@@ -323,7 +351,7 @@ public class TrendPlotView : View
         if (plotWidth < 4 || plotHeight < 2) return true;
 
         // Clear with theme background
-        Driver.SetAttribute(BackgroundAttr);
+        Driver.SetAttribute(_backgroundAttr);
         for (int y = 0; y < viewport.Height; y++)
         {
             Move(0, y);
@@ -418,9 +446,9 @@ public class TrendPlotView : View
     private void DrawScanlines(int width, int height)
     {
         // Subtle scanline effect on alternating rows (if theme enables it)
-        if (!Theme.EnableScanlines) return;
+        if (!_currentTheme.EnableScanlines) return;
 
-        Driver.SetAttribute(ScanlineAttr);
+        Driver.SetAttribute(_scanlineAttr);
         for (int y = 1; y < height; y += 2)
         {
             Move(0, y);
@@ -434,65 +462,65 @@ public class TrendPlotView : View
     private void DrawHeader(int width)
     {
         // Industrial header bar
-        Driver.SetAttribute(BorderAttr);
+        Driver.SetAttribute(_borderAttr);
         Move(0, 0);
-        AddRune((Rune)Theme.BoxTopLeft);
-        for (int x = 1; x < width - 1; x++) AddRune((Rune)Theme.BoxHorizontal);
-        AddRune((Rune)Theme.BoxTopRight);
+        AddRune((Rune)_currentTheme.BoxTopLeft);
+        for (int x = 1; x < width - 1; x++) AddRune((Rune)_currentTheme.BoxHorizontal);
+        AddRune((Rune)_currentTheme.BoxTopRight);
 
         // Title with signal name
         string title = _boundNode?.DisplayName?.ToUpperInvariant() ?? "SCOPE";
         if (title.Length > 20) title = title[..20];
 
         Move(2, 0);
-        Driver.SetAttribute(BrightAttr);
-        AddStr($"{Theme.BoxTitleLeft} {title} {Theme.BoxTitleRight}");
+        Driver.SetAttribute(_brightAttr);
+        AddStr($"{_currentTheme.BoxTitleLeft} {title} {_currentTheme.BoxTitleRight}");
 
         // Status indicators on right
         int rightPos = width - 25;
         if (rightPos > title.Length + 10)
         {
             Move(rightPos, 0);
-            Driver.SetAttribute(BorderAttr);
-            AddStr($"{Theme.BoxTitleLeft}");
+            Driver.SetAttribute(_borderAttr);
+            AddStr($"{_currentTheme.BoxTitleLeft}");
 
             // LIVE/HOLD indicator
             if (_isPaused)
             {
-                Driver.SetAttribute(StatusInactiveAttr);
+                Driver.SetAttribute(_statusInactiveAttr);
                 AddStr(" HOLD ");
             }
             else
             {
-                Driver.SetAttribute(StatusActiveAttr);
+                Driver.SetAttribute(_statusActiveAttr);
                 AddStr(" LIVE ");
             }
 
-            Driver.SetAttribute(BorderAttr);
+            Driver.SetAttribute(_borderAttr);
             AddStr("│");
 
             // Blinking activity indicator
             if (!_isPaused && (_frameCount % 10) < 5)
             {
-                Driver.SetAttribute(StatusActiveAttr);
+                Driver.SetAttribute(_statusActiveAttr);
                 AddStr("●");
             }
             else
             {
-                Driver.SetAttribute(StatusInactiveAttr);
+                Driver.SetAttribute(_statusInactiveAttr);
                 AddStr("○");
             }
 
-            Driver.SetAttribute(BorderAttr);
-            AddStr($"{Theme.BoxTitleRight}");
+            Driver.SetAttribute(_borderAttr);
+            AddStr($"{_currentTheme.BoxTitleRight}");
         }
 
         // Second header line with technical info
         Move(0, 1);
-        Driver.SetAttribute(BorderAttr);
-        AddRune((Rune)Theme.BoxVertical);
+        Driver.SetAttribute(_borderAttr);
+        AddRune((Rune)_currentTheme.BoxVertical);
 
-        Driver.SetAttribute(DimAttr);
+        Driver.SetAttribute(_dimAttr);
         string techInfo = $" CH1  SCALE:{(_autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X")}  ";
         lock (_lock)
         {
@@ -503,8 +531,8 @@ public class TrendPlotView : View
         AddStr(techInfo.PadRight(width - 2));
 
         Move(width - 1, 1);
-        Driver.SetAttribute(BorderAttr);
-        AddRune((Rune)Theme.BoxVertical);
+        Driver.SetAttribute(_borderAttr);
+        AddRune((Rune)_currentTheme.BoxVertical);
     }
 
     private void DrawIndustrialFrame(int width, int height, int plotWidth, int plotHeight)
@@ -514,20 +542,20 @@ public class TrendPlotView : View
         int plotLeft = LeftMargin - 1;
         int plotRight = LeftMargin + plotWidth;
 
-        Driver.SetAttribute(BorderAttr);
+        Driver.SetAttribute(_borderAttr);
 
         // Top border of plot area
         Move(plotLeft, plotTop);
-        AddRune((Rune)Theme.BoxTopLeft);
+        AddRune((Rune)_currentTheme.BoxTopLeft);
         for (int x = plotLeft + 1; x < plotRight; x++)
         {
             // Tick marks every 10 columns
             if ((x - LeftMargin) % 10 == 0 && x < plotRight - 1)
-                AddRune((Rune)Theme.TickHorizontal);
+                AddRune((Rune)_currentTheme.TickHorizontal);
             else
-                AddRune((Rune)Theme.BoxHorizontal);
+                AddRune((Rune)_currentTheme.BoxHorizontal);
         }
-        AddRune((Rune)Theme.BoxTopRight);
+        AddRune((Rune)_currentTheme.BoxTopRight);
 
         // Side borders
         for (int y = plotTop + 1; y < plotBottom; y++)
@@ -535,31 +563,31 @@ public class TrendPlotView : View
             Move(plotLeft, y);
             // Tick marks every 4 rows
             if ((y - TopMargin) % 4 == 0)
-                AddRune((Rune)Theme.TickVertical);
+                AddRune((Rune)_currentTheme.TickVertical);
             else
-                AddRune((Rune)Theme.BoxVertical);
+                AddRune((Rune)_currentTheme.BoxVertical);
 
             Move(plotRight, y);
             if ((y - TopMargin) % 4 == 0)
-                AddRune((Rune)Theme.TickVerticalRight);
+                AddRune((Rune)_currentTheme.TickVerticalRight);
             else
-                AddRune((Rune)Theme.BoxVertical);
+                AddRune((Rune)_currentTheme.BoxVertical);
         }
 
         // Bottom border
         Move(plotLeft, plotBottom);
-        AddRune((Rune)Theme.BoxBottomLeft);
+        AddRune((Rune)_currentTheme.BoxBottomLeft);
         for (int x = plotLeft + 1; x < plotRight; x++)
         {
             if ((x - LeftMargin) % 10 == 0 && x < plotRight - 1)
-                AddRune((Rune)Theme.TickHorizontalBottom);
+                AddRune((Rune)_currentTheme.TickHorizontalBottom);
             else
-                AddRune((Rune)Theme.BoxHorizontal);
+                AddRune((Rune)_currentTheme.BoxHorizontal);
         }
-        AddRune((Rune)Theme.BoxBottomRight);
+        AddRune((Rune)_currentTheme.BoxBottomRight);
 
         // Corner ornaments
-        Driver.SetAttribute(DimAttr);
+        Driver.SetAttribute(_dimAttr);
         Move(plotLeft - 1, plotTop);
         AddStr("▐");
         Move(plotRight + 1, plotTop);
@@ -572,7 +600,7 @@ public class TrendPlotView : View
 
     private void DrawGrid(int plotWidth, int plotHeight)
     {
-        Driver.SetAttribute(GridAttr);
+        Driver.SetAttribute(_gridAttr);
 
         // Horizontal grid lines
         for (int y = 0; y < plotHeight; y++)
@@ -613,7 +641,7 @@ public class TrendPlotView : View
         if (zeroY > 0 && zeroY < 1)
         {
             int centerRow = (int)(zeroY * (plotHeight - 1));
-            Driver.SetAttribute(DimAttr);
+            Driver.SetAttribute(_dimAttr);
             for (int x = 0; x < plotWidth; x++)
             {
                 Move(LeftMargin + x, TopMargin + centerRow);
@@ -624,7 +652,7 @@ public class TrendPlotView : View
 
     private void DrawYAxisLabels(int plotHeight)
     {
-        Driver.SetAttribute(NormalAttr);
+        Driver.SetAttribute(_normalAttr);
 
         // Max value
         string maxStr = FormatAxisValue(_visibleMax);
@@ -650,7 +678,7 @@ public class TrendPlotView : View
             float q1 = _visibleMin + (_visibleMax - _visibleMin) * 0.25f;
             float q3 = _visibleMin + (_visibleMax - _visibleMin) * 0.75f;
 
-            Driver.SetAttribute(DimAttr);
+            Driver.SetAttribute(_dimAttr);
             Move(1, TopMargin + plotHeight * 3 / 4);
             AddStr(FormatAxisValue(q1).PadLeft(LeftMargin - 2));
             Move(1, TopMargin + plotHeight / 4);
@@ -770,12 +798,12 @@ public class TrendPlotView : View
 
                 // Choose color based on position (brighter near the leading edge)
                 // Use theme-aware colors for glow effect
-                if (sampleIdx >= sampleCount - 3 && !_isPaused && Theme.EnableGlow)
-                    Driver.SetAttribute(GlowAttr);
+                if (sampleIdx >= sampleCount - 3 && !_isPaused && _currentTheme.EnableGlow)
+                    Driver.SetAttribute(_glowAttr);
                 else if (sampleIdx >= sampleCount - 8)
-                    Driver.SetAttribute(BrightAttr);
+                    Driver.SetAttribute(_brightAttr);
                 else
-                    Driver.SetAttribute(NormalAttr);
+                    Driver.SetAttribute(_normalAttr);
 
                 // Select the right block character
                 var (fillTop, fillBottom) = cell.Value;
@@ -792,16 +820,16 @@ public class TrendPlotView : View
     private void DrawNoSignal(int plotWidth, int plotHeight)
     {
         // Animated "NO SIGNAL" message
-        Driver.SetAttribute((_frameCount % 20) < 10 ? BrightAttr : DimAttr);
+        Driver.SetAttribute((_frameCount % 20) < 10 ? _brightAttr : _dimAttr);
 
-        string msg = Theme.NoSignalMessage;
+        string msg = _currentTheme.NoSignalMessage;
         int x = LeftMargin + (plotWidth - msg.Length) / 2;
         int y = TopMargin + plotHeight / 2;
 
         Move(x, y);
         AddStr(msg);
 
-        Driver.SetAttribute(DimAttr);
+        Driver.SetAttribute(_dimAttr);
         string hint = "Select a node to begin plotting";
         x = LeftMargin + (plotWidth - hint.Length) / 2;
         Move(x, y + 2);
@@ -813,37 +841,37 @@ public class TrendPlotView : View
         int y = height - 2;
 
         // Status bar background
-        Driver.SetAttribute(BorderAttr);
+        Driver.SetAttribute(_borderAttr);
         Move(0, y);
-        AddRune((Rune)Theme.BoxLeftT);
-        for (int x = 1; x < width - 1; x++) AddRune((Rune)Theme.BoxHorizontal);
-        AddRune((Rune)Theme.BoxRightT);
+        AddRune((Rune)_currentTheme.BoxLeftT);
+        for (int x = 1; x < width - 1; x++) AddRune((Rune)_currentTheme.BoxHorizontal);
+        AddRune((Rune)_currentTheme.BoxRightT);
 
         // Status text
         Move(0, y + 1);
-        AddRune((Rune)Theme.BoxVertical);
+        AddRune((Rune)_currentTheme.BoxVertical);
 
-        Driver.SetAttribute(DimAttr);
+        Driver.SetAttribute(_dimAttr);
 
         // Key hints
         string keys = " [SPACE]";
         AddStr(keys);
-        Driver.SetAttribute(_isPaused ? StatusActiveAttr : DimAttr);
+        Driver.SetAttribute(_isPaused ? _statusActiveAttr : _dimAttr);
         AddStr("Pause");
 
-        Driver.SetAttribute(DimAttr);
+        Driver.SetAttribute(_dimAttr);
         AddStr("  [+/-]");
-        Driver.SetAttribute(!_autoScale ? StatusActiveAttr : DimAttr);
+        Driver.SetAttribute(!_autoScale ? _statusActiveAttr : _dimAttr);
         AddStr("Scale");
 
-        Driver.SetAttribute(DimAttr);
+        Driver.SetAttribute(_dimAttr);
         AddStr("  [R]");
-        Driver.SetAttribute(_autoScale ? StatusActiveAttr : DimAttr);
+        Driver.SetAttribute(_autoScale ? _statusActiveAttr : _dimAttr);
         AddStr("Auto");
 
         // Fill rest with spaces and close border
         int currentPos = 1 + keys.Length + 5 + 7 + 5 + 5 + 4;
-        Driver.SetAttribute(DimAttr);
+        Driver.SetAttribute(_dimAttr);
 
         // Current value on the right
         float currentValue = 0;
@@ -867,18 +895,18 @@ public class TrendPlotView : View
         }
 
         Move(valuePos, y + 1);
-        Driver.SetAttribute(BrightAttr);
+        Driver.SetAttribute(_brightAttr);
         AddStr(valueStr);
 
         Move(width - 1, y + 1);
-        Driver.SetAttribute(BorderAttr);
-        AddRune((Rune)Theme.BoxVertical);
+        Driver.SetAttribute(_borderAttr);
+        AddRune((Rune)_currentTheme.BoxVertical);
 
         // Bottom border
         Move(0, height - 1);
-        AddRune((Rune)Theme.BoxBottomLeft);
-        for (int x = 1; x < width - 1; x++) AddRune((Rune)Theme.BoxHorizontal);
-        AddRune((Rune)Theme.BoxBottomRight);
+        AddRune((Rune)_currentTheme.BoxBottomLeft);
+        for (int x = 1; x < width - 1; x++) AddRune((Rune)_currentTheme.BoxHorizontal);
+        AddRune((Rune)_currentTheme.BoxBottomRight);
     }
 
     private static string FormatAxisValue(float value)

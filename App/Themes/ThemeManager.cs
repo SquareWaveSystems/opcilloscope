@@ -61,11 +61,17 @@ public static class ThemeManager
     {
         if (theme == null) return;
 
+        RetroTheme themeToUse;
+        Action<RetroTheme>? handlers;
+
         lock (_lock)
         {
             _currentTheme = theme;
+            themeToUse = _currentTheme;
+            handlers = ThemeChanged;
         }
-        ThemeChanged?.Invoke(theme);
+
+        handlers?.Invoke(themeToUse);
     }
 
     /// <summary>
