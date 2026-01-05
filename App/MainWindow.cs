@@ -22,6 +22,8 @@ public class MainWindow : Toplevel
     private SubscriptionManager? _subscriptionManager;
     private EmbeddedTestServer? _testServer;
     private bool _isStartingTestServer;
+    private readonly CsvRecordingManager _csvRecordingManager;
+    private object? _recordingStatusTimer;
 
     private readonly Label _titleBanner;
     private readonly MenuBar _menuBar;
@@ -41,6 +43,7 @@ public class MainWindow : Toplevel
         _logger = new Logger();
         _client = new OpcUaClientWrapper(_logger);
         _nodeBrowser = new NodeBrowser(_client, _logger);
+        _csvRecordingManager = new CsvRecordingManager(_logger);
 
         // Wire up client events
         _client.Connected += OnClientConnected;
@@ -141,6 +144,8 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredItemsView.RecordRequested += OnRecordRequested;
+        _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -181,6 +186,10 @@ public class MainWindow : Toplevel
                 new MenuBarItem("_File", new MenuItem[]
                 {
                     new MenuItem("_Export to CSV...", "", ExportToCsv),
+                    null!, // Separator
+                    new MenuItem("Start _Recording...", "", () => OnRecordRequested()),
+                    new MenuItem("Sto_p Recording", "", () => OnStopRecordingRequested()),
+                    null!, // Separator
                     new MenuItem("E_xit", "", () => RequestStop())
                 }),
                 new MenuBarItem("_Connection", new MenuItem[]
@@ -310,6 +319,12 @@ public class MainWindow : Toplevel
 
     private void Disconnect()
     {
+        // Stop recording if active
+        if (_csvRecordingManager.IsRecording)
+        {
+            OnStopRecordingRequested();
+        }
+
         _subscriptionManager?.Dispose();
         _subscriptionManager = null;
 
@@ -480,6 +495,9 @@ public class MainWindow : Toplevel
 
     private void OnValueChanged(MonitoredNode item)
     {
+        // Record to CSV if recording is active
+        _csvRecordingManager.RecordValue(item);
+
         UiThread.Run(() =>
         {
             _monitoredItemsView.UpdateItem(item);
@@ -562,6 +580,86 @@ public class MainWindow : Toplevel
     {
         var dialog = new TrendPlotDialog(_subscriptionManager, node);
         Application.Run(dialog);
+    }
+
+    private void OnRecordRequested()
+    {
+        if (_csvRecordingManager.IsRecording)
+        {
+            _logger.Warning("Recording is already in progress");
+            return;
+        }
+
+        if (_subscriptionManager == null || !_subscriptionManager.MonitoredItems.Any())
+        {
+            MessageBox.Query("Record", "No items to record. Subscribe to items first.", "OK");
+            return;
+        }
+
+        using var dialog = new SaveDialog
+        {
+            Title = "Save Recording As",
+            AllowedTypes = new[] { new AllowedType("CSV Files", ".csv") }
+        };
+
+        Application.Run(dialog);
+
+        if (!dialog.Canceled && dialog.Path != null)
+        {
+            var path = dialog.Path.ToString();
+            if (!path!.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            {
+                path += ".csv";
+            }
+
+            if (_csvRecordingManager.StartRecording(path))
+            {
+                _monitoredItemsView.SetRecordingState(true, "REC");
+                StartRecordingStatusUpdates();
+            }
+            else
+            {
+                MessageBox.ErrorQuery("Recording Error", "Failed to start recording", "OK");
+            }
+        }
+    }
+
+    private void OnStopRecordingRequested()
+    {
+        if (!_csvRecordingManager.IsRecording)
+        {
+            return;
+        }
+
+        StopRecordingStatusUpdates();
+        _csvRecordingManager.StopRecording();
+        _monitoredItemsView.SetRecordingState(false, "");
+        MessageBox.Query("Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
+    }
+
+    private void StartRecordingStatusUpdates()
+    {
+        // Use Terminal.Gui's Application.AddTimeout for periodic updates
+        _recordingStatusTimer = Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+        {
+            if (_csvRecordingManager.IsRecording)
+            {
+                var duration = _csvRecordingManager.RecordingDuration;
+                var status = $"REC {duration:mm\\:ss} ({_csvRecordingManager.RecordCount} records)";
+                _monitoredItemsView.UpdateRecordingStatus(status);
+                return true; // Continue timer
+            }
+            return false; // Stop timer
+        });
+    }
+
+    private void StopRecordingStatusUpdates()
+    {
+        if (_recordingStatusTimer != null)
+        {
+            Application.RemoveTimeout(_recordingStatusTimer);
+            _recordingStatusTimer = null;
+        }
     }
 
     private void ExportToCsv()
@@ -696,6 +794,12 @@ Trend Plot (in dialog):
   +/-       - Adjust vertical scale
   R         - Reset to auto-scale
 
+CSV Recording:
+  - Use Record/Stop buttons in Monitored Items panel
+  - Or use File > Start Recording / Stop Recording
+  - Records all value changes to CSV in real-time
+  - CSV format: Timestamp, DisplayName, NodeId, Value, Status
+
 Tips:
   - Only Variable nodes can be subscribed
   - Double-click a node to subscribe
@@ -739,6 +843,8 @@ License: MIT
     {
         if (disposing)
         {
+            StopRecordingStatusUpdates();
+            _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _subscriptionManager?.Dispose();
             _client.Dispose();
