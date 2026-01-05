@@ -76,19 +76,19 @@ public class TestNodeManager : CustomNodeManager2
     private void CreateSimulationNodes(FolderState folder)
     {
         // Counter - Int32, changes every second
-        _counterNode = CreateVariable(folder, "Counter", "Counter", DataTypeIds.Int32, ValueRanks.Scalar);
+        _counterNode = CreateVariable<int>(folder, "Counter", "Counter", DataTypeIds.Int32, ValueRanks.Scalar);
         _counterNode.Value = _counterValue;
         _counterNode.AccessLevel = AccessLevels.CurrentRead;
         _counterNode.UserAccessLevel = AccessLevels.CurrentRead;
 
         // RandomValue - Double, random 0-100
-        _randomNode = CreateVariable(folder, "RandomValue", "RandomValue", DataTypeIds.Double, ValueRanks.Scalar);
+        _randomNode = CreateVariable<double>(folder, "RandomValue", "RandomValue", DataTypeIds.Double, ValueRanks.Scalar);
         _randomNode.Value = _randomValue;
         _randomNode.AccessLevel = AccessLevels.CurrentRead;
         _randomNode.UserAccessLevel = AccessLevels.CurrentRead;
 
         // SineWave - Double, oscillating value
-        _sineNode = CreateVariable(folder, "SineWave", "SineWave", DataTypeIds.Double, ValueRanks.Scalar);
+        _sineNode = CreateVariable<double>(folder, "SineWave", "SineWave", DataTypeIds.Double, ValueRanks.Scalar);
         _sineNode.Value = _sineValue;
         _sineNode.AccessLevel = AccessLevels.CurrentRead;
         _sineNode.UserAccessLevel = AccessLevels.CurrentRead;
