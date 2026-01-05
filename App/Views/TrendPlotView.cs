@@ -1026,7 +1026,11 @@ public class TrendPlotView : View
             // Select color attribute based on depth
             Attribute colorAttr = GetDepthColor(depth, depthCount);
 
-            // Get samples for this frame (read under lock to avoid reading during write)
+            // Get samples for this frame
+            // Note: Reading from _frameHistory without lock is safe because:
+            // 1. Arrays are preallocated and never replaced
+            // 2. Float reads are atomic
+            // 3. Worst case is seeing a partially updated frame for one render (acceptable for visualization)
             float[] frameSamples = _frameHistory[frameIdx];
 
             // Draw this frame at the specified depth
