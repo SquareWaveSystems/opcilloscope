@@ -24,9 +24,9 @@ public class OpcUaClientWrapper : IDisposable
     public event Action? Disconnected;
     public event Action<string>? ConnectionError;
 
-    public OpcUaClientWrapper(Logger logger)
+    public OpcUaClientWrapper(Logger? logger = null)
     {
-        _logger = logger;
+        _logger = logger ?? new Logger();
     }
 
     private async Task<ApplicationConfiguration> GetApplicationConfigAsync()
@@ -252,6 +252,22 @@ public class OpcUaClientWrapper : IDisposable
         );
 
         return results?.Count > 0 ? results[0] : StatusCodes.BadUnexpectedError;
+    }
+
+    public Task<DataValue> ReadValueAsync(NodeId nodeId)
+    {
+        return Task.FromResult(ReadValue(nodeId) ?? new DataValue(StatusCodes.BadNodeIdUnknown));
+    }
+
+    public Task<StatusCode> WriteValueAsync(NodeId nodeId, object value)
+    {
+        return Task.FromResult(WriteValue(nodeId, value));
+    }
+
+    public Task DisconnectAsync()
+    {
+        Disconnect();
+        return Task.CompletedTask;
     }
 
     public void Dispose()

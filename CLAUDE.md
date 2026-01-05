@@ -45,7 +45,13 @@ OpcScope/
 │   ├── Logger.cs               # In-app logging
 │   └── UiThread.cs             # Thread marshalling for UI
 ├── tests/                      # Unit tests (xunit)
-├── test-server/                # Node-OPCUA test server
+│   └── OpcScope.Tests/
+│       ├── Infrastructure/     # In-process OPC UA test server
+│       │   ├── TestServer.cs   # Server with ApplicationConfiguration
+│       │   ├── TestNodeManager.cs # Custom NodeManager with test nodes
+│       │   └── TestServerFixture.cs # xUnit fixture with IAsyncLifetime
+│       └── Integration/        # Integration tests
+├── test-server/                # Node-OPCUA test server (legacy)
 ├── packages/                   # Local NuGet packages
 └── scripts/
     ├── download-packages.sh    # Offline package download
@@ -103,26 +109,69 @@ The project uses a local package source (`./packages/`) due to network restricti
 2. Run `dotnet restore`
 
 Required OPC Foundation packages:
-- `OPCFoundation.NetStandard.Opc.Ua.Client`
-- `OPCFoundation.NetStandard.Opc.Ua.Core`
-- `OPCFoundation.NetStandard.Opc.Ua.Configuration`
-- `OPCFoundation.NetStandard.Opc.Ua.Security.Certificates`
+- `OPCFoundation.NetStandard.Opc.Ua.Client` - Client session and subscription
+- `OPCFoundation.NetStandard.Opc.Ua.Core` - Core types and utilities
+- `OPCFoundation.NetStandard.Opc.Ua.Configuration` - Application configuration
+- `OPCFoundation.NetStandard.Opc.Ua.Security.Certificates` - Certificate management
+- `OPCFoundation.NetStandard.Opc.Ua.Server` - Server implementation (tests only)
 
-### Test Server
-Start the Node-OPCUA test server for integration testing:
+### In-Process Test Server (Recommended)
+The project includes an in-process OPC Foundation test server for integration testing without external dependencies.
+
+```csharp
+// Using xUnit IClassFixture for test class
+public class MyTests : IntegrationTestBase
+{
+    public MyTests(TestServerFixture fixture) : base(fixture) { }
+
+    [Fact]
+    public async Task CanReadValue()
+    {
+        var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
+        var value = await Client!.ReadValueAsync(nodeId);
+        Assert.NotNull(value);
+    }
+}
+
+// Using collection fixture for shared server across classes
+[Collection("TestServer")]
+public class OtherTests
+{
+    private readonly TestServerFixture _fixture;
+    public OtherTests(TestServerFixture fixture) => _fixture = fixture;
+}
+```
+
+Key classes:
+- `TestServer` - Server with start/stop methods and ApplicationConfiguration
+- `TestNodeManager` - Custom NodeManager exposing test nodes in `urn:opcscope:testserver` namespace
+- `TestServerFixture` - xUnit fixture implementing `IAsyncLifetime`
+- `IntegrationTestBase` - Base class with auto-connected client
+
+### Test Server Nodes
+Available test nodes (same for both in-process and Node-OPCUA servers):
+
+**Simulation folder** (values update every second):
+- `Counter` - Int32, increments every second
+- `RandomValue` - Double, random 0-100
+- `SineWave` - Double, oscillating value
+- `WritableString` - String, writable
+- `ToggleBoolean` - Boolean, writable
+- `WritableNumber` - Int32, writable
+
+**StaticData folder** (read-only):
+- `ServerName` - String ("OpcScope Test Server")
+- `StartTime` - DateTime
+- `Version` - String ("1.0.0")
+- `ArrayOfInts` - Int32[] ([1, 2, 3, 4, 5])
+
+### Legacy Node-OPCUA Server
+For manual testing, the Node-OPCUA server can still be used:
 ```bash
 cd test-server
 npm start
 ```
 Server runs at `opc.tcp://localhost:4840/UA/OpcScopeTest`
-
-Available test nodes:
-- `Simulation/Counter` - Int32, increments every second
-- `Simulation/RandomValue` - Double, random 0-100
-- `Simulation/SineWave` - Double, oscillating value
-- `Simulation/WritableString` - String, writable
-- `Simulation/WritableNumber` - Int32, writable
-- `StaticData/*` - Read-only static values
 
 ## Common Issues
 
