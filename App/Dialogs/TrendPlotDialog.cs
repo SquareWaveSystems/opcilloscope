@@ -91,8 +91,12 @@ public class TrendPlotDialog : Dialog
 
         Add(_trendPlotView, _statusLabel, buttonFrame);
 
-        // Start in demo mode if no monitored items available
-        if (_availableNodes == null || !_availableNodes.Any())
+        // Start with initial node, demo mode, or prompt to select
+        if (initialNode != null)
+        {
+            BindToNode(initialNode);
+        }
+        else if (_availableNodes == null || !_availableNodes.Any())
         {
             StartDemoMode();
         }
