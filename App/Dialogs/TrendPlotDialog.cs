@@ -3,6 +3,7 @@ using OpcScope.App.Views;
 using OpcScope.App.Themes;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Dialogs;
 
@@ -15,9 +16,13 @@ public class TrendPlotDialog : Dialog
     private readonly TrendPlotView _trendPlotView;
     private readonly SubscriptionManager? _subscriptionManager;
     private readonly IReadOnlyCollection<MonitoredNode>? _availableNodes;
+    private readonly Button _selectNodeButton;
+    private readonly Button _demoButton;
+    private readonly Button _clearButton;
+    private readonly Button _closeButton;
 
     // Theme-aware accessor
-    private static RetroTheme Theme => ThemeManager.Current;
+    private RetroTheme Theme => ThemeManager.Current;
 
     public TrendPlotDialog(SubscriptionManager? subscriptionManager = null, MonitoredNode? initialNode = null)
     {
@@ -50,45 +55,48 @@ public class TrendPlotDialog : Dialog
             ColorScheme = ColorScheme
         };
 
-        var selectNodeButton = new Button
+        _selectNodeButton = new Button
         {
             X = 1,
             Y = 0,
             Text = $"{Theme.ButtonPrefix}NODE{Theme.ButtonSuffix}",
             ColorScheme = Theme.ButtonColorScheme
         };
-        selectNodeButton.Accepting += OnSelectNode;
+        _selectNodeButton.Accepting += OnSelectNode;
 
-        var demoButton = new Button
+        _demoButton = new Button
         {
-            X = Pos.Right(selectNodeButton) + 2,
+            X = Pos.Right(_selectNodeButton) + 2,
             Y = 0,
             Text = $"{Theme.ButtonPrefix}DEMO{Theme.ButtonSuffix}",
             ColorScheme = Theme.ButtonColorScheme
         };
-        demoButton.Accepting += OnDemoMode;
+        _demoButton.Accepting += OnDemoMode;
 
-        var clearButton = new Button
+        _clearButton = new Button
         {
-            X = Pos.Right(demoButton) + 2,
+            X = Pos.Right(_demoButton) + 2,
             Y = 0,
             Text = $"{Theme.ButtonPrefix}CLR{Theme.ButtonSuffix}",
             ColorScheme = Theme.ButtonColorScheme
         };
-        clearButton.Accepting += OnClear;
+        _clearButton.Accepting += OnClear;
 
-        var closeButton = new Button
+        _closeButton = new Button
         {
-            X = Pos.Right(clearButton) + 2,
+            X = Pos.Right(_clearButton) + 2,
             Y = 0,
             Text = $"{Theme.ButtonPrefix}EXIT{Theme.ButtonSuffix}",
             ColorScheme = Theme.ButtonColorScheme
         };
-        closeButton.Accepting += (s, e) => Application.RequestStop();
+        _closeButton.Accepting += (s, e) => Application.RequestStop();
 
-        buttonFrame.Add(selectNodeButton, demoButton, clearButton, closeButton);
+        buttonFrame.Add(_selectNodeButton, _demoButton, _clearButton, _closeButton);
 
         Add(_trendPlotView, buttonFrame);
+
+        // Subscribe to theme changes
+        ThemeManager.ThemeChanged += OnThemeChanged;
 
         // Start with initial node, demo mode, or wait for selection
         if (initialNode != null)
@@ -216,10 +224,34 @@ public class TrendPlotDialog : Dialog
         _trendPlotView.Clear();
     }
 
+    private void OnThemeChanged(RetroTheme theme)
+    {
+        Application.Invoke(() =>
+        {
+            Title = $"{theme.TitleDecoration}[ OSCILLOSCOPE ]{theme.TitleDecoration}";
+            ColorScheme = theme.DialogColorScheme;
+
+            _selectNodeButton.Text = $"{theme.ButtonPrefix}NODE{theme.ButtonSuffix}";
+            _selectNodeButton.ColorScheme = theme.ButtonColorScheme;
+
+            _demoButton.Text = $"{theme.ButtonPrefix}DEMO{theme.ButtonSuffix}";
+            _demoButton.ColorScheme = theme.ButtonColorScheme;
+
+            _clearButton.Text = $"{theme.ButtonPrefix}CLR{theme.ButtonSuffix}";
+            _clearButton.ColorScheme = theme.ButtonColorScheme;
+
+            _closeButton.Text = $"{theme.ButtonPrefix}EXIT{theme.ButtonSuffix}";
+            _closeButton.ColorScheme = theme.ButtonColorScheme;
+
+            _trendPlotView.SetNeedsLayout();
+        });
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            ThemeManager.ThemeChanged -= OnThemeChanged;
             _trendPlotView.Dispose();
         }
         base.Dispose(disposing);
