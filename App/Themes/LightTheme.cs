@@ -4,16 +4,16 @@ using Attribute = Terminal.Gui.Attribute;
 namespace OpcScope.App.Themes;
 
 /// <summary>
-/// Inverted light theme inspired by Severance/Lumon corporate aesthetic.
-/// White background with dark text - sterile, institutional feel.
-/// Uses single-line box drawing characters for a clean corporate appearance.
+/// Light theme with clean, high-contrast appearance.
+/// Off-white background with dark text for comfortable viewing.
+/// Uses dark grey highlights for good contrast on light background.
 /// </summary>
-public class WhiteTheme : RetroTheme
+public class LightTheme : RetroTheme
 {
-    public override string Name => "White";
-    public override string Description => "Light corporate (Outie)";
+    public override string Name => "Light";
+    public override string Description => "Light theme with dark grey highlights";
 
-    // Use single-line borders for clean corporate look
+    // Use single-line borders for clean look
     public override LineStyle BorderLineStyle => LineStyle.Single;
     public override LineStyle FrameLineStyle => LineStyle.Single;
 
@@ -25,9 +25,9 @@ public class WhiteTheme : RetroTheme
     public override Color ForegroundBright => new(20, 25, 30);   // Pure dark
     public override Color ForegroundDim => new(120, 125, 130);   // Mid grey
 
-    // Subtle teal accent - Lumon corporate color
-    public override Color Accent => new(0, 140, 140);            // Darker teal
-    public override Color AccentBright => new(0, 100, 100);      // Even darker when bright
+    // Dark grey highlight color for good contrast on light background
+    public override Color Accent => new(80, 85, 90);             // Dark grey
+    public override Color AccentBright => new(60, 65, 70);       // Darker grey when bright
 
     // Light borders that don't compete
     public override Color Border => new(180, 182, 185);          // Light grey
@@ -66,14 +66,14 @@ public class WhiteTheme : RetroTheme
     // Disable glow - doesn't work well on light backgrounds
     public override bool EnableGlow => false;
 
-    // Override color schemes for inverted display
+    // Override color schemes for inverted display with dark grey highlights
     private ColorScheme? _mainColorScheme;
     private ColorScheme? _menuColorScheme;
 
     public override ColorScheme MainColorScheme => _mainColorScheme ??= new()
     {
         Normal = NormalAttr,
-        Focus = new Attribute(Background, Foreground),  // Inverted for visibility
+        Focus = new Attribute(Background, new Color(70, 75, 80)),  // Dark grey background for focus
         HotNormal = AccentAttr,
         HotFocus = new Attribute(Background, Accent),
         Disabled = new Attribute(StatusInactive, Background)
@@ -82,7 +82,7 @@ public class WhiteTheme : RetroTheme
     public override ColorScheme MenuColorScheme => _menuColorScheme ??= new()
     {
         Normal = NormalAttr,
-        Focus = new Attribute(Background, ForegroundBright),  // Inverted
+        Focus = new Attribute(Background, new Color(70, 75, 80)),  // Dark grey background for focus
         HotNormal = AccentAttr,
         HotFocus = new Attribute(Background, Accent),
         Disabled = new Attribute(StatusInactive, Background)
