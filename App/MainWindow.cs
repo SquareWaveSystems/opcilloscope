@@ -1,0 +1,430 @@
+using Terminal.Gui;
+using OpcScope.App.Views;
+using OpcScope.App.Dialogs;
+using OpcScope.OpcUa;
+using OpcScope.OpcUa.Models;
+using OpcScope.Utilities;
+
+namespace OpcScope.App;
+
+/// <summary>
+/// Main application window with layout orchestration.
+/// </summary>
+public class MainWindow : Toplevel
+{
+    private readonly Logger _logger;
+    private readonly OpcUaClientWrapper _client;
+    private readonly NodeBrowser _nodeBrowser;
+    private SubscriptionManager? _subscriptionManager;
+
+    private readonly MenuBar _menuBar;
+    private readonly AddressSpaceView _addressSpaceView;
+    private readonly MonitoredItemsView _monitoredItemsView;
+    private readonly NodeDetailsView _nodeDetailsView;
+    private readonly LogView _logView;
+    private readonly StatusBar _statusBar;
+    private readonly Label _connectionStatusLabel;
+
+    private string? _lastEndpoint;
+
+    public MainWindow()
+    {
+        _logger = new Logger();
+        _client = new OpcUaClientWrapper(_logger);
+        _nodeBrowser = new NodeBrowser(_client, _logger);
+
+        // Wire up client events
+        _client.Connected += OnClientConnected;
+        _client.Disconnected += OnClientDisconnected;
+        _client.ConnectionError += OnConnectionError;
+
+        // Create menu bar
+        _menuBar = CreateMenuBar();
+
+        // Create main views
+        _addressSpaceView = new AddressSpaceView
+        {
+            X = 0,
+            Y = 1,
+            Width = Dim.Percent(35),
+            Height = Dim.Percent(60)
+        };
+
+        _monitoredItemsView = new MonitoredItemsView
+        {
+            X = Pos.Right(_addressSpaceView),
+            Y = 1,
+            Width = Dim.Fill(),
+            Height = Dim.Percent(60)
+        };
+
+        _nodeDetailsView = new NodeDetailsView
+        {
+            X = 0,
+            Y = Pos.Bottom(_addressSpaceView),
+            Width = Dim.Fill(),
+            Height = Dim.Sized(5)
+        };
+
+        _logView = new LogView
+        {
+            X = 0,
+            Y = Pos.Bottom(_nodeDetailsView),
+            Width = Dim.Fill(),
+            Height = Dim.Fill(1)
+        };
+
+        // Create status bar with connection indicator
+        _connectionStatusLabel = new Label
+        {
+            Text = " [Disconnected]"
+        };
+
+        _statusBar = new StatusBar
+        {
+            Visible = true
+        };
+
+        _statusBar.Items = new StatusItem[]
+        {
+            new StatusItem(Key.F1, "~F1~ Help", ShowHelp),
+            new StatusItem(Key.F5, "~F5~ Refresh", RefreshTree),
+            new StatusItem(Key.Enter, "~Enter~ Subscribe", SubscribeSelected),
+            new StatusItem(Key.Delete, "~Del~ Unsubscribe", UnsubscribeSelected),
+            new StatusItem(Key.F10, "~F10~ Menu", () => _menuBar.OpenMenu())
+        };
+
+        // Wire up view events
+        _addressSpaceView.NodeSelected += OnNodeSelected;
+        _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
+        _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
+
+        // Initialize views
+        _logView.Initialize(_logger);
+        _nodeDetailsView.Initialize(_nodeBrowser);
+
+        // Add all views
+        Add(_menuBar);
+        Add(_addressSpaceView);
+        Add(_monitoredItemsView);
+        Add(_nodeDetailsView);
+        Add(_logView);
+        Add(_statusBar);
+
+        // Log startup
+        _logger.Info("OpcScope started");
+        _logger.Info("Press F10 for menu, or use Connection -> Connect");
+    }
+
+    private MenuBar CreateMenuBar()
+    {
+        return new MenuBar
+        {
+            Menus = new[]
+            {
+                new MenuBarItem("_File", new[]
+                {
+                    new MenuItem("_Export to CSV...", "", ExportToCsv, null, null, Key.CtrlMask | Key.E),
+                    null, // separator
+                    new MenuItem("E_xit", "", () => RequestStop(), null, null, Key.CtrlMask | Key.Q)
+                }),
+                new MenuBarItem("_Connection", new[]
+                {
+                    new MenuItem("_Connect...", "", ShowConnectDialog, null, null, Key.CtrlMask | Key.O),
+                    new MenuItem("_Disconnect", "", Disconnect),
+                    new MenuItem("_Reconnect", "", () => _ = ReconnectAsync())
+                }),
+                new MenuBarItem("_View", new[]
+                {
+                    new MenuItem("_Refresh Tree", "", RefreshTree, null, null, Key.F5),
+                    new MenuItem("_Clear Log", "", () => _logView.Clear()),
+                    new MenuItem("_Settings...", "", ShowSettings)
+                }),
+                new MenuBarItem("_Help", new[]
+                {
+                    new MenuItem("_Help", "", ShowHelp, null, null, Key.F1),
+                    new MenuItem("_About", "", ShowAbout)
+                })
+            }
+        };
+    }
+
+    private void ShowConnectDialog()
+    {
+        var dialog = new ConnectDialog(_lastEndpoint);
+        Application.Run(dialog);
+
+        if (dialog.Confirmed)
+        {
+            _lastEndpoint = dialog.EndpointUrl;
+            _ = ConnectAsync(dialog.EndpointUrl);
+        }
+    }
+
+    private async Task ConnectAsync(string endpoint)
+    {
+        // Disconnect if already connected
+        Disconnect();
+
+        UpdateConnectionStatus("Connecting...");
+
+        var success = await _client.ConnectAsync(endpoint);
+
+        if (success)
+        {
+            InitializeAfterConnect();
+        }
+    }
+
+    private void InitializeAfterConnect()
+    {
+        // Initialize subscription manager
+        _subscriptionManager = new SubscriptionManager(_client, _logger);
+        _subscriptionManager.Initialize();
+
+        // Wire up subscription events
+        _subscriptionManager.ValueChanged += OnValueChanged;
+        _subscriptionManager.ItemAdded += item =>
+        {
+            UiThread.Run(() => _monitoredItemsView.AddItem(item));
+        };
+        _subscriptionManager.ItemRemoved += handle =>
+        {
+            UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
+        };
+
+        // Initialize address space view
+        _addressSpaceView.Initialize(_nodeBrowser);
+
+        UpdateConnectionStatus($"Connected to {_client.CurrentEndpoint}");
+    }
+
+    private void Disconnect()
+    {
+        _subscriptionManager?.Dispose();
+        _subscriptionManager = null;
+
+        _client.Disconnect();
+
+        _addressSpaceView.Clear();
+        _monitoredItemsView.Clear();
+        _nodeDetailsView.Clear();
+
+        UpdateConnectionStatus("Disconnected");
+    }
+
+    private async Task ReconnectAsync()
+    {
+        if (string.IsNullOrEmpty(_lastEndpoint))
+        {
+            _logger.Warning("No previous connection to reconnect");
+            return;
+        }
+
+        UpdateConnectionStatus("Reconnecting...");
+        var success = await _client.ReconnectAsync();
+
+        if (success)
+        {
+            InitializeAfterConnect();
+        }
+    }
+
+    private void RefreshTree()
+    {
+        if (_client.IsConnected)
+        {
+            _addressSpaceView.Refresh();
+            _logger.Info("Address space refreshed");
+        }
+    }
+
+    private void SubscribeSelected()
+    {
+        var node = _addressSpaceView.SelectedNode;
+        if (node != null)
+        {
+            OnSubscribeRequested(node);
+        }
+    }
+
+    private void UnsubscribeSelected()
+    {
+        var item = _monitoredItemsView.SelectedItem;
+        if (item != null)
+        {
+            OnUnsubscribeRequested(item);
+        }
+    }
+
+    private void OnNodeSelected(BrowsedNode node)
+    {
+        _nodeDetailsView.ShowNode(node);
+    }
+
+    private void OnSubscribeRequested(BrowsedNode node)
+    {
+        if (_subscriptionManager == null)
+        {
+            _logger.Warning("Not connected");
+            return;
+        }
+
+        if (node.NodeClass != LibUA.Core.NodeClass.Variable)
+        {
+            _logger.Warning($"Cannot subscribe to {node.NodeClass} nodes, only Variables");
+            return;
+        }
+
+        _subscriptionManager.AddNode(node.NodeId, node.DisplayName);
+    }
+
+    private void OnUnsubscribeRequested(MonitoredNode item)
+    {
+        _subscriptionManager?.RemoveNode(item.ClientHandle);
+    }
+
+    private void OnValueChanged(MonitoredNode item)
+    {
+        UiThread.Run(() =>
+        {
+            _monitoredItemsView.UpdateItem(item);
+        });
+    }
+
+    private void OnClientConnected()
+    {
+        UiThread.Run(() =>
+        {
+            _logger.Info("Connected successfully");
+        });
+    }
+
+    private void OnClientDisconnected()
+    {
+        UiThread.Run(() =>
+        {
+            UpdateConnectionStatus("Disconnected");
+        });
+    }
+
+    private void OnConnectionError(string message)
+    {
+        UiThread.Run(() =>
+        {
+            MessageBox.ErrorQuery("Connection Error", message, "OK");
+        });
+    }
+
+    private void UpdateConnectionStatus(string status)
+    {
+        Title = $"OpcScope - {status}";
+        SetNeedsDisplay();
+    }
+
+    private void ShowSettings()
+    {
+        var currentInterval = _subscriptionManager?.PublishingInterval ?? 1000;
+        var dialog = new SettingsDialog(currentInterval);
+        Application.Run(dialog);
+
+        if (dialog.Confirmed && _subscriptionManager != null)
+        {
+            _subscriptionManager.PublishingInterval = dialog.PublishingInterval;
+            _logger.Info($"Publishing interval changed to {dialog.PublishingInterval}ms");
+        }
+    }
+
+    private void ExportToCsv()
+    {
+        if (_subscriptionManager == null || !_subscriptionManager.MonitoredItems.Any())
+        {
+            MessageBox.Query("Export", "No items to export", "OK");
+            return;
+        }
+
+        var dialog = new SaveDialog("Export to CSV", "Choose export location")
+        {
+            FilePath = "opcscope_export.csv"
+        };
+
+        Application.Run(dialog);
+
+        if (!dialog.Canceled && dialog.FilePath != null)
+        {
+            try
+            {
+                var path = dialog.FilePath.ToString();
+                using var writer = new StreamWriter(path!);
+                writer.WriteLine("DisplayName,NodeId,Value,Timestamp,Status");
+
+                foreach (var item in _subscriptionManager.MonitoredItems)
+                {
+                    writer.WriteLine($"\"{item.DisplayName}\",\"{item.NodeId}\",\"{item.Value}\",\"{item.TimestampString}\",\"{item.StatusString}\"");
+                }
+
+                _logger.Info($"Exported {_subscriptionManager.MonitoredItems.Count} items to {path}");
+                MessageBox.Query("Export", $"Exported to {path}", "OK");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Export failed: {ex.Message}");
+                MessageBox.ErrorQuery("Export Error", ex.Message, "OK");
+            }
+        }
+    }
+
+    private void ShowHelp()
+    {
+        var help = @"OpcScope - Terminal OPC UA Client
+
+Keyboard Shortcuts:
+  F1        - Show this help
+  F5        - Refresh address space tree
+  F10       - Open menu
+  Enter     - Subscribe to selected node
+  Delete    - Unsubscribe from selected item
+  Ctrl+O    - Connect to server
+  Ctrl+Q    - Quit
+
+Navigation:
+  Tab       - Move between panels
+  Arrow Keys - Navigate within panel
+  Space     - Expand/collapse tree node
+
+Tips:
+  - Only Variable nodes can be subscribed
+  - Double-click a node to subscribe
+  - Values update in real-time via subscription
+";
+        MessageBox.Query("Help", help, "OK");
+    }
+
+    private void ShowAbout()
+    {
+        var about = @"OpcScope v1.0.0
+
+A lightweight terminal-based OPC UA client
+for browsing, monitoring, and subscribing
+to industrial automation data.
+
+Built with:
+  - .NET 8
+  - Terminal.Gui v2
+  - LibUA (nauful-LibUA-core)
+
+License: MIT
+";
+        MessageBox.Query("About OpcScope", about, "OK");
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _subscriptionManager?.Dispose();
+            _client.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}

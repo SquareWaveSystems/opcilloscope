@@ -1,0 +1,259 @@
+using LibUA.Core;
+using OpcScope.OpcUa.Models;
+using OpcScope.Utilities;
+
+namespace OpcScope.OpcUa;
+
+/// <summary>
+/// Address space navigation logic with lazy loading.
+/// </summary>
+public class NodeBrowser
+{
+    private readonly OpcUaClientWrapper _client;
+    private readonly Logger _logger;
+    private readonly Dictionary<string, string> _dataTypeCache = new();
+
+    // Common data type NodeIds
+    private static readonly Dictionary<uint, string> BuiltInDataTypes = new()
+    {
+        { 1, "Boolean" },
+        { 2, "SByte" },
+        { 3, "Byte" },
+        { 4, "Int16" },
+        { 5, "UInt16" },
+        { 6, "Int32" },
+        { 7, "UInt32" },
+        { 8, "Int64" },
+        { 9, "UInt64" },
+        { 10, "Float" },
+        { 11, "Double" },
+        { 12, "String" },
+        { 13, "DateTime" },
+        { 14, "Guid" },
+        { 15, "ByteString" },
+        { 16, "XmlElement" },
+        { 17, "NodeId" },
+        { 18, "ExpandedNodeId" },
+        { 19, "StatusCode" },
+        { 20, "QualifiedName" },
+        { 21, "LocalizedText" },
+        { 22, "ExtensionObject" },
+        { 23, "DataValue" },
+        { 24, "Variant" },
+        { 25, "DiagnosticInfo" },
+    };
+
+    public NodeBrowser(OpcUaClientWrapper client, Logger logger)
+    {
+        _client = client;
+        _logger = logger;
+    }
+
+    public BrowsedNode GetRootNode()
+    {
+        return new BrowsedNode
+        {
+            NodeId = new NodeId(0, 84), // Root folder is ns=0;i=84
+            BrowseName = "Root",
+            DisplayName = "Root",
+            NodeClass = NodeClass.Object,
+            HasChildren = true
+        };
+    }
+
+    public List<BrowsedNode> GetChildren(BrowsedNode parent)
+    {
+        if (!_client.IsConnected)
+            return new List<BrowsedNode>();
+
+        try
+        {
+            var refs = _client.Browse(parent.NodeId);
+            var children = new List<BrowsedNode>();
+
+            foreach (var r in refs)
+            {
+                var targetNodeId = r.TargetId.NodeId;
+
+                var child = new BrowsedNode
+                {
+                    NodeId = targetNodeId,
+                    BrowseName = r.BrowseName?.Name ?? string.Empty,
+                    DisplayName = r.DisplayName?.Text ?? r.BrowseName?.Name ?? "Unknown",
+                    NodeClass = r.NodeClass,
+                    DataType = r.TypeDefinition?.NodeId,
+                    Parent = parent
+                };
+
+                // For variables, try to get the data type
+                if (r.NodeClass == NodeClass.Variable)
+                {
+                    child.DataTypeName = GetDataTypeName(targetNodeId);
+                }
+
+                // Check if node has children by doing a quick browse
+                child.HasChildren = HasChildren(targetNodeId);
+
+                children.Add(child);
+            }
+
+            parent.ChildrenLoaded = true;
+            parent.Children.Clear();
+            parent.Children.AddRange(children);
+
+            return children;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Browse failed for {parent.NodeId}: {ex.Message}");
+            return new List<BrowsedNode>();
+        }
+    }
+
+    private bool HasChildren(NodeId nodeId)
+    {
+        try
+        {
+            var refs = _client.Browse(nodeId);
+            return refs.Count > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private string? GetDataTypeName(NodeId nodeId)
+    {
+        var key = nodeId.ToString();
+        if (_dataTypeCache.TryGetValue(key, out var cached))
+            return cached;
+
+        try
+        {
+            var attrs = _client.ReadAttributes(nodeId, NodeAttribute.DataType);
+            if (attrs.Length > 0 && attrs[0].Value is NodeId dataTypeId)
+            {
+                string? name = null;
+
+                // Check built-in types first
+                if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == NodeIdType.Numeric)
+                {
+                    var id = (uint)(dataTypeId.NumericIdentifier);
+                    if (BuiltInDataTypes.TryGetValue(id, out var builtIn))
+                        name = builtIn;
+                }
+
+                // If not built-in, browse for the type name
+                if (name == null)
+                {
+                    var typeAttrs = _client.ReadAttributes(dataTypeId, NodeAttribute.DisplayName);
+                    if (typeAttrs.Length > 0 && typeAttrs[0].Value is LocalizedText lt)
+                        name = lt.Text;
+                }
+
+                if (name != null)
+                {
+                    _dataTypeCache[key] = name;
+                    return name;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore errors reading data type
+        }
+
+        return null;
+    }
+
+    public NodeAttributes? GetNodeAttributes(NodeId nodeId)
+    {
+        if (!_client.IsConnected)
+            return null;
+
+        try
+        {
+            var attrs = _client.ReadAttributes(
+                nodeId,
+                NodeAttribute.NodeId,
+                NodeAttribute.NodeClass,
+                NodeAttribute.BrowseName,
+                NodeAttribute.DisplayName,
+                NodeAttribute.Description,
+                NodeAttribute.DataType,
+                NodeAttribute.ValueRank,
+                NodeAttribute.AccessLevel,
+                NodeAttribute.UserAccessLevel
+            );
+
+            return new NodeAttributes
+            {
+                NodeId = nodeId,
+                NodeClass = attrs.Length > 1 && attrs[1].Value is int nc ? (NodeClass)nc : NodeClass.Unspecified,
+                BrowseName = attrs.Length > 2 && attrs[2].Value is QualifiedName qn ? qn.Name : null,
+                DisplayName = attrs.Length > 3 && attrs[3].Value is LocalizedText lt ? lt.Text : null,
+                Description = attrs.Length > 4 && attrs[4].Value is LocalizedText desc ? desc.Text : null,
+                DataType = attrs.Length > 5 && attrs[5].Value is NodeId dt ? GetDataTypeNameById(dt) : null,
+                ValueRank = attrs.Length > 6 && attrs[6].Value is int vr ? vr : null,
+                AccessLevel = attrs.Length > 7 && attrs[7].Value is byte al ? al : null,
+                UserAccessLevel = attrs.Length > 8 && attrs[8].Value is byte ual ? ual : null
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to read attributes: {ex.Message}");
+            return null;
+        }
+    }
+
+    private string? GetDataTypeNameById(NodeId dataTypeId)
+    {
+        if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == NodeIdType.Numeric)
+        {
+            var id = (uint)(dataTypeId.NumericIdentifier);
+            if (BuiltInDataTypes.TryGetValue(id, out var name))
+                return name;
+        }
+
+        try
+        {
+            var attrs = _client.ReadAttributes(dataTypeId, NodeAttribute.DisplayName);
+            if (attrs.Length > 0 && attrs[0].Value is LocalizedText lt)
+                return lt.Text;
+        }
+        catch
+        {
+            // Ignore
+        }
+
+        return dataTypeId.ToString();
+    }
+}
+
+public class NodeAttributes
+{
+    public NodeId NodeId { get; init; } = NodeId.Zero;
+    public NodeClass NodeClass { get; init; }
+    public string? BrowseName { get; init; }
+    public string? DisplayName { get; init; }
+    public string? Description { get; init; }
+    public string? DataType { get; init; }
+    public int? ValueRank { get; init; }
+    public byte? AccessLevel { get; init; }
+    public byte? UserAccessLevel { get; init; }
+
+    public string AccessLevelString
+    {
+        get
+        {
+            if (AccessLevel == null) return "N/A";
+            var parts = new List<string>();
+            if ((AccessLevel & 0x01) != 0) parts.Add("Read");
+            if ((AccessLevel & 0x02) != 0) parts.Add("Write");
+            if ((AccessLevel & 0x04) != 0) parts.Add("HistoryRead");
+            if ((AccessLevel & 0x08) != 0) parts.Add("HistoryWrite");
+            return parts.Count > 0 ? string.Join(", ", parts) : "None";
+        }
+    }
+}
