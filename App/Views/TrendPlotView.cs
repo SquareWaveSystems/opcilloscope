@@ -18,7 +18,7 @@ namespace OpcScope.App.Views;
 public class TrendPlotView : View
 {
     // === Cached theme and attributes ===
-    private RetroTheme _currentTheme;
+    private RetroTheme _currentTheme = null!; // Initialized in constructor
     private Attribute _brightAttr;
     private Attribute _normalAttr;
     private Attribute _dimAttr;
@@ -119,9 +119,9 @@ public class TrendPlotView : View
         {
             Application.Invoke(() => SetNeedsLayout());
         }
-        catch
+        catch (InvalidOperationException)
         {
-            // Application may not be initialized yet
+            // Application may not be initialized yet - ignore
         }
     }
 
