@@ -29,6 +29,8 @@ public class MainWindow : Toplevel
     private readonly NodeDetailsView _nodeDetailsView;
     private readonly LogView _logView;
     private readonly StatusBar _statusBar;
+    private readonly SpinnerView _activitySpinner;
+    private readonly Label _activityLabel;
 
     private string? _lastEndpoint;
 
@@ -93,6 +95,26 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
+
+        // Create activity spinner for async operations
+        _activitySpinner = new SpinnerView
+        {
+            X = Pos.AnchorEnd(20),
+            Y = 0,
+            Visible = false,
+            AutoSpin = true
+        };
+
+        _activityLabel = new Label
+        {
+            X = Pos.Right(_activitySpinner) + 1,
+            Y = 0,
+            Text = "",
+            Visible = false
+        };
+
+        _statusBar.Add(_activitySpinner);
+        _statusBar.Add(_activityLabel);
 
         // Wire up view events
         _addressSpaceView.NodeSelected += OnNodeSelected;
@@ -218,12 +240,20 @@ public class MainWindow : Toplevel
         Disconnect();
 
         UpdateConnectionStatus("Connecting...");
+        ShowActivity("Connecting...");
 
-        var success = await _client.ConnectAsync(endpoint);
-
-        if (success)
+        try
         {
-            InitializeAfterConnect();
+            var success = await _client.ConnectAsync(endpoint);
+
+            if (success)
+            {
+                InitializeAfterConnect();
+            }
+        }
+        finally
+        {
+            HideActivity();
         }
     }
 
@@ -279,11 +309,20 @@ public class MainWindow : Toplevel
         }
 
         UpdateConnectionStatus("Reconnecting...");
-        var success = await _client.ReconnectAsync();
+        ShowActivity("Reconnecting...");
 
-        if (success)
+        try
         {
-            InitializeAfterConnect();
+            var success = await _client.ReconnectAsync();
+
+            if (success)
+            {
+                InitializeAfterConnect();
+            }
+        }
+        finally
+        {
+            HideActivity();
         }
     }
 
@@ -458,6 +497,22 @@ public class MainWindow : Toplevel
         SetNeedsLayout();
     }
 
+    private void ShowActivity(string message)
+    {
+        _activityLabel.Text = message;
+        _activityLabel.Visible = true;
+        _activitySpinner.Visible = true;
+        SetNeedsLayout();
+    }
+
+    private void HideActivity()
+    {
+        _activitySpinner.Visible = false;
+        _activityLabel.Visible = false;
+        _activityLabel.Text = "";
+        SetNeedsLayout();
+    }
+
     private void ShowSettings()
     {
         var currentInterval = _subscriptionManager?.PublishingInterval ?? 1000;
@@ -580,25 +635,88 @@ public class MainWindow : Toplevel
 
         if (!dialog.Canceled && dialog.Path != null)
         {
-            try
-            {
-                var path = dialog.Path.ToString();
-                using var writer = new StreamWriter(path!);
-                writer.WriteLine("DisplayName,NodeId,Value,Timestamp,Status");
+            var items = _subscriptionManager.MonitoredItems.ToList();
+            var path = dialog.Path.ToString();
 
-                foreach (var item in _subscriptionManager.MonitoredItems)
+            // Create progress dialog
+            var progressDialog = new Dialog
+            {
+                Title = " Exporting ",
+                Width = 50,
+                Height = 7
+            };
+
+            var progressLabel = new Label
+            {
+                X = 1,
+                Y = 1,
+                Text = "Exporting data..."
+            };
+
+            var progressBar = new ProgressBar
+            {
+                X = 1,
+                Y = 2,
+                Width = Dim.Fill(1),
+                Fraction = 0f,
+                ProgressBarStyle = ProgressBarStyle.Continuous
+            };
+
+            var statusLabel = new Label
+            {
+                X = 1,
+                Y = 3,
+                Text = $"0 / {items.Count} items"
+            };
+
+            progressDialog.Add(progressLabel, progressBar, statusLabel);
+
+            // Export in background
+            _ = Task.Run(async () =>
+            {
+                try
                 {
-                    writer.WriteLine($"\"{item.DisplayName}\",\"{item.NodeId}\",\"{item.Value}\",\"{item.TimestampString}\",\"{item.StatusString}\"");
-                }
+                    using var writer = new StreamWriter(path!);
+                    await writer.WriteLineAsync("DisplayName,NodeId,Value,Timestamp,Status");
 
-                _logger.Info($"Exported {_subscriptionManager.MonitoredItems.Count} items to {path}");
-                MessageBox.Query("Export", $"Exported to {path}", "OK");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Export failed: {ex.Message}");
-                MessageBox.ErrorQuery("Export Error", ex.Message, "OK");
-            }
+                    for (int i = 0; i < items.Count; i++)
+                    {
+                        var item = items[i];
+                        await writer.WriteLineAsync($"\"{item.DisplayName}\",\"{item.NodeId}\",\"{item.Value}\",\"{item.TimestampString}\",\"{item.StatusString}\"");
+
+                        // Update progress on UI thread
+                        var progress = (float)(i + 1) / items.Count;
+                        var current = i + 1;
+                        Application.Invoke(() =>
+                        {
+                            progressBar.Fraction = progress;
+                            statusLabel.Text = $"{current} / {items.Count} items";
+                        });
+
+                        // Small delay for visual feedback on small datasets
+                        if (items.Count < 100)
+                            await Task.Delay(10);
+                    }
+
+                    Application.Invoke(() =>
+                    {
+                        Application.RequestStop();
+                        _logger.Info($"Exported {items.Count} items to {path}");
+                        MessageBox.Query("Export", $"Exported {items.Count} items to {path}", "OK");
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Application.Invoke(() =>
+                    {
+                        Application.RequestStop();
+                        _logger.Error($"Export failed: {ex.Message}");
+                        MessageBox.ErrorQuery("Export Error", ex.Message, "OK");
+                    });
+                }
+            });
+
+            Application.Run(progressDialog);
         }
     }
 

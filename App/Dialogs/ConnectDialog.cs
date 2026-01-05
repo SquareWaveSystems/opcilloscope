@@ -7,14 +7,38 @@ namespace OpcScope.App.Dialogs;
 /// <summary>
 /// Dialog for entering OPC UA server connection details.
 /// Uses Terminal.Gui v2 styling with theme support.
+/// Features ComboBox with endpoint history for quick access to recent servers.
 /// </summary>
 public class ConnectDialog : Dialog
 {
-    private readonly TextField _endpointField;
+    private static readonly List<string> _endpointHistory = new()
+    {
+        "opc.tcp://localhost:4840",
+        "opc.tcp://localhost:48010",
+        "opc.tcp://192.168.1.1:4840"
+    };
+
+    private readonly ComboBox _endpointComboBox;
     private bool _confirmed;
 
-    public string EndpointUrl => _endpointField.Text ?? string.Empty;
+    public string EndpointUrl => _endpointComboBox.Text ?? string.Empty;
     public bool Confirmed => _confirmed;
+
+    /// <summary>
+    /// Adds an endpoint to the history if not already present.
+    /// </summary>
+    public static void AddToHistory(string endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint)) return;
+
+        // Remove if exists (to move to top)
+        _endpointHistory.Remove(endpoint);
+        // Insert at top
+        _endpointHistory.Insert(0, endpoint);
+        // Keep only last 10
+        while (_endpointHistory.Count > 10)
+            _endpointHistory.RemoveAt(_endpointHistory.Count - 1);
+    }
 
     public ConnectDialog(string? lastEndpoint = null)
     {
@@ -22,39 +46,47 @@ public class ConnectDialog : Dialog
 
         Title = " Connect to Server ";
         Width = 60;
-        Height = 10;
+        Height = 11;
 
         // Apply theme styling
         ColorScheme = theme.DialogColorScheme;
         BorderStyle = theme.BorderLineStyle;
 
+        // Move last endpoint to top of history if provided
+        if (!string.IsNullOrEmpty(lastEndpoint))
+        {
+            AddToHistory(lastEndpoint);
+        }
+
         var endpointLabel = new Label
         {
             X = 1,
             Y = 1,
-            Text = "Endpoint URL:"
+            Text = "Endpoint URL (select or type):"
         };
 
-        _endpointField = new TextField
+        _endpointComboBox = new ComboBox
         {
             X = 1,
             Y = 2,
             Width = Dim.Fill(1),
-            Text = lastEndpoint ?? "opc.tcp://localhost:4840"
+            Height = 4,
+            Text = lastEndpoint ?? _endpointHistory.FirstOrDefault() ?? "opc.tcp://localhost:4840"
         };
+        _endpointComboBox.SetSource(_endpointHistory);
 
         var hintLabel = new Label
         {
             X = 1,
-            Y = 4,
-            Text = "Example: opc.tcp://192.168.1.50:4840",
+            Y = 5,
+            Text = "Use ↓ to see recent endpoints",
             ColorScheme = theme.MainColorScheme
         };
 
         var connectButton = new Button
         {
             X = Pos.Center() - 10,
-            Y = 6,
+            Y = 7,
             Text = $"{theme.ButtonPrefix}Connect{theme.ButtonSuffix}",
             IsDefault = true,
             ColorScheme = theme.ButtonColorScheme
@@ -64,6 +96,7 @@ public class ConnectDialog : Dialog
         {
             if (ValidateEndpoint())
             {
+                AddToHistory(EndpointUrl);
                 _confirmed = true;
                 Application.RequestStop();
             }
@@ -72,7 +105,7 @@ public class ConnectDialog : Dialog
         var cancelButton = new Button
         {
             X = Pos.Center() + 4,
-            Y = 6,
+            Y = 7,
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
             ColorScheme = theme.ButtonColorScheme
         };
@@ -83,9 +116,9 @@ public class ConnectDialog : Dialog
             Application.RequestStop();
         };
 
-        Add(endpointLabel, _endpointField, hintLabel, connectButton, cancelButton);
+        Add(endpointLabel, _endpointComboBox, hintLabel, connectButton, cancelButton);
 
-        _endpointField.SetFocus();
+        _endpointComboBox.SetFocus();
     }
 
     private bool ValidateEndpoint()

@@ -10,7 +10,7 @@ namespace OpcScope.App.Dialogs;
 /// </summary>
 public class SettingsDialog : Dialog
 {
-    private readonly TextField _publishIntervalField;
+    private readonly NumericUpDown<int> _publishIntervalField;
     private bool _confirmed;
 
     public bool Confirmed => _confirmed;
@@ -36,19 +36,20 @@ public class SettingsDialog : Dialog
             Text = "Publishing Interval (ms):"
         };
 
-        _publishIntervalField = new TextField
+        _publishIntervalField = new NumericUpDown<int>
         {
             X = 1,
             Y = 2,
-            Width = 15,
-            Text = currentInterval.ToString()
+            Width = 20,
+            Value = currentInterval,
+            Increment = 100
         };
 
         var hintLabel = new Label
         {
             X = 1,
             Y = 4,
-            Text = "Range: 100 - 10000 ms",
+            Text = "Range: 100 - 10000 ms (use +/- or type)",
             ColorScheme = theme.MainColorScheme
         };
 
@@ -91,13 +92,7 @@ public class SettingsDialog : Dialog
 
     private bool ValidateSettings()
     {
-        var text = _publishIntervalField.Text?.Trim() ?? "";
-
-        if (!int.TryParse(text, out var interval))
-        {
-            MessageBox.ErrorQuery("Error", "Please enter a valid number", "OK");
-            return false;
-        }
+        var interval = _publishIntervalField.Value;
 
         if (interval < 100 || interval > 10000)
         {
