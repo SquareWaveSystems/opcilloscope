@@ -1,7 +1,7 @@
 # OpcScope Project Guide
 
 ## Overview
-OpcScope is a terminal-based OPC UA client/monitor application built with .NET 10, Terminal.Gui v2, and OPC Foundation Client SDK (`OPCFoundation.NetStandard.Opc.Ua.Client`).
+OpcScope is a terminal-based OPC UA client/monitor application built with .NET 10, Terminal.Gui v2, and OPC Foundation Client SDK (`OPCFoundation.NetStandard.Opc.Ua.Client`). It provides real-time browsing, monitoring, and visualization of industrial automation data.
 
 ## Environment Setup
 
@@ -49,8 +49,27 @@ dotnet build
 # Run (from repo root)
 dotnet run
 
+# Run with a configuration file
+dotnet run -- config.opcscope
+dotnet run -- --config config.opcscope
+
 # Run tests
 dotnet test
+```
+
+## Command-Line Interface
+
+```
+Usage: opcscope [options] [file]
+
+Options:
+  -f, --config <file>   Load configuration file (.opcscope or .json)
+  -h, --help            Show help message
+
+Examples:
+  opcscope                           Start with empty configuration
+  opcscope production.opcscope       Load configuration file
+  opcscope --config config.json      Load configuration file
 ```
 
 ## Project Structure
@@ -58,41 +77,149 @@ dotnet test
 ```
 OpcScope/
 ├── OpcScope.csproj                 # Main application project
-├── Program.cs                      # Application entry point
+├── OpcScope.sln                    # Solution file
+├── Program.cs                      # Application entry point with CLI argument parsing
+├── CLAUDE.md                       # This file - AI assistant guide
+│
 ├── App/
-│   ├── MainWindow.cs               # Main UI layout with panels
-│   ├── Views/                      # UI view components
-│   │   ├── AddressSpaceView.cs     # TreeView for OPC UA nodes
-│   │   ├── MonitoredItemsView.cs   # TableView for subscribed items
-│   │   ├── NodeDetailsView.cs      # Node attribute display
-│   │   └── LogView.cs              # Application log display
-│   └── Dialogs/                    # Modal dialogs
-│       ├── ConnectDialog.cs
-│       ├── WriteValueDialog.cs
-│       └── SettingsDialog.cs
-├── OpcUa/
-│   ├── OpcUaClientWrapper.cs       # OPC Foundation Session wrapper
-│   ├── NodeBrowser.cs              # Address space navigation
-│   ├── SubscriptionManager.cs      # OPC UA Subscription with Publish/Subscribe
+│   ├── MainWindow.cs               # Main UI layout, menu bar, status bar, event orchestration
+│   ├── Views/
+│   │   ├── AddressSpaceView.cs     # TreeView for OPC UA address space navigation
+│   │   ├── MonitoredItemsView.cs   # TableView for subscribed items with selection
+│   │   ├── NodeDetailsView.cs      # Node attribute display panel
+│   │   ├── LogView.cs              # Application log display
+│   │   ├── ScopeView.cs            # Real-time multi-signal oscilloscope view
+│   │   └── TrendPlotView.cs        # Single-signal trend plot view
+│   ├── Dialogs/
+│   │   ├── ConnectDialog.cs        # Server connection dialog
+│   │   ├── WriteValueDialog.cs     # Write value to node dialog
+│   │   ├── SettingsDialog.cs       # Application settings dialog
+│   │   ├── ScopeDialog.cs          # Multi-signal scope dialog (up to 5 signals)
+│   │   └── TrendPlotDialog.cs      # Single-signal trend plot dialog
+│   └── Themes/
+│       ├── AppTheme.cs             # Abstract base theme class
+│       ├── DarkTheme.cs            # Dark theme implementation
+│       ├── LightTheme.cs           # Light theme implementation
+│       ├── ThemeManager.cs         # Global theme state and switching
+│       └── ThemeStyler.cs          # Theme application helper
+│
+├── Configuration/
+│   ├── ConfigurationService.cs     # Load/save .opcscope configuration files
+│   ├── RecentFilesManager.cs       # Recently opened files tracking
 │   └── Models/
-│       ├── BrowsedNode.cs          # Address space node model
-│       └── MonitoredNode.cs        # Monitored item model
+│       └── OpcScopeConfig.cs       # Configuration data models (ServerConfig, SubscriptionSettings, etc.)
+│
+├── OpcUa/
+│   ├── OpcUaClientWrapper.cs       # OPC Foundation Session wrapper with connection management
+│   ├── ConnectionManager.cs        # Connection lifecycle orchestration (connect/disconnect/reconnect)
+│   ├── NodeBrowser.cs              # Address space navigation and browsing
+│   ├── SubscriptionManager.cs      # OPC UA Subscription with MonitoredItems
+│   └── Models/
+│       ├── BrowsedNode.cs          # Address space node model for tree view
+│       └── MonitoredNode.cs        # Monitored item model with value tracking
+│
 ├── Utilities/
-│   ├── Logger.cs                   # In-app logging
-│   └── UiThread.cs                 # Thread marshalling for UI
+│   ├── Logger.cs                   # In-app logging service
+│   ├── UiThread.cs                 # Thread marshalling for UI updates
+│   ├── CsvRecordingManager.cs      # Background CSV recording of monitored values
+│   ├── OpcValueConverter.cs        # OPC UA value type conversion utilities
+│   └── TaskExtensions.cs           # Async task helper extensions (FireAndForget)
+│
 ├── src/
-│   └── OpcScope.TestServer/        # In-process test server library
+│   └── OpcScope.TestServer/        # In-process OPC UA test server library
+│       ├── OpcScope.TestServer.csproj
+│       ├── Program.cs              # Standalone test server entry point
+│       ├── TestServer.cs           # Server with ApplicationConfiguration
+│       └── TestNodeManager.cs      # Custom NodeManager with test nodes
+│
 ├── tests/
-│   └── OpcScope.Tests/             # Unit and integration tests (xunit)
-│       ├── Infrastructure/         # Test server infrastructure
-│       │   ├── TestServer.cs       # Server with ApplicationConfiguration
-│       │   ├── TestNodeManager.cs  # Custom NodeManager with test nodes
+│   └── OpcScope.Tests/             # Unit and integration tests (xUnit)
+│       ├── OpcScope.Tests.csproj
+│       ├── Infrastructure/
 │       │   └── TestServerFixture.cs # xUnit fixture with IAsyncLifetime
-│       └── Integration/            # Integration tests
-├── scripts/                        # Build/utility scripts
-├── packages/                       # Local NuGet packages (fallback)
-└── OpcScope.sln
+│       ├── Integration/
+│       │   └── OpcUaIntegrationTests.cs
+│       ├── App/
+│       │   ├── ThemeManagerTests.cs
+│       │   └── AppThemeTests.cs
+│       ├── OpcUa/
+│       │   ├── SubscriptionManagerTests.cs
+│       │   ├── NodeAttributesTests.cs
+│       │   └── Models/
+│       │       ├── BrowsedNodeTests.cs
+│       │       └── MonitoredNodeTests.cs
+│       └── Utilities/
+│           ├── LoggerTests.cs
+│           ├── CsvRecordingManagerTests.cs
+│           └── OpcValueConverterTests.cs
+│
+├── .github/workflows/
+│   ├── ci.yml                      # Build and test on push/PR
+│   ├── release.yml                 # Release automation
+│   ├── claude.yml                  # Claude AI integration
+│   └── claude-code-review.yml      # Claude code review automation
+│
+├── scripts/
+│   └── download-packages.sh        # Download NuGet packages via curl
+│
+└── packages/                       # Local NuGet packages (fallback)
 ```
+
+## Key Features
+
+### Configuration Files (.opcscope)
+OpcScope uses JSON-based configuration files with the `.opcscope` extension:
+
+```json
+{
+  "version": "1.0",
+  "server": {
+    "endpointUrl": "opc.tcp://localhost:4840",
+    "securityMode": "None"
+  },
+  "settings": {
+    "publishingIntervalMs": 1000,
+    "samplingIntervalMs": 500
+  },
+  "monitoredNodes": [
+    {
+      "nodeId": "ns=2;s=Counter",
+      "displayName": "Counter",
+      "enabled": true
+    }
+  ],
+  "metadata": {
+    "name": "My Config",
+    "description": "Production server monitoring",
+    "createdAt": "2026-01-06T00:00:00Z",
+    "lastModified": "2026-01-06T00:00:00Z"
+  }
+}
+```
+
+### Theme System
+Two built-in themes with consistent styling:
+- **DarkTheme** (default): Dark background, high contrast for terminal use
+- **LightTheme**: Light background for bright environments
+
+Toggle themes via View menu or programmatically:
+```csharp
+ThemeManager.SetTheme("Light");
+ThemeManager.SetThemeByIndex(0); // 0 = Dark, 1 = Light
+```
+
+### Scope View (Multi-Signal Oscilloscope)
+Real-time visualization of up to 5 signals simultaneously:
+- Time-based X-axis (elapsed seconds)
+- Auto-scaling Y-axis with manual override (+/- keys)
+- Pause/resume with Space key
+- Distinct colors per signal (Green, Cyan, Yellow, Magenta, White)
+
+### CSV Recording
+Record monitored item values to CSV files:
+- Background queue-based writing (non-blocking)
+- ISO 8601 timestamps with millisecond precision
+- CSV format: `Timestamp,DisplayName,NodeId,Value,Status`
 
 ## Key Technical Details
 
@@ -103,6 +230,7 @@ OpcScope/
 - Use `SetNeedsLayout()` or `Update()` instead of `SetNeedsDisplay()`
 - `ListView.SetSource()` requires `ObservableCollection<T>`
 - Use `Application.Invoke()` for thread marshalling (no MainLoop)
+- Use `Application.AddTimeout()` for periodic updates
 
 ### OPC Foundation SDK API
 - Uses `Opc.Ua.Client.Session` for connection management
@@ -172,6 +300,26 @@ subscription.AddItem(monitoredItem);
 subscription.ApplyChanges();
 ```
 
+### ConnectionManager Pattern
+The `ConnectionManager` class orchestrates connection lifecycle:
+
+```csharp
+var connectionManager = new ConnectionManager(logger);
+
+// Events
+connectionManager.StateChanged += state => { /* Connecting, Connected, Disconnected, Reconnecting */ };
+connectionManager.ValueChanged += node => { /* Handle value updates */ };
+connectionManager.ItemAdded += node => { /* Handle new subscription */ };
+connectionManager.ItemRemoved += handle => { /* Handle unsubscription */ };
+
+// Operations
+await connectionManager.ConnectAsync("opc.tcp://localhost:4840");
+await connectionManager.SubscribeAsync(nodeId, displayName);
+await connectionManager.UnsubscribeAsync(clientHandle);
+await connectionManager.ReconnectAsync();
+connectionManager.Disconnect();
+```
+
 ### NuGet Configuration
 The project uses a dual-source NuGet configuration:
 - **nuget.org** (primary) - Works in CI and normal network environments
@@ -239,10 +387,26 @@ Available test nodes:
 - `Version` - String ("1.0.0")
 - `ArrayOfInts` - Int32[] ([1, 2, 3, 4, 5])
 
-## Technical Notes
+## Architecture Patterns
 
 ### Thread Safety
-OPC Foundation callbacks arrive on background threads. All UI updates are marshalled to the UI thread via `Application.Invoke()`.
+OPC Foundation callbacks arrive on background threads. All UI updates are marshalled to the UI thread:
+
+```csharp
+// Using UiThread helper
+UiThread.Run(() => _monitoredItemsView.UpdateItem(item));
+
+// Using Application.Invoke directly
+Application.Invoke(() => SetNeedsLayout());
+```
+
+### Async Pattern with FireAndForget
+For async operations from synchronous event handlers:
+
+```csharp
+// FireAndForget extension logs exceptions without blocking
+_connectionManager.SubscribeAsync(nodeId, displayName).FireAndForget(_logger);
+```
 
 ### Lazy Loading
 The address space tree uses lazy loading - child nodes are only fetched when a parent is expanded, preventing memory issues with large address spaces.
@@ -254,16 +418,54 @@ Uses proper OPC UA Publish/Subscribe with `MonitoredItem.Notification` events - 
 - Connection errors display in the log panel without crashing
 - Automatic reconnection with exponential backoff (1s, 2s, 4s, 8s)
 - Graceful handling of bad node IDs and access denied errors
+- CSV recording continues silently on individual write failures
+
+## CI/CD Workflows
+
+### CI Workflow (ci.yml)
+Runs on push/PR to main:
+- Checkout, setup .NET 10, restore, build (Release), test
+
+### Release Workflow (release.yml)
+Automates release builds and publishing.
 
 ## Common Issues
 
 1. **`dotnet` command not found**: Install .NET SDK using the install script (see Environment Setup above)
 2. **NuGet restore fails with proxy/401 errors**: Run `./scripts/download-packages.sh` to download packages via curl, then re-run `dotnet restore`
 3. **Tests fail with Xunit errors in main project**: Ensure `tests/**` is excluded in OpcScope.csproj
-4. **UI thread exceptions**: Always use `Application.Invoke()` for UI updates from background threads
+4. **UI thread exceptions**: Always use `Application.Invoke()` or `UiThread.Run()` for UI updates from background threads
 5. **Ambiguous NodeBrowser reference**: OPC Foundation has its own `Browser` class - use fully qualified names if needed
 6. **Certificate validation errors**: Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
 7. **Integration tests fail with "Unexpected error starting application"**: The OPC UA test server requires specific environment permissions - unit tests will still pass
+8. **Theme not applying correctly**: Ensure `ApplyTheme()` is called after all controls are created
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| F1 | Show help |
+| F5 | Refresh address space tree |
+| F10 | Open menu |
+| Enter | Subscribe to selected node |
+| Delete | Unsubscribe from selected item |
+| Space | Toggle recording selection (in monitored items) |
+| W | Write value to selected item |
+| Ctrl+G | Open Scope with selected items |
+| Ctrl+R | Toggle recording (start/stop) |
+| Ctrl+N | New configuration |
+| Ctrl+O | Open configuration |
+| Ctrl+S | Save configuration |
+| Ctrl+Shift+S | Save configuration as |
+| Ctrl+Q | Quit |
+
+**In Scope View:**
+| Key | Action |
+|-----|--------|
+| Space | Pause/resume plotting |
+| +/= | Zoom in (increase scale) |
+| - | Zoom out (decrease scale) |
+| R | Reset to auto-scale |
 
 ## Rules
 Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
