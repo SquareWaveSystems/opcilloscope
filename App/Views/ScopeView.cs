@@ -58,7 +58,7 @@ public class ScopeView : View
     private object? _timerToken;
     private int _frameCount;
     private DateTime _startTime;
-    private double _timeWindowSeconds = DefaultTimeWindowSeconds;
+    private readonly double _timeWindowSeconds = DefaultTimeWindowSeconds;
 
     // GraphView and annotations
     private readonly GraphView _graphView;
@@ -293,15 +293,21 @@ public class ScopeView : View
 
                 // Trim old samples beyond time window
                 var cutoff = DateTime.Now.AddSeconds(-_timeWindowSeconds);
-                while (series.Samples.Count > 0 && series.Samples[0].Timestamp < cutoff)
+                var removeCount = 0;
+                while (removeCount < series.Samples.Count && series.Samples[removeCount].Timestamp < cutoff)
                 {
-                    series.Samples.RemoveAt(0);
+                    removeCount++;
+                }
+                if (removeCount > 0)
+                {
+                    series.Samples.RemoveRange(0, removeCount);
                 }
 
                 // Also enforce max samples limit
-                while (series.Samples.Count > MaxSamples)
+                if (series.Samples.Count > MaxSamples)
                 {
-                    series.Samples.RemoveAt(0);
+                    var excess = series.Samples.Count - MaxSamples;
+                    series.Samples.RemoveRange(0, excess);
                 }
             }
         }
@@ -404,7 +410,8 @@ public class ScopeView : View
             }
         }
 
-        if (globalMin == float.MaxValue)
+        // If no samples were found, use default range
+        if (globalMin == float.MaxValue || globalMax == float.MinValue)
         {
             globalMin = 0;
             globalMax = 100;
@@ -569,19 +576,7 @@ public class ScopeView : View
         }
     }
 
-    private static string FormatTimeAxisLabel(double seconds)
-    {
-        if (seconds < 60)
-        {
-            return $"{seconds:F0}s";
-        }
-        else
-        {
-            var mins = (int)(seconds / 60);
-            var secs = (int)(seconds % 60);
-            return $"{mins}:{secs:D2}";
-        }
-    }
+    private static string FormatTimeAxisLabel(double seconds) => FormatElapsedTime(seconds);
 
     /// <summary>
     /// Toggles pause state.

@@ -25,6 +25,8 @@ public class MonitoredItemsView : FrameView
     // Scope selection
     private const int MaxScopeSelections = 5;
     private readonly Label _selectionFeedback;
+    private object? _feedbackTimerToken;
+    private int _cachedScopeSelectionCount;
 
     // Unicode symbols for record/stop and checkbox
     private const string RecordSymbol = "●";  // Red circle for record
@@ -65,6 +67,7 @@ public class MonitoredItemsView : FrameView
                     selected.Add(node);
                 }
             }
+            _cachedScopeSelectionCount = selected.Count;
             return selected;
         }
     }
@@ -72,7 +75,7 @@ public class MonitoredItemsView : FrameView
     /// <summary>
     /// Gets the count of items selected for Scope.
     /// </summary>
-    public int ScopeSelectionCount => ScopeSelectedNodes.Count;
+    public int ScopeSelectionCount => _cachedScopeSelectionCount;
 
     public MonitoredItemsView()
     {
@@ -260,6 +263,7 @@ public class MonitoredItemsView : FrameView
         {
             // Deselect
             selected.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
             UpdateScopeCheckbox(selected);
             HideSelectionFeedback();
             ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
@@ -275,6 +279,7 @@ public class MonitoredItemsView : FrameView
 
             // Select
             selected.IsSelectedForScope = true;
+            _cachedScopeSelectionCount++;
             UpdateScopeCheckbox(selected);
             HideSelectionFeedback();
             ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
@@ -292,12 +297,19 @@ public class MonitoredItemsView : FrameView
 
     private void ShowSelectionFeedback(string message)
     {
+        // Cancel any existing timer
+        if (_feedbackTimerToken != null)
+        {
+            Application.RemoveTimeout(_feedbackTimerToken);
+            _feedbackTimerToken = null;
+        }
+
         _selectionFeedback.Text = message;
         _selectionFeedback.Visible = true;
         SetNeedsLayout();
 
         // Auto-hide after 2 seconds
-        Application.AddTimeout(TimeSpan.FromSeconds(2), () =>
+        _feedbackTimerToken = Application.AddTimeout(TimeSpan.FromSeconds(2), () =>
         {
             Application.Invoke(HideSelectionFeedback);
             return false;  // Don't repeat
