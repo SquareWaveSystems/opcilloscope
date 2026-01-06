@@ -97,6 +97,8 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
+        _statusBar.Add(new Shortcut(Key.Space, "Select", null));  // Visual hint only - handled in MonitoredItemsView
+        _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
         // Company branding label (bottom right, separate from status bar shortcuts)
@@ -132,7 +134,6 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSelected += OnNodeSelected;
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
-        _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
         _monitoredItemsView.RecordRequested += OnRecordRequested;
         _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
@@ -190,7 +191,7 @@ public class MainWindow : Toplevel
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
-                    new MenuItem("_Trend Plot...", "", ShowTrendPlot),
+                    new MenuItem("_Scope...", "Ctrl+G", LaunchScope),
                     new MenuItem("_Refresh Tree", "", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     new MenuItem("_Settings...", "", ShowSettings)
@@ -476,15 +477,23 @@ public class MainWindow : Toplevel
         }
     }
 
-    private void ShowTrendPlot()
+    private void LaunchScope()
     {
-        var dialog = new TrendPlotDialog(_subscriptionManager);
-        Application.Run(dialog);
-    }
+        if (_subscriptionManager == null)
+        {
+            MessageBox.Query("Scope", "Connect to a server first.", "OK");
+            return;
+        }
 
-    private void OnTrendPlotRequested(MonitoredNode node)
-    {
-        var dialog = new TrendPlotDialog(_subscriptionManager, node);
+        var selectedNodes = _monitoredItemsView.ScopeSelectedNodes;
+
+        if (selectedNodes.Count == 0)
+        {
+            MessageBox.Query("Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored items.", "OK");
+            return;
+        }
+
+        var dialog = new ScopeDialog(selectedNodes, _subscriptionManager);
         Application.Run(dialog);
     }
 
@@ -685,8 +694,9 @@ Keyboard Shortcuts:
   F5        - Refresh address space tree
   F10       - Open menu
   Enter     - Subscribe to selected node
-  Space     - Show trend plot for selected item
+  Space     - Toggle scope selection (in Monitored Items)
   Delete    - Unsubscribe from selected item
+  Ctrl+G    - Open Scope with selected items
   Ctrl+O    - Connect to server
   Ctrl+Q    - Quit
 
@@ -695,7 +705,13 @@ Navigation:
   Arrow Keys - Navigate within panel
   Space     - Expand/collapse tree node (in tree view)
 
-Trend Plot (in dialog):
+Scope View:
+  - Select up to 5 items using Space in Monitored Items
+  - Press Ctrl+G to launch Scope with selected items
+  - X-axis shows elapsed time
+  - Each signal displayed with distinct color
+
+Scope Controls (in dialog):
   Space     - Pause/resume plotting
   +/-       - Adjust vertical scale
   R         - Reset to auto-scale
@@ -710,7 +726,6 @@ Tips:
   - Only Variable nodes can be subscribed
   - Double-click a node to subscribe
   - Values update in real-time via subscription
-  - Use View > Trend Plot to visualize values
 ";
         MessageBox.Query("OPC Scope Help", help, "OK");
     }
@@ -724,8 +739,13 @@ Tips:
 ╚══════════════════════════════════════╝
 
 A lightweight terminal-based OPC UA client
-for browsing, monitoring, and subscribing
-to industrial automation data.
+for browsing, monitoring, and visualizing
+industrial automation data in real-time.
+
+Features:
+  - Multi-signal Scope view (up to 5 signals)
+  - Time-based plotting with auto-scale
+  - CSV recording of monitored values
 
 Current Theme: {theme.Name}
   {theme.Description}
