@@ -8,7 +8,7 @@ namespace OpcScope.OpcUa.TestServer;
 /// In-process OPC UA test server that can be started from within the application.
 /// Provides test nodes for demonstration and testing purposes.
 /// </summary>
-public class EmbeddedTestServer : IDisposable
+public class EmbeddedTestServer : IAsyncDisposable, IDisposable
 {
     private StandardServer? _server;
     private ApplicationInstance? _application;
@@ -54,7 +54,10 @@ public class EmbeddedTestServer : IDisposable
 
         if (!hasAppCertificate)
         {
-            throw new Exception("Application certificate validation failed");
+            throw new InvalidOperationException(
+                $"Application certificate validation failed. " +
+                $"An application instance certificate may be missing, invalid, or untrusted. " +
+                $"ApplicationName='{ApplicationName}', ApplicationUri='{ApplicationUri}', EndpointUrl='{EndpointUrl}'.");
         }
 
         // Create and start the server
@@ -117,9 +120,9 @@ public class EmbeddedTestServer : IDisposable
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(pkiPath, "rejected")
                 },
-                AutoAcceptUntrustedCertificates = true,
+                AutoAcceptUntrustedCertificates = true, // Test server only: do not enable in production
                 RejectSHA1SignedCertificates = false,
-                MinimumCertificateKeySize = 1024
+                MinimumCertificateKeySize = 2048
             },
 
             TransportConfigurations = new TransportConfigurationCollection(),
@@ -188,22 +191,30 @@ public class EmbeddedTestServer : IDisposable
         return config;
     }
 
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
+    public async ValueTask DisposeAsync()
     {
         if (!_disposed)
         {
-            if (disposing)
+            await StopAsync();
+            _disposed = true;
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            // Synchronous disposal - stop the server synchronously
+            if (_server != null)
             {
-                StopAsync().GetAwaiter().GetResult();
+                _server.Stop();
+                _server.Dispose();
+                _server = null;
             }
             _disposed = true;
         }
+        GC.SuppressFinalize(this);
     }
 }
 

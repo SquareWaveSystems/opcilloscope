@@ -295,6 +295,13 @@ public class MainWindow : Toplevel
             return;
         }
 
+        if (_isStartingTestServer)
+        {
+            _logger.Warning("Test server is already starting");
+            return;
+        }
+
+        _isStartingTestServer = true;
         try
         {
             _testServer = new EmbeddedTestServer();
@@ -323,6 +330,10 @@ public class MainWindow : Toplevel
             _testServer?.Dispose();
             _testServer = null;
         }
+        finally
+        {
+            _isStartingTestServer = false;
+        }
     }
 
     private async Task StopTestServerAsync()
@@ -344,7 +355,6 @@ public class MainWindow : Toplevel
             await _testServer.StopAsync();
             _logger.Info("Test server stopped");
 
-            _testServer.Dispose();
             _testServer = null;
         }
         catch (Exception ex)
