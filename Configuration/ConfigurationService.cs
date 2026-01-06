@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using OpcScope.Configuration.Models;
 using OpcScope.OpcUa.Models;
 
@@ -10,12 +9,6 @@ namespace OpcScope.Configuration;
 /// </summary>
 public class ConfigurationService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
 
     /// <summary>
     /// Path to the currently loaded configuration file, or null if no file is loaded.
@@ -65,7 +58,7 @@ public class ConfigurationService
     public async Task<OpcScopeConfig> LoadAsync(string filePath)
     {
         var json = await File.ReadAllTextAsync(filePath);
-        var config = JsonSerializer.Deserialize<OpcScopeConfig>(json, JsonOptions)
+        var config = JsonSerializer.Deserialize(json, OpcScopeJsonContext.Default.OpcScopeConfig)
             ?? throw new InvalidDataException("Invalid configuration file");
 
         // Handle version migrations if needed
@@ -119,7 +112,7 @@ public class ConfigurationService
     {
         config.Metadata.LastModified = DateTime.UtcNow;
 
-        var json = JsonSerializer.Serialize(config, JsonOptions);
+        var json = JsonSerializer.Serialize(config, OpcScopeJsonContext.Default.OpcScopeConfig);
         await File.WriteAllTextAsync(filePath, json);
 
         CurrentFilePath = filePath;

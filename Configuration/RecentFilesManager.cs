@@ -113,7 +113,7 @@ public class RecentFilesManager
             if (File.Exists(_settingsPath))
             {
                 var json = File.ReadAllText(_settingsPath);
-                _recentFiles = JsonSerializer.Deserialize<List<string>>(json) ?? new();
+                _recentFiles = JsonSerializer.Deserialize(json, OpcScopeJsonContext.Default.ListString) ?? new();
             }
         }
         catch
@@ -132,7 +132,7 @@ public class RecentFilesManager
             {
                 Directory.CreateDirectory(directory);
             }
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(_recentFiles));
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(_recentFiles, OpcScopeJsonContext.Default.ListString));
         }
         catch
         {
