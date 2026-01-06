@@ -169,32 +169,9 @@ internal class TestNodeManager : CustomNodeManager2
         NodeId dataType,
         int valueRank)
     {
-        var variable = new BaseDataVariableState<T>(parent)
-        {
-            SymbolicName = name,
-            ReferenceTypeId = ReferenceTypeIds.Organizes,
-            TypeDefinitionId = VariableTypeIds.BaseDataVariableType,
-            NodeId = new NodeId(path, NamespaceIndex),
-            BrowseName = new QualifiedName(name, NamespaceIndex),
-            DisplayName = new LocalizedText("en", name),
-            WriteMask = AttributeWriteMask.DisplayName | AttributeWriteMask.Description,
-            UserWriteMask = AttributeWriteMask.DisplayName | AttributeWriteMask.Description,
-            DataType = dataType,
-            ValueRank = valueRank,
-            AccessLevel = AccessLevels.CurrentReadOrWrite,
-            UserAccessLevel = AccessLevels.CurrentReadOrWrite,
-            Historizing = false,
-            StatusCode = StatusCodes.Good,
-            Timestamp = DateTime.UtcNow
-        };
-
-        if (valueRank == ValueRanks.OneDimension)
-        {
-            variable.ArrayDimensions = new ReadOnlyList<uint>(new List<uint> { 0 });
-        }
-
+        var variable = new BaseDataVariableState<T>(parent);
+        InitializeVariable(variable, path, name, dataType, valueRank);
         parent?.AddChild(variable);
-
         return variable;
     }
 
@@ -206,33 +183,39 @@ internal class TestNodeManager : CustomNodeManager2
         NodeId dataType,
         int valueRank)
     {
-        var variable = new BaseDataVariableState(parent)
-        {
-            SymbolicName = name,
-            ReferenceTypeId = ReferenceTypeIds.Organizes,
-            TypeDefinitionId = VariableTypeIds.BaseDataVariableType,
-            NodeId = new NodeId(path, NamespaceIndex),
-            BrowseName = new QualifiedName(name, NamespaceIndex),
-            DisplayName = new LocalizedText("en", name),
-            WriteMask = AttributeWriteMask.DisplayName | AttributeWriteMask.Description,
-            UserWriteMask = AttributeWriteMask.DisplayName | AttributeWriteMask.Description,
-            DataType = dataType,
-            ValueRank = valueRank,
-            AccessLevel = AccessLevels.CurrentReadOrWrite,
-            UserAccessLevel = AccessLevels.CurrentReadOrWrite,
-            Historizing = false,
-            StatusCode = StatusCodes.Good,
-            Timestamp = DateTime.UtcNow
-        };
+        var variable = new BaseDataVariableState(parent);
+        InitializeVariable(variable, path, name, dataType, valueRank);
+        parent?.AddChild(variable);
+        return variable;
+    }
+
+    private void InitializeVariable(
+        BaseVariableState variable,
+        string path,
+        string name,
+        NodeId dataType,
+        int valueRank)
+    {
+        variable.SymbolicName = name;
+        variable.ReferenceTypeId = ReferenceTypeIds.Organizes;
+        variable.TypeDefinitionId = VariableTypeIds.BaseDataVariableType;
+        variable.NodeId = new NodeId(path, NamespaceIndex);
+        variable.BrowseName = new QualifiedName(name, NamespaceIndex);
+        variable.DisplayName = new LocalizedText("en", name);
+        variable.WriteMask = AttributeWriteMask.DisplayName | AttributeWriteMask.Description;
+        variable.UserWriteMask = AttributeWriteMask.DisplayName | AttributeWriteMask.Description;
+        variable.DataType = dataType;
+        variable.ValueRank = valueRank;
+        variable.AccessLevel = AccessLevels.CurrentReadOrWrite;
+        variable.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
+        variable.Historizing = false;
+        variable.StatusCode = StatusCodes.Good;
+        variable.Timestamp = DateTime.UtcNow;
 
         if (valueRank == ValueRanks.OneDimension)
         {
             variable.ArrayDimensions = new ReadOnlyList<uint>(new List<uint> { 0 });
         }
-
-        parent?.AddChild(variable);
-
-        return variable;
     }
 
     private void StartSimulation()
@@ -273,9 +256,9 @@ internal class TestNodeManager : CustomNodeManager2
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore exceptions during simulation
+            Utils.Trace("Exception in TestNodeManager.OnSimulationTick: {0}", ex);
         }
     }
 
@@ -284,7 +267,11 @@ internal class TestNodeManager : CustomNodeManager2
         NodeState node,
         ref object value)
     {
-        _writableString = (string)value;
+        if (value is not string stringValue)
+        {
+            return StatusCodes.BadTypeMismatch;
+        }
+        _writableString = stringValue;
         return ServiceResult.Good;
     }
 
@@ -293,7 +280,11 @@ internal class TestNodeManager : CustomNodeManager2
         NodeState node,
         ref object value)
     {
-        _toggleBoolean = (bool)value;
+        if (value is not bool boolValue)
+        {
+            return StatusCodes.BadTypeMismatch;
+        }
+        _toggleBoolean = boolValue;
         return ServiceResult.Good;
     }
 
@@ -302,7 +293,11 @@ internal class TestNodeManager : CustomNodeManager2
         NodeState node,
         ref object value)
     {
-        _writableNumber = (int)value;
+        if (value is not int intValue)
+        {
+            return StatusCodes.BadTypeMismatch;
+        }
+        _writableNumber = intValue;
         return ServiceResult.Good;
     }
 

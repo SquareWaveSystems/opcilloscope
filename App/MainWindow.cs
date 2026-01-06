@@ -21,6 +21,7 @@ public class MainWindow : Toplevel
     private readonly NodeBrowser _nodeBrowser;
     private SubscriptionManager? _subscriptionManager;
     private EmbeddedTestServer? _testServer;
+    private bool _isStartingTestServer;
 
     private readonly MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
@@ -281,6 +282,13 @@ public class MainWindow : Toplevel
             return;
         }
 
+        if (_isStartingTestServer)
+        {
+            _logger.Warning("Test server is already starting");
+            return;
+        }
+
+        _isStartingTestServer = true;
         try
         {
             _testServer = new EmbeddedTestServer();
@@ -309,6 +317,10 @@ public class MainWindow : Toplevel
             _testServer?.Dispose();
             _testServer = null;
         }
+        finally
+        {
+            _isStartingTestServer = false;
+        }
     }
 
     private async Task StopTestServerAsync()
@@ -330,7 +342,6 @@ public class MainWindow : Toplevel
             await _testServer.StopAsync();
             _logger.Info("Test server stopped");
 
-            _testServer.Dispose();
             _testServer = null;
         }
         catch (Exception ex)
