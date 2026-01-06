@@ -83,6 +83,8 @@ public class OpcUaClientWrapper : IDisposable
 
         await _appConfig.ValidateAsync(ApplicationType.Client);
 
+        _logger.Warning("Certificate validation disabled (AutoAcceptUntrustedCertificates=true). Not recommended for production.");
+
         return _appConfig;
     }
 
