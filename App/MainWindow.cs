@@ -22,7 +22,7 @@ public class MainWindow : Toplevel
     private readonly RecentFilesManager _recentFiles;
     private ConfigMetadata? _currentMetadata;
 
-    private readonly MenuBar _menuBar;
+    private MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
     private readonly MonitoredItemsView _monitoredItemsView;
     private readonly NodeDetailsView _nodeDetailsView;
@@ -51,10 +51,7 @@ public class MainWindow : Toplevel
         _csvRecordingManager = new CsvRecordingManager(_logger);
         _configService = new ConfigurationService();
         _recentFiles = new RecentFilesManager();
-        _recentFiles.FilesChanged += (_, _) =>
-        {
-            UiThread.Run(RebuildMenuBar);
-        };
+        _recentFiles.FilesChanged += () => UiThread.Run(RebuildMenuBar);
 
         // Wire up connection manager events
         _connectionManager.StateChanged += OnConnectionStateChanged;
@@ -291,6 +288,8 @@ public class MainWindow : Toplevel
                     new MenuItem("Start _Recording...", "", () => OnRecordRequested(), shortcutKey: Key.R.WithCtrl),
                     new MenuItem("Sto_p Recording", "", () => OnStopRecordingRequested()),
                     null!, // Separator
+                    new MenuItem("_Settings", "", ShowSettings),
+                    null!, // Separator
                     new MenuItem("E_xit", "", () => RequestStop(), shortcutKey: Key.Q.WithCtrl)
                 }),
                 new MenuBarItem("_Connection", new MenuItem[]
@@ -301,11 +300,10 @@ public class MainWindow : Toplevel
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
-                    new MenuItem("_Scope...", "Ctrl+G", LaunchScope),
-                    new MenuItem("_Refresh Tree", "", RefreshTree),
+                    new MenuItem("_Scope", "Ctrl+G", LaunchScope),
+                    new MenuItem("_Refresh Tree", "F5", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
-                    _themeToggleItem,
-                    new MenuItem("_Settings...", "", ShowSettings)
+                    _themeToggleItem
                 }),
                 new MenuBarItem("_Help", new MenuItem[]
                 {
@@ -1180,15 +1178,8 @@ License: MIT
     /// </summary>
     private void RebuildMenuBar()
     {
-        // Capture current position (if any) before removing the existing menu bar
-        int x = 0;
-        int y = 0;
-
         if (_menuBar != null)
         {
-            x = _menuBar.X;
-            y = _menuBar.Y;
-
             // Remove and dispose the old menu bar to avoid leaks and stale references
             Remove(_menuBar);
             _menuBar.Dispose();
@@ -1196,9 +1187,9 @@ License: MIT
 
         var newMenuBar = CreateMenuBar();
 
-        // Restore position
-        newMenuBar.X = x;
-        newMenuBar.Y = y;
+        // Menu bar is always at top-left
+        newMenuBar.X = 0;
+        newMenuBar.Y = 0;
 
         // Apply theme
         var theme = ThemeManager.Current;
