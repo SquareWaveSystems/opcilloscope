@@ -33,13 +33,6 @@ public class MonitoredItemsView : FrameView
     // Empty state
     private readonly Label _emptyStateLabel;
 
-    // Scope selection
-    private readonly Label _selectionFeedback;
-    private int _cachedScopeSelectionCount;
-    private const int MaxScopeSelections = 5;
-    private const string CheckedBox = "[✓]";
-    private const string UncheckedBox = "[ ]";
-
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? WriteRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count

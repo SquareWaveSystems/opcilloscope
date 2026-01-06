@@ -29,7 +29,7 @@ public class AddressSpaceView : FrameView
         CanFocus = true;
 
         // Apply initial theme styling
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
         _treeView = new TreeView<BrowsedNode>
