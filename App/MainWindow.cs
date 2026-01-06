@@ -51,7 +51,6 @@ public class MainWindow : Toplevel
         _csvRecordingManager = new CsvRecordingManager(_logger);
         _configService = new ConfigurationService();
         _recentFiles = new RecentFilesManager();
-        _recentFiles.FilesChanged += () => UiThread.Run(RebuildMenuBar);
 
         // Wire up connection manager events
         _connectionManager.StateChanged += OnConnectionStateChanged;
@@ -275,20 +274,12 @@ public class MainWindow : Toplevel
             {
                 new MenuBarItem("_File", new MenuItem[]
                 {
-                    new MenuItem("_New Config", "", NewConfig, shortcutKey: Key.N.WithCtrl),
                     new MenuItem("_Open Config...", "", OpenConfig, shortcutKey: Key.O.WithCtrl),
-                    null!, // Separator
                     new MenuItem("_Save Config", "", SaveConfig, shortcutKey: Key.S.WithCtrl),
                     new MenuItem("Save Config _As...", "", SaveConfigAs, shortcutKey: Key.S.WithCtrl.WithShift),
                     null!, // Separator
-                    new MenuBarItem("_Recent Configs", BuildRecentConfigsMenu()),
-                    null!, // Separator
-                    new MenuItem("_Export to CSV...", "", ExportToCsv, shortcutKey: Key.E.WithCtrl),
-                    null!, // Separator
                     new MenuItem("Start _Recording...", "", () => OnRecordRequested(), shortcutKey: Key.R.WithCtrl),
                     new MenuItem("Sto_p Recording", "", () => OnStopRecordingRequested()),
-                    null!, // Separator
-                    new MenuItem("_Settings", "", ShowSettings),
                     null!, // Separator
                     new MenuItem("E_xit", "", () => RequestStop(), shortcutKey: Key.Q.WithCtrl)
                 }),
@@ -303,7 +294,9 @@ public class MainWindow : Toplevel
                     new MenuItem("_Scope", "Ctrl+G", LaunchScope),
                     new MenuItem("_Refresh Tree", "F5", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
-                    _themeToggleItem
+                    _themeToggleItem,
+                    null!, // Separator
+                    new MenuItem("Se_ttings...", "", ShowSettings)
                 }),
                 new MenuBarItem("_Help", new MenuItem[]
                 {
@@ -929,114 +922,6 @@ public class MainWindow : Toplevel
         }
     }
 
-    private void ExportToCsv()
-    {
-        var subscriptionManager = _connectionManager.SubscriptionManager;
-        if (subscriptionManager == null || !subscriptionManager.MonitoredItems.Any())
-        {
-            MessageBox.Query("Export", "No items to export", "OK");
-            return;
-        }
-
-        using var dialog = new SaveDialog
-        {
-            Title = "Export to CSV"
-        };
-
-        Application.Run(dialog);
-
-        if (!dialog.Canceled && dialog.Path != null)
-        {
-            var items = subscriptionManager.MonitoredItems.ToList();
-            var path = dialog.Path.ToString();
-
-            // Create progress dialog
-            var progressDialog = new Dialog
-            {
-                Title = " Exporting ",
-                Width = 50,
-                Height = 7
-            };
-
-            var progressLabel = new Label
-            {
-                X = 1,
-                Y = 1,
-                Text = "Exporting data..."
-            };
-
-            var progressBar = new ProgressBar
-            {
-                X = 1,
-                Y = 2,
-                Width = Dim.Fill(1),
-                Fraction = 0f,
-                ProgressBarStyle = ProgressBarStyle.Continuous
-            };
-
-            var statusLabel = new Label
-            {
-                X = 1,
-                Y = 3,
-                Text = $"0 / {items.Count} items"
-            };
-
-            progressDialog.Add(progressLabel, progressBar, statusLabel);
-
-            // Export in background with proper exception handling
-            var exportTask = Task.Run(async () =>
-            {
-                try
-                {
-                    using var writer = new StreamWriter(path!);
-                    await writer.WriteLineAsync("DisplayName,NodeId,Value,Timestamp,Status");
-
-                    for (int i = 0; i < items.Count; i++)
-                    {
-                        var item = items[i];
-                        await writer.WriteLineAsync($"\"{item.DisplayName}\",\"{item.NodeId}\",\"{item.Value}\",\"{item.TimestampString}\",\"{item.StatusString}\"");
-
-                        // Update progress on UI thread
-                        var progress = (float)(i + 1) / items.Count;
-                        var current = i + 1;
-                        Application.Invoke(() =>
-                        {
-                            progressBar.Fraction = progress;
-                            statusLabel.Text = $"{current} / {items.Count} items";
-                        });
-
-                        // Small delay for visual feedback on very small datasets
-                        if (items.Count < 10)
-                            await Task.Delay(10);
-                    }
-
-                    Application.Invoke(() =>
-                    {
-                        progressDialog.RequestStop();
-                        _logger.Info($"Exported {items.Count} items to {path}");
-                        MessageBox.Query("Export", $"Exported {items.Count} items to {path}", "OK");
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Application.Invoke(() =>
-                    {
-                        progressDialog.RequestStop();
-                        _logger.Error($"Export failed: {ex.Message}");
-                        MessageBox.ErrorQuery("Export Error", ex.Message, "OK");
-                    });
-                }
-            });
-
-            Application.Run(progressDialog);
-            
-            // Wait for the export task to complete before disposing
-            exportTask.Wait();
-
-            progressDialog.Dispose();
-        }
-    }
-
     private void ShowHelp()
     {
         var help = @"OPC Scope - Terminal OPC UA Client
@@ -1118,123 +1003,6 @@ License: MIT
     }
 
     #region Configuration File Handling
-
-    /// <summary>
-    /// Builds the Recent Configs submenu dynamically.
-    /// </summary>
-    private MenuItem[] BuildRecentConfigsMenu()
-    {
-        var existingFiles = _recentFiles.GetExistingFiles();
-
-        if (existingFiles.Count == 0)
-        {
-            return new MenuItem[]
-            {
-                new MenuItem("(No recent files)", "", null) { CanExecute = () => false }
-            };
-        }
-
-        var menuItems = new List<MenuItem>();
-
-        foreach (var filePath in existingFiles.Take(10))
-        {
-            var displayName = TruncatePathForMenu(filePath);
-            var path = filePath; // Capture for closure
-            menuItems.Add(new MenuItem(displayName, path, () => LoadConfigurationAsync(path).FireAndForget(_logger)));
-        }
-
-        menuItems.Add(null!); // Separator
-        menuItems.Add(new MenuItem("Clear Recent", "", () =>
-        {
-            _recentFiles.Clear();
-            RebuildMenuBar();
-        }));
-
-        return menuItems.ToArray();
-    }
-
-    /// <summary>
-    /// Truncates a file path for display in menu items.
-    /// Shows only filename if short, or uses ellipsis for long paths.
-    /// </summary>
-    private string TruncatePathForMenu(string filePath, int maxLength = 50)
-    {
-        var fileName = Path.GetFileName(filePath);
-        
-        // If just the filename fits comfortably, use it
-        if (fileName.Length <= maxLength)
-        {
-            return fileName;
-        }
-        
-        // Otherwise, truncate the filename itself
-        return fileName.Length > maxLength 
-            ? fileName.Substring(0, maxLength - 3) + "..." 
-            : fileName;
-    }
-
-    /// <summary>
-    /// Rebuilds the menu bar to refresh dynamic menus (like Recent Configs).
-    /// </summary>
-    private void RebuildMenuBar()
-    {
-        if (_menuBar != null)
-        {
-            // Remove and dispose the old menu bar to avoid leaks and stale references
-            Remove(_menuBar);
-            _menuBar.Dispose();
-        }
-
-        var newMenuBar = CreateMenuBar();
-
-        // Menu bar is always at top-left
-        newMenuBar.X = 0;
-        newMenuBar.Y = 0;
-
-        // Apply theme
-        var theme = ThemeManager.Current;
-        ThemeStyler.ApplyToMenuBar(newMenuBar, theme);
-
-        Add(newMenuBar);
-
-        // Update field to reference the new menu bar instance
-        _menuBar = newMenuBar;
-
-        SetNeedsLayout();
-    }
-
-    /// <summary>
-    /// Creates a new configuration, prompting to save changes if necessary.
-    /// </summary>
-    private void NewConfig()
-    {
-        if (_configService.HasUnsavedChanges && !ConfirmDiscardChanges())
-            return;
-
-        // Stop recording if active
-        if (_csvRecordingManager.IsRecording)
-        {
-            OnStopRecordingRequested();
-        }
-
-        // Disconnect from current server
-        if (_connectionManager.IsConnected)
-        {
-            _connectionManager.Disconnect();
-        }
-
-        // Clear views
-        _addressSpaceView.Clear();
-        _monitoredItemsView.Clear();
-        _nodeDetailsView.Clear();
-
-        // Reset configuration state
-        _configService.Reset();
-        _currentMetadata = null;
-        UpdateWindowTitle();
-
-        _logger.Info("New configuration created");
-    }
 
     /// <summary>
     /// Opens a configuration file, prompting to save changes if necessary.
@@ -1422,7 +1190,6 @@ License: MIT
 
             _currentMetadata = config.Metadata;
             _recentFiles.Add(filePath);
-            RebuildMenuBar();
             UpdateWindowTitle();
 
             _logger.Info($"Configuration saved to {filePath}");
