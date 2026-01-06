@@ -20,12 +20,14 @@ public class MainWindow : Toplevel
     private readonly NodeBrowser _nodeBrowser;
     private SubscriptionManager? _subscriptionManager;
 
+    private readonly Label _titleBanner;
     private readonly MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
     private readonly MonitoredItemsView _monitoredItemsView;
     private readonly NodeDetailsView _nodeDetailsView;
     private readonly LogView _logView;
     private readonly StatusBar _statusBar;
+    private readonly Label _companyLabel;
     private readonly SpinnerView _activitySpinner;
     private readonly Label _activityLabel;
 
@@ -36,6 +38,7 @@ public class MainWindow : Toplevel
         _logger = new Logger();
         _client = new OpcUaClientWrapper(_logger);
         _nodeBrowser = new NodeBrowser(_client, _logger);
+        _csvRecordingManager = new CsvRecordingManager(_logger);
 
         // Wire up client events
         _client.Connected += OnClientConnected;
@@ -45,6 +48,15 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
+        // Create title banner
+        _titleBanner = new Label
+        {
+            X = Pos.Center(),
+            Y = 0,
+            Text = "═══╡ OPC Scope ╞═══",
+            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.BrightCyan, Color.Black) }
+        };
+
         // Create menu bar
         _menuBar = CreateMenuBar();
 
@@ -52,7 +64,7 @@ public class MainWindow : Toplevel
         _addressSpaceView = new AddressSpaceView
         {
             X = 0,
-            Y = 1,
+            Y = 2,
             Width = Dim.Percent(35),
             Height = Dim.Percent(60)
         };
@@ -60,7 +72,7 @@ public class MainWindow : Toplevel
         _monitoredItemsView = new MonitoredItemsView
         {
             X = Pos.Right(_addressSpaceView),
-            Y = 1,
+            Y = 2,
             Width = Dim.Fill(),
             Height = Dim.Percent(60)
         };
@@ -92,6 +104,16 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
+        // Company branding label (bottom right)
+        _companyLabel = new Label
+        {
+            X = Pos.AnchorEnd(25),
+            Y = 0,
+            Text = "Square Wave Systems 2026",
+            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.DarkGray, Color.Black) }
+        };
+        _statusBar.Add(_companyLabel);
+
         // Create activity spinner for async operations
         _activitySpinner = new SpinnerView
         {
@@ -117,12 +139,15 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredItemsView.RecordRequested += OnRecordRequested;
+        _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
         // Initialize views
         _logView.Initialize(_logger);
         _nodeDetailsView.Initialize(_nodeBrowser);
 
         // Add all views
+        Add(_titleBanner);
         Add(_menuBar);
         Add(_addressSpaceView);
         Add(_monitoredItemsView);
@@ -134,7 +159,7 @@ public class MainWindow : Toplevel
         ApplyTheme();
 
         // Log startup
-        _logger.Info("OpcScope started");
+        _logger.Info("OPC Scope started - Square Wave Systems");
         _logger.Info("Press F10 for menu, or use Connection -> Connect");
     }
 
@@ -144,17 +169,22 @@ public class MainWindow : Toplevel
         var themeMenuItems = ThemeManager.AvailableThemes
             .Select((theme, index) => new MenuItem(
                 $"_{theme.Name}",
-                theme.Description,
+                "",
                 () => ThemeManager.SetThemeByIndex(index)))
             .ToArray();
 
         return new MenuBar
         {
+            Y = 1,
             Menus = new MenuBarItem[]
             {
                 new MenuBarItem("_File", new MenuItem[]
                 {
                     new MenuItem("_Export to CSV...", "", ExportToCsv),
+                    null!, // Separator
+                    new MenuItem("Start _Recording...", "", () => OnRecordRequested()),
+                    new MenuItem("Sto_p Recording", "", () => OnStopRecordingRequested()),
+                    null!, // Separator
                     new MenuItem("E_xit", "", () => RequestStop())
                 }),
                 new MenuBarItem("_Connection", new MenuItem[]
@@ -187,6 +217,18 @@ public class MainWindow : Toplevel
         // Apply main window styling
         ColorScheme = theme.MainColorScheme;
         BorderStyle = theme.BorderLineStyle;
+
+        // Apply styling to title banner (use accent color for branding)
+        _titleBanner.ColorScheme = new ColorScheme
+        {
+            Normal = theme.AccentBrightAttr
+        };
+
+        // Apply styling to company label (subtle in status bar)
+        _companyLabel.ColorScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.ForegroundDim, theme.Background)
+        };
 
         // Apply styling to menu and status bar
         ThemeStyler.ApplyToMenuBar(_menuBar, theme);
@@ -269,6 +311,12 @@ public class MainWindow : Toplevel
 
     private void Disconnect()
     {
+        // Stop recording if active
+        if (_csvRecordingManager.IsRecording)
+        {
+            OnStopRecordingRequested();
+        }
+
         _subscriptionManager?.Dispose();
         _subscriptionManager = null;
 
@@ -363,6 +411,9 @@ public class MainWindow : Toplevel
 
     private void OnValueChanged(MonitoredNode item)
     {
+        // Record to CSV if recording is active
+        _csvRecordingManager.RecordValue(item);
+
         UiThread.Run(() =>
         {
             _monitoredItemsView.UpdateItem(item);
@@ -395,7 +446,7 @@ public class MainWindow : Toplevel
 
     private void UpdateConnectionStatus(string status)
     {
-        Title = $"OpcScope - {status}";
+        Title = $"OPC Scope - {status}";
         SetNeedsLayout();
     }
 
@@ -556,7 +607,8 @@ public class MainWindow : Toplevel
 
     private void ShowHelp()
     {
-        var help = @"OpcScope - Terminal OPC UA Client
+        var help = @"OPC Scope - Terminal OPC UA Client
+by Square Wave Systems
 
 Keyboard Shortcuts:
   F1        - Show this help
@@ -578,19 +630,28 @@ Trend Plot (in dialog):
   +/-       - Adjust vertical scale
   R         - Reset to auto-scale
 
+CSV Recording:
+  - Use Record/Stop buttons in Monitored Items panel
+  - Or use File > Start Recording / Stop Recording
+  - Records all value changes to CSV in real-time
+  - CSV format: Timestamp, DisplayName, NodeId, Value, Status
+
 Tips:
   - Only Variable nodes can be subscribed
   - Double-click a node to subscribe
   - Values update in real-time via subscription
   - Use View > Trend Plot to visualize values
 ";
-        MessageBox.Query("Help", help, "OK");
+        MessageBox.Query("OPC Scope Help", help, "OK");
     }
 
     private void ShowAbout()
     {
         var theme = ThemeManager.Current;
-        var about = $@"OpcScope v1.0.0
+        var about = $@"╔══════════════════════════════════════╗
+║           OPC Scope v1.0.0           ║
+║      by Square Wave Systems          ║
+╚══════════════════════════════════════╝
 
 A lightweight terminal-based OPC UA client
 for browsing, monitoring, and subscribing
@@ -607,17 +668,19 @@ Built with:
 Themes inspired by:
   - Cassette Futurism (Alien, Blade Runner)
   - github.com/Imetomi/retro-futuristic-ui-design
-  - squarewavesystems.github.io
 
+© 2026 Square Wave Systems
 License: MIT
 ";
-        MessageBox.Query("About OpcScope", about, "OK");
+        MessageBox.Query("About OPC Scope", about, "OK");
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            StopRecordingStatusUpdates();
+            _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _subscriptionManager?.Dispose();
             _client.Dispose();
