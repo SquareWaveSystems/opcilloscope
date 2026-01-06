@@ -550,14 +550,11 @@ public class MainWindow : Toplevel
             // Ensure we wait for the export task to complete and propagate any exceptions
             try
             {
-                exportTask.Wait();
+                exportTask.GetAwaiter().GetResult();
             }
-            catch (AggregateException ae)
+            catch (Exception ex)
             {
-                foreach (var ex in ae.InnerExceptions)
-                {
-                    _logger.Error($"Export task exception: {ex.Message}");
-                }
+                _logger.Error($"Export task exception: {ex.Message}");
             }
 
             progressDialog.Dispose();
