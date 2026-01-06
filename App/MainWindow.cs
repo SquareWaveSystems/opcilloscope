@@ -399,6 +399,10 @@ public class MainWindow : Toplevel
         SetNeedsLayout();
     }
 
+    /// <summary>
+    /// Shows the activity spinner and message in the status bar during async operations.
+    /// </summary>
+    /// <param name="message">The message to display next to the spinner.</param>
     private void ShowActivity(string message)
     {
         _activityLabel.Text = message;
@@ -407,6 +411,9 @@ public class MainWindow : Toplevel
         SetNeedsLayout();
     }
 
+    /// <summary>
+    /// Hides the activity spinner and clears the activity message in the status bar.
+    /// </summary>
     private void HideActivity()
     {
         _activitySpinner.Visible = false;
@@ -493,8 +500,8 @@ public class MainWindow : Toplevel
 
             progressDialog.Add(progressLabel, progressBar, statusLabel);
 
-            // Export in background
-            _ = Task.Run(async () =>
+            // Export in background with proper exception handling
+            var exportTask = Task.Run(async () =>
             {
                 try
                 {
@@ -515,14 +522,14 @@ public class MainWindow : Toplevel
                             statusLabel.Text = $"{current} / {items.Count} items";
                         });
 
-                        // Small delay for visual feedback on small datasets
-                        if (items.Count < 100)
+                        // Small delay for visual feedback on very small datasets
+                        if (items.Count < 10)
                             await Task.Delay(10);
                     }
 
                     Application.Invoke(() =>
                     {
-                        Application.RequestStop();
+                        progressDialog.RequestStop();
                         _logger.Info($"Exported {items.Count} items to {path}");
                         MessageBox.Query("Export", $"Exported {items.Count} items to {path}", "OK");
                     });
@@ -531,7 +538,7 @@ public class MainWindow : Toplevel
                 {
                     Application.Invoke(() =>
                     {
-                        Application.RequestStop();
+                        progressDialog.RequestStop();
                         _logger.Error($"Export failed: {ex.Message}");
                         MessageBox.ErrorQuery("Export Error", ex.Message, "OK");
                     });
@@ -539,6 +546,11 @@ public class MainWindow : Toplevel
             });
 
             Application.Run(progressDialog);
+            
+            // Wait for the export task to complete before disposing
+            exportTask.Wait();
+
+            progressDialog.Dispose();
         }
     }
 

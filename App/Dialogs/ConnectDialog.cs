@@ -1,6 +1,7 @@
 using Terminal.Gui;
 using OpcScope.App.Themes;
 using AppThemeManager = OpcScope.App.Themes.ThemeManager;
+using System.Collections.ObjectModel;
 
 namespace OpcScope.App.Dialogs;
 
@@ -17,6 +18,7 @@ public class ConnectDialog : Dialog
         "opc.tcp://localhost:48010",
         "opc.tcp://192.168.1.1:4840"
     };
+    private static readonly object _historyLock = new();
 
     private readonly ComboBox _endpointComboBox;
     private bool _confirmed;
@@ -25,19 +27,24 @@ public class ConnectDialog : Dialog
     public bool Confirmed => _confirmed;
 
     /// <summary>
-    /// Adds an endpoint to the history if not already present.
+    /// Adds an endpoint URL to the history, moving it to the top if it already exists,
+    /// and maintaining only the most recent 10 endpoints.
     /// </summary>
+    /// <param name="endpoint">The OPC UA endpoint URL to add to the history.</param>
     public static void AddToHistory(string endpoint)
     {
         if (string.IsNullOrWhiteSpace(endpoint)) return;
 
-        // Remove if exists (to move to top)
-        _endpointHistory.Remove(endpoint);
-        // Insert at top
-        _endpointHistory.Insert(0, endpoint);
-        // Keep only last 10
-        while (_endpointHistory.Count > 10)
-            _endpointHistory.RemoveAt(_endpointHistory.Count - 1);
+        lock (_historyLock)
+        {
+            // Remove if exists (to move to top)
+            _endpointHistory.Remove(endpoint);
+            // Insert at top
+            _endpointHistory.Insert(0, endpoint);
+            // Keep only last 10
+            while (_endpointHistory.Count > 10)
+                _endpointHistory.RemoveAt(_endpointHistory.Count - 1);
+        }
     }
 
     public ConnectDialog(string? lastEndpoint = null)
@@ -65,15 +72,26 @@ public class ConnectDialog : Dialog
             Text = "Endpoint URL (select or type):"
         };
 
+        // Get default text with thread safety
+        string defaultText;
+        List<string> historyCopy;
+        lock (_historyLock)
+        {
+            defaultText = lastEndpoint ?? _endpointHistory.FirstOrDefault() ?? "opc.tcp://localhost:4840";
+            historyCopy = new List<string>(_endpointHistory);
+        }
+
+        var historySource = new ObservableCollection<string>(historyCopy);
+
         _endpointComboBox = new ComboBox
         {
             X = 1,
             Y = 2,
             Width = Dim.Fill(1),
             Height = 4,
-            Text = lastEndpoint ?? _endpointHistory.FirstOrDefault() ?? "opc.tcp://localhost:4840"
+            Text = defaultText
         };
-        _endpointComboBox.SetSource(_endpointHistory);
+        _endpointComboBox.SetSource(historySource);
 
         var hintLabel = new Label
         {
