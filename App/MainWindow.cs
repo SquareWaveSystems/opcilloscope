@@ -129,30 +129,29 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
-        // Connection status indicator (colored)
-        _connectionStatusLabel = new Label
-        {
-            X = Pos.AnchorEnd(40),
-            Y = 0,
-            Text = $" {theme.DisconnectedIndicator} "
-        };
-        UpdateConnectionStatusLabelStyle(isConnected: false);
-        _statusBar.Add(_connectionStatusLabel);
-
-        // Company branding label (bottom right, separate from status bar shortcuts)
+        // Company branding label (width-aware, overlaid on status bar row)
         // ColorScheme is set in ApplyTheme() to use theme colors
         _companyLabel = new Label
         {
-            X = Pos.AnchorEnd(26),
-            Y = Pos.AnchorEnd(1),
+            X = Pos.AnchorEnd(46),
+            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
             Text = "Square Wave Systems 2026"
         };
 
-        // Create activity spinner for async operations
+        // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
+        _connectionStatusLabel = new Label
+        {
+            X = Pos.AnchorEnd(20),
+            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
+            Text = $" {theme.DisconnectedIndicator} "
+        };
+        UpdateConnectionStatusLabelStyle(isConnected: false);
+
+        // Create activity spinner for async operations (left of company label)
         // ColorScheme is set in ApplyTheme() to use theme colors
         _activitySpinner = new SpinnerView
         {
-            X = Pos.AnchorEnd(20),
+            X = Pos.AnchorEnd(62),
             Y = 0,
             Visible = false,
             AutoSpin = true
@@ -168,6 +167,9 @@ public class MainWindow : Toplevel
 
         _statusBar.Add(_activitySpinner);
         _statusBar.Add(_activityLabel);
+
+        // Initial width-aware update (will also be called from ApplyTheme)
+        Initialized += (_, _) => UpdateCompanyLabelForWidth();
 
         // Wire up view events
         _addressSpaceView.NodeSelected += OnNodeSelected;
@@ -189,6 +191,7 @@ public class MainWindow : Toplevel
         Add(_logView);
         Add(_statusBar);
         Add(_companyLabel);
+        Add(_connectionStatusLabel);
 
         // Apply initial theme (after all controls are created)
         ApplyTheme();
@@ -337,6 +340,9 @@ public class MainWindow : Toplevel
         // Apply theme to activity spinner and label (for async operations)
         _activitySpinner.ColorScheme = cleanStatusBarScheme;
         _activityLabel.ColorScheme = cleanStatusBarScheme;
+
+        // Update width-aware company label
+        UpdateCompanyLabelForWidth();
 
         // Apply to child views with border differentiation
         // MonitoredItems gets double-line (emphasized)
@@ -600,6 +606,19 @@ public class MainWindow : Toplevel
                 isConnected ? theme.StatusGood : theme.Accent,
                 theme.Background)
         };
+    }
+
+    private void UpdateCompanyLabelForWidth()
+    {
+        var width = _statusBar.Frame.Width;
+
+        // Width-aware company branding
+        if (width >= 120)
+            _companyLabel.Text = "Square Wave Systems 2026";
+        else if (width >= 90)
+            _companyLabel.Text = "SWS 2026";
+        else
+            _companyLabel.Text = "SWS";
     }
 
     private void StartConnectingAnimation()
