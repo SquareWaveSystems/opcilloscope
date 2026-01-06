@@ -9,7 +9,9 @@ class Program
     {
         try
         {
+#pragma warning disable IL2026 // Terminal.Gui Application.Init uses reflection and is not AOT-compatible
             Application.Init();
+#pragma warning restore IL2026
 
             // Parse command-line arguments for auto-connect
             string? autoConnectUrl = null;

@@ -51,14 +51,9 @@ public class OpcUaClientWrapper : IDisposable
             ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 }
         };
 
-        // Accept all certificates for simplicity
-        _appConfig.CertificateValidator = new CertificateValidator();
-        _appConfig.CertificateValidator.CertificateValidation += (_, e) =>
-        {
-            e.Accept = true;
-        };
+        // AutoAcceptUntrustedCertificates is already set above, no need for explicit validator
 
-        await _appConfig.Validate(ApplicationType.Client);
+        await _appConfig.ValidateAsync(ApplicationType.Client);
 
         return _appConfig;
     }
@@ -80,6 +75,7 @@ public class OpcUaClientWrapper : IDisposable
             var endpointConfig = EndpointConfiguration.Create(config);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
 
+#pragma warning disable CS0618 // Session.Create is obsolete but ISessionFactory.CreateAsync requires additional setup
             _session = await Opc.Ua.Client.Session.Create(
                 config,
                 endpoint,
@@ -89,6 +85,7 @@ public class OpcUaClientWrapper : IDisposable
                 new UserIdentity(new AnonymousIdentityToken()),
                 null
             );
+#pragma warning restore CS0618
 
             _session.KeepAlive += Session_KeepAlive;
 
@@ -191,7 +188,7 @@ public class OpcUaClientWrapper : IDisposable
             ResultMask = (uint)BrowseResultMask.All
         };
 
-        return await Task.Run(() => browser.Browse(nodeId));
+        return await browser.BrowseAsync(nodeId);
     }
 
     public async Task<DataValue?> ReadValueAsync(NodeId nodeId)

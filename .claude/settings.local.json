@@ -5,7 +5,8 @@
       "mcp__context7__query-docs",
       "Bash(grep:*)",
       "mcp__context7__resolve-library-id",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(dotnet test:*)"
     ]
   }
 }

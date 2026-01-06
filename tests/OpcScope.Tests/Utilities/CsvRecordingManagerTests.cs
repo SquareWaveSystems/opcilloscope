@@ -360,7 +360,7 @@ public class CsvRecordingManagerTests : IDisposable
     }
 
     [Fact]
-    public void RecordValue_MultipleThreads_HandlesThreadSafety()
+    public async Task RecordValue_MultipleThreads_HandlesThreadSafety()
     {
         // Arrange
         var filePath = Path.Combine(_testDirectory, "test.csv");
@@ -388,8 +388,8 @@ public class CsvRecordingManagerTests : IDisposable
             }));
         }
 
-        Task.WaitAll(tasks.ToArray());
-        Thread.Sleep(500); // Give background writer time to process all records
+        await Task.WhenAll(tasks);
+        await Task.Delay(500); // Give background writer time to process all records
         _manager.StopRecording();
 
         // Assert
