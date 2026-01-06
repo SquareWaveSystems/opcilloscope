@@ -2,6 +2,8 @@ using Terminal.Gui;
 using OpcScope.App.Views;
 using OpcScope.App.Dialogs;
 using OpcScope.App.Themes;
+using OpcScope.Configuration;
+using OpcScope.Configuration.Models;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
 using OpcScope.Utilities;
@@ -16,6 +18,9 @@ public class MainWindow : Toplevel
 {
     private readonly Logger _logger;
     private readonly ConnectionManager _connectionManager;
+    private readonly ConfigurationService _configService;
+    private readonly RecentFilesManager _recentFiles;
+    private ConfigMetadata? _currentMetadata;
 
     private readonly MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
@@ -44,13 +49,32 @@ public class MainWindow : Toplevel
         _logger = new Logger();
         _connectionManager = new ConnectionManager(_logger);
         _csvRecordingManager = new CsvRecordingManager(_logger);
+        _configService = new ConfigurationService();
+        _recentFiles = new RecentFilesManager();
+        _recentFiles.FilesChanged += (_, _) =>
+        {
+            UiThread.Run(RebuildMenuBar);
+        };
 
         // Wire up connection manager events
         _connectionManager.StateChanged += OnConnectionStateChanged;
         _connectionManager.ConnectionError += OnConnectionError;
         _connectionManager.ValueChanged += OnValueChanged;
-        _connectionManager.ItemAdded += item => UiThread.Run(() => _monitoredItemsView.AddItem(item));
-        _connectionManager.ItemRemoved += handle => UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
+        _connectionManager.ItemAdded += item =>
+        {
+            UiThread.Run(() => _monitoredItemsView.AddItem(item));
+            _configService.MarkDirty();
+            UiThread.Run(UpdateWindowTitle);
+        };
+        _connectionManager.ItemRemoved += handle =>
+        {
+            UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
+            _configService.MarkDirty();
+            UiThread.Run(UpdateWindowTitle);
+        };
+
+        // Wire up configuration service events
+        _configService.UnsavedChangesStateChanged += _ => UiThread.Run(UpdateWindowTitle);
         // Override global "Menu" ColorScheme BEFORE creating any views
         // This prevents StatusBar's blue background flash on first render
         var theme = ThemeManager.Current;
@@ -254,12 +278,20 @@ public class MainWindow : Toplevel
             {
                 new MenuBarItem("_File", new MenuItem[]
                 {
-                    new MenuItem("_Export to CSV...", "", ExportToCsv),
+                    new MenuItem("_New Config", "", NewConfig, shortcutKey: Key.N.WithCtrl),
+                    new MenuItem("_Open Config...", "", OpenConfig, shortcutKey: Key.O.WithCtrl),
                     null!, // Separator
-                    new MenuItem("Start _Recording...", "", () => OnRecordRequested()),
+                    new MenuItem("_Save Config", "", SaveConfig, shortcutKey: Key.S.WithCtrl),
+                    new MenuItem("Save Config _As...", "", SaveConfigAs, shortcutKey: Key.S.WithCtrl.WithShift),
+                    null!, // Separator
+                    new MenuBarItem("_Recent Configs", BuildRecentConfigsMenu()),
+                    null!, // Separator
+                    new MenuItem("_Export to CSV...", "", ExportToCsv, shortcutKey: Key.E.WithCtrl),
+                    null!, // Separator
+                    new MenuItem("Start _Recording...", "", () => OnRecordRequested(), shortcutKey: Key.R.WithCtrl),
                     new MenuItem("Sto_p Recording", "", () => OnStopRecordingRequested()),
                     null!, // Separator
-                    new MenuItem("E_xit", "", () => RequestStop())
+                    new MenuItem("E_xit", "", () => RequestStop(), shortcutKey: Key.Q.WithCtrl)
                 }),
                 new MenuBarItem("_Connection", new MenuItem[]
                 {
@@ -781,6 +813,10 @@ public class MainWindow : Toplevel
         {
             _connectionManager.SubscriptionManager.PublishingInterval = dialog.PublishingInterval;
             _logger.Info($"Publishing interval changed to {dialog.PublishingInterval}ms");
+
+            // Mark configuration as having unsaved changes
+            _configService.MarkDirty();
+            UpdateWindowTitle();
         }
     }
 
@@ -1082,6 +1118,379 @@ License: MIT
 ";
         MessageBox.Query("About OPC Scope", about, "OK");
     }
+
+    #region Configuration File Handling
+
+    /// <summary>
+    /// Builds the Recent Configs submenu dynamically.
+    /// </summary>
+    private MenuItem[] BuildRecentConfigsMenu()
+    {
+        var existingFiles = _recentFiles.GetExistingFiles();
+
+        if (existingFiles.Count == 0)
+        {
+            return new MenuItem[]
+            {
+                new MenuItem("(No recent files)", "", null) { CanExecute = () => false }
+            };
+        }
+
+        var menuItems = new List<MenuItem>();
+
+        foreach (var filePath in existingFiles.Take(10))
+        {
+            var displayName = TruncatePathForMenu(filePath);
+            var path = filePath; // Capture for closure
+            menuItems.Add(new MenuItem(displayName, path, () => LoadConfigurationAsync(path).FireAndForget(_logger)));
+        }
+
+        menuItems.Add(null!); // Separator
+        menuItems.Add(new MenuItem("Clear Recent", "", () =>
+        {
+            _recentFiles.Clear();
+            RebuildMenuBar();
+        }));
+
+        return menuItems.ToArray();
+    }
+
+    /// <summary>
+    /// Truncates a file path for display in menu items.
+    /// Shows only filename if short, or uses ellipsis for long paths.
+    /// </summary>
+    private string TruncatePathForMenu(string filePath, int maxLength = 50)
+    {
+        var fileName = Path.GetFileName(filePath);
+        
+        // If just the filename fits comfortably, use it
+        if (fileName.Length <= maxLength)
+        {
+            return fileName;
+        }
+        
+        // Otherwise, truncate the filename itself
+        return fileName.Length > maxLength 
+            ? fileName.Substring(0, maxLength - 3) + "..." 
+            : fileName;
+    }
+
+    /// <summary>
+    /// Rebuilds the menu bar to refresh dynamic menus (like Recent Configs).
+    /// </summary>
+    private void RebuildMenuBar()
+    {
+        // Capture current position (if any) before removing the existing menu bar
+        int x = 0;
+        int y = 0;
+
+        if (_menuBar != null)
+        {
+            x = _menuBar.X;
+            y = _menuBar.Y;
+
+            // Remove and dispose the old menu bar to avoid leaks and stale references
+            Remove(_menuBar);
+            _menuBar.Dispose();
+        }
+
+        var newMenuBar = CreateMenuBar();
+
+        // Restore position
+        newMenuBar.X = x;
+        newMenuBar.Y = y;
+
+        // Apply theme
+        var theme = ThemeManager.Current;
+        ThemeStyler.ApplyToMenuBar(newMenuBar, theme);
+
+        Add(newMenuBar);
+
+        // Update field to reference the new menu bar instance
+        _menuBar = newMenuBar;
+
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Creates a new configuration, prompting to save changes if necessary.
+    /// </summary>
+    private void NewConfig()
+    {
+        if (_configService.HasUnsavedChanges && !ConfirmDiscardChanges())
+            return;
+
+        // Stop recording if active
+        if (_csvRecordingManager.IsRecording)
+        {
+            OnStopRecordingRequested();
+        }
+
+        // Disconnect from current server
+        if (_connectionManager.IsConnected)
+        {
+            _connectionManager.Disconnect();
+        }
+
+        // Clear views
+        _addressSpaceView.Clear();
+        _monitoredItemsView.Clear();
+        _nodeDetailsView.Clear();
+
+        // Reset configuration state
+        _configService.Reset();
+        _currentMetadata = null;
+        UpdateWindowTitle();
+
+        _logger.Info("New configuration created");
+    }
+
+    /// <summary>
+    /// Opens a configuration file, prompting to save changes if necessary.
+    /// </summary>
+    private void OpenConfig()
+    {
+        if (_configService.HasUnsavedChanges && !ConfirmDiscardChanges())
+            return;
+
+        using var dialog = new OpenDialog
+        {
+            Title = "Open Configuration",
+            AllowedTypes = new List<IAllowedType>
+            {
+                new AllowedType("OpcScope Config", ".opcscope"),
+                new AllowedType("JSON Files", ".json")
+            }
+        };
+
+        Application.Run(dialog);
+
+        if (!dialog.Canceled && dialog.Path != null)
+        {
+            LoadConfigurationAsync(dialog.Path.ToString()!).FireAndForget(_logger);
+        }
+    }
+
+    /// <summary>
+    /// Saves the current configuration to the current file path.
+    /// </summary>
+    private void SaveConfig()
+    {
+        if (string.IsNullOrEmpty(_configService.CurrentFilePath))
+        {
+            SaveConfigAs();
+            return;
+        }
+
+        SaveConfigurationAsync(_configService.CurrentFilePath).FireAndForget(_logger);
+    }
+
+    /// <summary>
+    /// Saves the current configuration to a new file path.
+    /// </summary>
+    private void SaveConfigAs()
+    {
+        using var dialog = new SaveDialog
+        {
+            Title = "Save Configuration",
+            AllowedTypes = new List<IAllowedType>
+            {
+                new AllowedType("OpcScope Config", ".opcscope")
+            }
+        };
+
+        Application.Run(dialog);
+
+        if (!dialog.Canceled && dialog.Path != null)
+        {
+            var filePath = dialog.Path.ToString()!;
+            if (!filePath.EndsWith(".opcscope", StringComparison.OrdinalIgnoreCase))
+                filePath += ".opcscope";
+
+            SaveConfigurationAsync(filePath).FireAndForget(_logger);
+        }
+    }
+
+    /// <summary>
+    /// Loads a configuration from the specified file path.
+    /// </summary>
+    private async Task LoadConfigurationAsync(string filePath)
+    {
+        try
+        {
+            ShowActivity("Loading configuration...");
+            _logger.Info($"Loading configuration from {filePath}...");
+
+            var config = await _configService.LoadAsync(filePath);
+
+            // Store metadata
+            _currentMetadata = config.Metadata;
+
+            // Connect to server and subscribe to nodes
+            if (!string.IsNullOrEmpty(config.Server.EndpointUrl))
+            {
+                var connected = await _connectionManager.ConnectAsync(config.Server.EndpointUrl);
+
+                if (connected)
+                {
+                    // Only after successful connection, disconnect old and clear views
+                    _addressSpaceView.Clear();
+                    _monitoredItemsView.Clear();
+                    _nodeDetailsView.Clear();
+                    
+                    _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+
+                    // Apply publishing interval to the newly created subscription manager
+                    if (_connectionManager.SubscriptionManager != null)
+                    {
+                        _connectionManager.SubscriptionManager.PublishingInterval = config.Settings.PublishingIntervalMs;
+                    }
+
+                    // Subscribe to saved nodes
+                    foreach (var node in config.MonitoredNodes.Where(n => n.Enabled))
+                    {
+                        try
+                        {
+                            var nodeId = Opc.Ua.NodeId.Parse(node.NodeId);
+                            await _connectionManager.SubscribeAsync(nodeId, node.DisplayName);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Warning($"Failed to subscribe to {node.DisplayName}: {ex.Message}");
+                        }
+                    }
+
+                    _recentFiles.Add(filePath);
+                    UpdateWindowTitle();
+
+                    var nodeCount = config.MonitoredNodes.Count(n => n.Enabled);
+                    _logger.Info($"Configuration loaded: {nodeCount} nodes");
+                }
+                else
+                {
+                    _logger.Error($"Failed to connect to {config.Server.EndpointUrl}");
+                    MessageBox.ErrorQuery("Connection Failed", 
+                        $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection and data have been preserved.", 
+                        "OK");
+                }
+            }
+            else
+            {
+                // No endpoint URL, just clear views and apply settings
+                if (_connectionManager.IsConnected)
+                {
+                    _connectionManager.Disconnect();
+                }
+                
+                _addressSpaceView.Clear();
+                _monitoredItemsView.Clear();
+                _nodeDetailsView.Clear();
+                
+                _recentFiles.Add(filePath);
+                UpdateWindowTitle();
+                _logger.Info("Configuration loaded (no server connection)");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to load configuration: {ex.Message}");
+            MessageBox.ErrorQuery("Error", $"Failed to load configuration:\n{ex.Message}", "OK");
+        }
+        finally
+        {
+            UiThread.Run(HideActivity);
+        }
+    }
+
+    /// <summary>
+    /// Saves the current configuration to the specified file path.
+    /// </summary>
+    private async Task SaveConfigurationAsync(string filePath)
+    {
+        try
+        {
+            ShowActivity("Saving configuration...");
+
+            var monitoredItems = _connectionManager.SubscriptionManager?.MonitoredItems
+                ?? Enumerable.Empty<MonitoredNode>();
+
+            var config = _configService.CaptureCurrentState(
+                _connectionManager.CurrentEndpoint,
+                _connectionManager.SubscriptionManager?.PublishingInterval ?? 1000,
+                monitoredItems,
+                _currentMetadata
+            );
+
+            // Update metadata name from filename if not set
+            if (string.IsNullOrEmpty(config.Metadata.Name))
+            {
+                config.Metadata.Name = Path.GetFileNameWithoutExtension(filePath);
+            }
+
+            await _configService.SaveAsync(config, filePath);
+
+            _currentMetadata = config.Metadata;
+            _recentFiles.Add(filePath);
+            RebuildMenuBar();
+            UpdateWindowTitle();
+
+            _logger.Info($"Configuration saved to {filePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to save configuration: {ex.Message}");
+            MessageBox.ErrorQuery("Error", $"Failed to save:\n{ex.Message}", "OK");
+        }
+        finally
+        {
+            UiThread.Run(HideActivity);
+        }
+    }
+
+    /// <summary>
+    /// Updates the window title to reflect the current configuration state.
+    /// </summary>
+    private void UpdateWindowTitle()
+    {
+        var configName = _configService.GetDisplayName();
+        var unsavedMarker = _configService.HasUnsavedChanges ? "*" : "";
+
+        Title = string.IsNullOrEmpty(_configService.CurrentFilePath) && !_configService.HasUnsavedChanges
+            ? "OPC Scope"
+            : $"OPC Scope - {configName}{unsavedMarker}";
+
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Prompts the user to confirm discarding unsaved changes.
+    /// </summary>
+    /// <returns>True if the user confirms, false to cancel the operation.</returns>
+    private bool ConfirmDiscardChanges()
+    {
+        var result = MessageBox.Query(
+            "Unsaved Changes",
+            "You have unsaved changes. Do you want to discard them?",
+            "Discard",
+            "Cancel");
+
+        return result == 0; // Discard
+    }
+
+    /// <summary>
+    /// Loads a configuration file from the command line argument.
+    /// </summary>
+    /// <param name="configPath">Path to the configuration file.</param>
+    public void LoadConfigFromCommandLine(string configPath)
+    {
+        Application.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
+        {
+            LoadConfigurationAsync(configPath).FireAndForget(_logger);
+            return false;
+        });
+    }
+
+    #endregion
 
     protected override void Dispose(bool disposing)
     {
