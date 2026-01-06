@@ -159,6 +159,22 @@ Available test nodes:
 - `Version` - String ("1.0.0")
 - `ArrayOfInts` - Int32[] ([1, 2, 3, 4, 5])
 
+## Technical Notes
+
+### Thread Safety
+OPC Foundation callbacks arrive on background threads. All UI updates are marshalled to the UI thread via `Application.Invoke()`.
+
+### Lazy Loading
+The address space tree uses lazy loading - child nodes are only fetched when a parent is expanded, preventing memory issues with large address spaces.
+
+### OPC UA Subscriptions
+Uses proper OPC UA Publish/Subscribe with `MonitoredItem.Notification` events - values are pushed by the server, no polling required.
+
+### Error Handling
+- Connection errors display in the log panel without crashing
+- Automatic reconnection with exponential backoff (1s, 2s, 4s, 8s)
+- Graceful handling of bad node IDs and access denied errors
+
 ## Common Issues
 
 1. **NuGet restore fails**: Use local package source or `scripts/download-packages.sh`
