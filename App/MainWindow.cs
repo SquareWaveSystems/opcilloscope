@@ -199,24 +199,34 @@ public class MainWindow : Toplevel
 
     private async Task RunStartupSequenceAsync()
     {
-        // Show initializing message
+        var theme = ThemeManager.Current;
+
+        // Show initializing message in accent color
         UiThread.Run(() =>
         {
             Title = "OPC Scope";
-            _connectionStatusLabel.Text = " INITIALIZING.. ";
+            _connectionStatusLabel.Text = " ■ INITIALIZING... ";
+            _connectionStatusLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background)
+            };
             SetNeedsLayout();
         });
 
-        await Task.Delay(800);
+        await Task.Delay(2000);
 
-        // Show nominal message
+        // Show nominal message in bright/success style
         UiThread.Run(() =>
         {
-            _connectionStatusLabel.Text = " All systems nominal. ";
+            _connectionStatusLabel.Text = " ■ All systems nominal. ";
+            _connectionStatusLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.StatusGood, theme.Background)
+            };
             SetNeedsLayout();
         });
 
-        await Task.Delay(600);
+        await Task.Delay(1700);
 
         // Show normal disconnected state and log startup
         UiThread.Run(() =>
