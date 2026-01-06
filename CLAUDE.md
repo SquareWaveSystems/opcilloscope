@@ -47,7 +47,7 @@ The project uses a **dual-source NuGet configuration** that works in both CI and
 dotnet build
 
 # Run (from repo root)
-dotnet run --project src/OpcScope
+dotnet run
 
 # Run tests
 dotnet test
@@ -57,31 +57,30 @@ dotnet test
 
 ```
 OpcScope/
+├── OpcScope.csproj                 # Main application project
+├── Program.cs                      # Application entry point
+├── App/
+│   ├── MainWindow.cs               # Main UI layout with panels
+│   ├── Views/                      # UI view components
+│   │   ├── AddressSpaceView.cs     # TreeView for OPC UA nodes
+│   │   ├── MonitoredItemsView.cs   # TableView for subscribed items
+│   │   ├── NodeDetailsView.cs      # Node attribute display
+│   │   └── LogView.cs              # Application log display
+│   └── Dialogs/                    # Modal dialogs
+│       ├── ConnectDialog.cs
+│       ├── WriteValueDialog.cs
+│       └── SettingsDialog.cs
+├── OpcUa/
+│   ├── OpcUaClientWrapper.cs       # OPC Foundation Session wrapper
+│   ├── NodeBrowser.cs              # Address space navigation
+│   ├── SubscriptionManager.cs      # OPC UA Subscription with Publish/Subscribe
+│   └── Models/
+│       ├── BrowsedNode.cs          # Address space node model
+│       └── MonitoredNode.cs        # Monitored item model
+├── Utilities/
+│   ├── Logger.cs                   # In-app logging
+│   └── UiThread.cs                 # Thread marshalling for UI
 ├── src/
-│   ├── OpcScope/                   # Main application
-│   │   ├── App/
-│   │   │   ├── MainWindow.cs       # Main UI layout with panels
-│   │   │   ├── Views/              # UI view components
-│   │   │   │   ├── AddressSpaceView.cs # TreeView for OPC UA nodes
-│   │   │   │   ├── MonitoredItemsView.cs # TableView for subscribed items
-│   │   │   │   ├── NodeDetailsView.cs  # Node attribute display
-│   │   │   │   └── LogView.cs      # Application log display
-│   │   │   └── Dialogs/            # Modal dialogs
-│   │   │       ├── ConnectDialog.cs
-│   │   │       ├── WriteValueDialog.cs
-│   │   │       └── SettingsDialog.cs
-│   │   ├── OpcUa/
-│   │   │   ├── OpcUaClientWrapper.cs   # OPC Foundation Session wrapper
-│   │   │   ├── NodeBrowser.cs      # Address space navigation
-│   │   │   ├── SubscriptionManager.cs  # OPC UA Subscription with Publish/Subscribe
-│   │   │   └── Models/
-│   │   │       ├── BrowsedNode.cs  # Address space node model
-│   │   │       └── MonitoredNode.cs # Monitored item model
-│   │   ├── Utilities/
-│   │   │   ├── Logger.cs           # In-app logging
-│   │   │   └── UiThread.cs         # Thread marshalling for UI
-│   │   ├── Program.cs              # Application entry point
-│   │   └── OpcScope.csproj
 │   └── OpcScope.TestServer/        # In-process test server library
 ├── tests/
 │   └── OpcScope.Tests/             # Unit and integration tests (xunit)

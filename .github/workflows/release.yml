@@ -48,7 +48,7 @@ jobs:
 
       - name: Publish
         run: |
-          dotnet publish src/OpcScope/OpcScope.csproj -c Release -r ${{ matrix.rid }} -o ./publish
+          dotnet publish OpcScope.csproj -c Release -r ${{ matrix.rid }} -o ./publish
 
       - name: Create archive (Linux/macOS)
         if: runner.os != 'Windows'

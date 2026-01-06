@@ -1,2 +1,2 @@
 @echo off
-dotnet run --project src/OpcScope %*
+dotnet run %*
