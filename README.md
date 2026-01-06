@@ -66,6 +66,25 @@ dotnet build
 dotnet run
 ```
 
+### NuGet Package Restore
+
+The project uses a dual-source NuGet configuration that works in both CI and restricted network environments:
+
+- **nuget.org** (primary) - Used by default when network access is available
+- **Local packages** (fallback) - Used when nuget.org is inaccessible
+
+**If `dotnet restore` fails due to proxy/network issues:**
+
+```bash
+# Download packages using curl (handles proxies better than .NET HttpClient)
+./scripts/download-packages.sh
+
+# Then restore will use the local packages as fallback
+dotnet restore
+```
+
+This setup ensures builds work in GitHub Actions CI (uses nuget.org) and in restricted environments like corporate proxies (uses local packages).
+
 ### Command Line Options
 
 ```bash
