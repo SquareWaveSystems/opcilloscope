@@ -150,8 +150,9 @@ public class SubscriptionManager : IDisposable
             _logger.Info($"Subscribed to {displayName}");
             ItemAdded?.Invoke(item);
 
-            // Read initial value
+            // Read initial value and node attributes (AccessLevel, DataType)
             await ReadInitialValueAsync(item);
+            await ReadNodeAttributesAsync(item);
 
             return item;
         }
@@ -208,6 +209,73 @@ public class SubscriptionManager : IDisposable
         {
             _logger.Warning($"Failed to read initial value for {item.DisplayName}: {ex.Message}");
         }
+    }
+
+    private async Task ReadNodeAttributesAsync(MonitoredNode item)
+    {
+        try
+        {
+            // Read AccessLevel and DataType attributes
+            var results = await _clientWrapper.ReadAttributesAsync(
+                item.NodeId,
+                Attributes.AccessLevel,
+                Attributes.DataType);
+
+            if (results.Count >= 2)
+            {
+                // AccessLevel
+                if (StatusCode.IsGood(results[0].StatusCode) && results[0].Value is byte accessLevel)
+                {
+                    item.AccessLevel = accessLevel;
+                }
+
+                // DataType - this is a NodeId that we need to resolve
+                if (StatusCode.IsGood(results[1].StatusCode) && results[1].Value is NodeId dataTypeNodeId)
+                {
+                    var (builtInType, typeName) = ResolveDataType(dataTypeNodeId);
+                    item.DataType = builtInType;
+                    item.DataTypeName = typeName;
+                }
+            }
+
+            // Notify UI about updated attributes
+            ValueChanged?.Invoke(item);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Failed to read attributes for {item.DisplayName}: {ex.Message}");
+        }
+    }
+
+    private (BuiltInType, string) ResolveDataType(NodeId dataTypeNodeId)
+    {
+        // Map common OPC UA data type NodeIds to BuiltInType
+        // Standard data types are in namespace 0 with numeric identifiers
+        if (dataTypeNodeId.NamespaceIndex == 0 && dataTypeNodeId.IdType == IdType.Numeric)
+        {
+            var id = (uint)dataTypeNodeId.Identifier;
+            return id switch
+            {
+                (uint)BuiltInType.Boolean => (BuiltInType.Boolean, "Boolean"),
+                (uint)BuiltInType.SByte => (BuiltInType.SByte, "SByte"),
+                (uint)BuiltInType.Byte => (BuiltInType.Byte, "Byte"),
+                (uint)BuiltInType.Int16 => (BuiltInType.Int16, "Int16"),
+                (uint)BuiltInType.UInt16 => (BuiltInType.UInt16, "UInt16"),
+                (uint)BuiltInType.Int32 => (BuiltInType.Int32, "Int32"),
+                (uint)BuiltInType.UInt32 => (BuiltInType.UInt32, "UInt32"),
+                (uint)BuiltInType.Int64 => (BuiltInType.Int64, "Int64"),
+                (uint)BuiltInType.UInt64 => (BuiltInType.UInt64, "UInt64"),
+                (uint)BuiltInType.Float => (BuiltInType.Float, "Float"),
+                (uint)BuiltInType.Double => (BuiltInType.Double, "Double"),
+                (uint)BuiltInType.String => (BuiltInType.String, "String"),
+                (uint)BuiltInType.DateTime => (BuiltInType.DateTime, "DateTime"),
+                (uint)BuiltInType.Guid => (BuiltInType.Guid, "Guid"),
+                (uint)BuiltInType.ByteString => (BuiltInType.ByteString, "ByteString"),
+                _ => (BuiltInType.Variant, dataTypeNodeId.ToString())
+            };
+        }
+
+        return (BuiltInType.Variant, dataTypeNodeId.ToString());
     }
 
     public async Task<bool> RemoveNodeAsync(uint clientHandle)

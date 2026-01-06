@@ -28,6 +28,7 @@ public class MonitoredItemsView : FrameView
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
+    public event Action<MonitoredNode>? WriteRequested;
     public event Action? RecordRequested;
     public event Action? StopRecordingRequested;
 
@@ -78,6 +79,7 @@ public class MonitoredItemsView : FrameView
 
         _dataTable = new DataTable();
         _dataTable.Columns.Add("Name", typeof(string));
+        _dataTable.Columns.Add("Access", typeof(string));
         _dataTable.Columns.Add("Value", typeof(string));
         _dataTable.Columns.Add("Time", typeof(string));
         _dataTable.Columns.Add("Status", typeof(string));
@@ -101,6 +103,7 @@ public class MonitoredItemsView : FrameView
         _tableView.Style.ShowVerticalCellLines = false;
         _tableView.Style.ShowVerticalHeaderLines = false;
         _tableView.Style.ExpandLastColumn = true;
+
 
         _tableView.KeyDown += HandleKeyDown;
 
@@ -146,6 +149,7 @@ public class MonitoredItemsView : FrameView
 
         var row = _dataTable.NewRow();
         row["Name"] = item.DisplayName;
+        row["Access"] = item.AccessString;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
         row["Status"] = item.StatusString;
@@ -162,6 +166,7 @@ public class MonitoredItemsView : FrameView
         if (!_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
             return;
 
+        row["Access"] = item.AccessString;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
         row["Status"] = item.StatusString;
@@ -204,6 +209,15 @@ public class MonitoredItemsView : FrameView
             if (selected != null)
             {
                 TrendPlotRequested?.Invoke(selected);
+                e.Handled = true;
+            }
+        }
+        else if (e == Key.W)
+        {
+            var selected = SelectedItem;
+            if (selected != null)
+            {
+                WriteRequested?.Invoke(selected);
                 e.Handled = true;
             }
         }

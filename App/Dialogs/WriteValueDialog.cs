@@ -1,78 +1,142 @@
 using Terminal.Gui;
+using Opc.Ua;
 using OpcScope.App.Themes;
+using OpcScope.Utilities;
 using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Dialogs;
 
 /// <summary>
 /// Dialog for writing a value to an OPC UA node.
-/// Uses Terminal.Gui v2 styling with theme support.
+/// Features real-time validation, NodeId display, and theme support.
 /// </summary>
 public class WriteValueDialog : Dialog
 {
     private readonly TextField _valueField;
-    private readonly string _dataType;
+    private readonly Label _errorLabel;
+    private readonly BuiltInType _dataType;
     private bool _confirmed;
     private object? _parsedValue;
 
     public bool Confirmed => _confirmed;
     public object? ParsedValue => _parsedValue;
 
-    public WriteValueDialog(string nodeName, string? dataType, string? currentValue)
+    public WriteValueDialog(NodeId nodeId, string nodeName, BuiltInType dataType, string dataTypeName, string? currentValue)
     {
         var theme = AppThemeManager.Current;
+        _dataType = dataType;
 
         Title = " Write Value ";
-        Width = 50;
-        Height = 12;
-        _dataType = dataType ?? "String";
+        Width = 60;
+        Height = 14;
 
         // Apply theme styling
         ColorScheme = theme.DialogColorScheme;
         BorderStyle = theme.BorderLineStyle;
 
-        var nodeLabel = new Label
+        // Node information section (read-only)
+        var nodeIdLabel = new Label
         {
             X = 1,
             Y = 1,
-            Text = $"Node: {nodeName}"
+            Text = "NodeId:"
+        };
+
+        var nodeIdValue = new Label
+        {
+            X = Pos.Right(nodeIdLabel) + 1,
+            Y = Pos.Top(nodeIdLabel),
+            Width = Dim.Fill()! - 1,
+            Text = nodeId.ToString()
+        };
+
+        var nameLabel = new Label
+        {
+            X = 1,
+            Y = Pos.Bottom(nodeIdLabel),
+            Text = "Name:"
+        };
+
+        var nameValue = new Label
+        {
+            X = Pos.Right(nameLabel) + 3,
+            Y = Pos.Top(nameLabel),
+            Width = Dim.Fill()! - 1,
+            Text = nodeName
         };
 
         var typeLabel = new Label
         {
             X = 1,
-            Y = 2,
-            Text = $"Type: {_dataType}"
+            Y = Pos.Bottom(nameLabel),
+            Text = "Type:"
+        };
+
+        var typeValue = new Label
+        {
+            X = Pos.Right(typeLabel) + 3,
+            Y = Pos.Top(typeLabel),
+            Text = dataTypeName
         };
 
         var currentLabel = new Label
         {
             X = 1,
-            Y = 3,
-            Text = $"Current: {currentValue ?? "N/A"}"
+            Y = Pos.Bottom(typeLabel),
+            Text = "Current:"
         };
 
-        var valueLabel = new Label
+        var currentValueLabel = new Label
+        {
+            X = Pos.Right(currentLabel) + 1,
+            Y = Pos.Top(currentLabel),
+            Width = Dim.Fill()! - 1,
+            Text = currentValue ?? "(null)"
+        };
+
+        // Input section
+        var newValueLabel = new Label
         {
             X = 1,
-            Y = 5,
-            Text = "New Value:"
+            Y = Pos.Bottom(currentLabel) + 1,
+            Text = $"New Value ({OpcValueConverter.GetInputHint(dataType)}):"
         };
 
         _valueField = new TextField
         {
             X = 1,
-            Y = 6,
-            Width = Dim.Fill(1),
+            Y = Pos.Bottom(newValueLabel),
+            Width = Dim.Fill()! - 1,
             Text = currentValue ?? ""
         };
 
+        // Error display label
+        _errorLabel = new Label
+        {
+            X = 1,
+            Y = Pos.Bottom(_valueField),
+            Width = Dim.Fill()! - 1,
+            Text = "",
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(Color.Red, theme.Background)
+            }
+        };
+
+        // Real-time validation on text change
+        _valueField.TextChanged += (_, _) => ValidateInput();
+
+        // Buttons using Dialog's AddButton pattern
         var writeButton = new Button
         {
-            X = Pos.Center() - 10,
-            Y = 8,
             Text = $"{theme.ButtonPrefix}Write{theme.ButtonSuffix}",
             IsDefault = true,
+            ColorScheme = theme.ButtonColorScheme
+        };
+
+        var cancelButton = new Button
+        {
+            Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
             ColorScheme = theme.ButtonColorScheme
         };
 
@@ -80,26 +144,9 @@ public class WriteValueDialog : Dialog
         {
             if (ValidateAndParse())
             {
-                var result = MessageBox.Query(
-                    "Confirm Write",
-                    $"Write '{_valueField.Text}' to {nodeName}?",
-                    "Yes", "No"
-                );
-
-                if (result == 0)
-                {
-                    _confirmed = true;
-                    Application.RequestStop();
-                }
+                _confirmed = true;
+                Application.RequestStop();
             }
-        };
-
-        var cancelButton = new Button
-        {
-            X = Pos.Center() + 4,
-            Y = 8,
-            Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
-            ColorScheme = theme.ButtonColorScheme
         };
 
         cancelButton.Accepting += (_, _) =>
@@ -108,41 +155,70 @@ public class WriteValueDialog : Dialog
             Application.RequestStop();
         };
 
-        Add(nodeLabel, typeLabel, currentLabel, valueLabel, _valueField, writeButton, cancelButton);
+        // Add all controls
+        Add(nodeIdLabel, nodeIdValue);
+        Add(nameLabel, nameValue);
+        Add(typeLabel, typeValue);
+        Add(currentLabel, currentValueLabel);
+        Add(newValueLabel, _valueField);
+        Add(_errorLabel);
+        AddButton(cancelButton);
+        AddButton(writeButton);
 
         _valueField.SetFocus();
+
+        // Initial validation
+        ValidateInput();
+    }
+
+    private void ValidateInput()
+    {
+        var text = _valueField.Text?.Trim() ?? "";
+
+        if (string.IsNullOrEmpty(text))
+        {
+            _errorLabel.Text = "";
+            return;
+        }
+
+        var (success, _, error) = OpcValueConverter.TryConvert(text, _dataType);
+
+        if (!success)
+        {
+            _errorLabel.Text = error ?? "Invalid value";
+        }
+        else
+        {
+            _errorLabel.Text = "";
+        }
     }
 
     private bool ValidateAndParse()
     {
         var text = _valueField.Text?.Trim() ?? "";
 
-        try
+        if (string.IsNullOrEmpty(text))
         {
-            _parsedValue = _dataType.ToLower() switch
-            {
-                "boolean" or "bool" => bool.Parse(text),
-                "sbyte" => sbyte.Parse(text),
-                "byte" => byte.Parse(text),
-                "int16" => short.Parse(text),
-                "uint16" => ushort.Parse(text),
-                "int32" => int.Parse(text),
-                "uint32" => uint.Parse(text),
-                "int64" => long.Parse(text),
-                "uint64" => ulong.Parse(text),
-                "float" => float.Parse(text),
-                "double" => double.Parse(text),
-                "string" => text,
-                "datetime" => DateTime.Parse(text),
-                _ => text // Default to string
-            };
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            MessageBox.ErrorQuery("Parse Error", $"Cannot parse '{text}' as {_dataType}: {ex.Message}", "OK");
+            _errorLabel.Text = "Value cannot be empty";
             return false;
         }
+
+        // Check if write is supported for this data type
+        if (!OpcValueConverter.IsWriteSupported(_dataType))
+        {
+            MessageBox.ErrorQuery("Write Error", $"Write not supported for data type: {_dataType}", "OK");
+            return false;
+        }
+
+        var (success, value, error) = OpcValueConverter.TryConvert(text, _dataType);
+
+        if (!success)
+        {
+            _errorLabel.Text = error ?? "Invalid value";
+            return false;
+        }
+
+        _parsedValue = value;
+        return true;
     }
 }
