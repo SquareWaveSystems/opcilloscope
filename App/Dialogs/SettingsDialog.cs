@@ -25,9 +25,13 @@ public class SettingsDialog : Dialog
         Height = 10;
         PublishingInterval = currentInterval;
 
-        // Apply theme styling
+        // Apply theme styling - double-line border for emphasis with grey border color
         ColorScheme = theme.DialogColorScheme;
-        BorderStyle = theme.BorderLineStyle;
+        BorderStyle = LineStyle.Double;
+        if (Border != null)
+        {
+            Border.ColorScheme = theme.BorderColorScheme;
+        }
 
         var intervalLabel = new Label
         {
@@ -53,13 +57,23 @@ public class SettingsDialog : Dialog
             ColorScheme = theme.MainColorScheme
         };
 
+        // Default button highlighted with amber
+        var defaultButtonScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+
         var applyButton = new Button
         {
             X = Pos.Center() - 10,
             Y = 6,
             Text = $"{theme.ButtonPrefix}Apply{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = theme.ButtonColorScheme
+            ColorScheme = defaultButtonScheme
         };
 
         applyButton.Accepting += (_, _) =>

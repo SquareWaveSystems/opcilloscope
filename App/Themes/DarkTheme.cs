@@ -4,39 +4,49 @@ using Attribute = Terminal.Gui.Attribute;
 namespace OpcScope.App.Themes;
 
 /// <summary>
-/// Dark theme with clean, minimal appearance.
-/// Neutral dark background with light text and tasteful color accents.
+/// Dark theme with retro CRT aesthetic.
+/// Inspired by Severance (Lumon) and Aliens terminal displays.
 /// </summary>
 public class DarkTheme : RetroTheme
 {
     public override string Name => "Dark";
-    public override string Description => "Dark theme";
+    public override string Description => "Retro CRT dark theme";
 
-    // Use single-line borders for clean look
-    public override LineStyle BorderLineStyle => LineStyle.Single;
+    // Main window uses double-line for emphasis, frames use single
+    public override LineStyle BorderLineStyle => LineStyle.Double;
     public override LineStyle FrameLineStyle => LineStyle.Single;
+    public override LineStyle EmphasizedBorderStyle => LineStyle.Double;
+    public override LineStyle SecondaryBorderStyle => LineStyle.Single;
 
-    // Neutral dark background - slightly warm charcoal
-    public override Color Background => new(30, 32, 36);
+    // Background per spec: #1a1a1a charcoal
+    public override Color Background => new(26, 26, 26);
 
-    // Light text for high contrast
-    public override Color Foreground => new(220, 222, 225);      // Off-white
-    public override Color ForegroundBright => new(245, 246, 248); // Near-white
-    public override Color ForegroundDim => new(130, 135, 140);    // Mid grey
+    // Text per spec: #d4d4c8 warm off-white with slight amber tint
+    public override Color Foreground => new(212, 212, 200);
+    public override Color ForegroundBright => new(240, 240, 230);
+    public override Color ForegroundDim => new(128, 128, 128);    // #808080 secondary text
 
-    // Deep CRT retro orange accent for highlights
-    public override Color Accent => new(204, 102, 0);             // Deep amber/orange
-    public override Color AccentBright => new(255, 140, 26);      // Brighter CRT orange
+    // Accent per spec: #cc7832 dull CRT amber/orange - the signature color
+    public override Color Accent => new(204, 120, 50);
+    public override Color AccentBright => new(230, 140, 60);
 
-    // Subtle borders that don't compete
-    public override Color Border => new(70, 75, 82);              // Dark grey
-    public override Color Grid => new(50, 54, 60);                // Very dark grid
+    // Border per spec: #404040 understated
+    public override Color Border => new(64, 64, 64);
+    public override Color Grid => new(50, 50, 50);
 
     // Status colors - visible on dark background
-    public override Color StatusActive => new(80, 200, 140);      // Soft green
-    public override Color StatusInactive => new(100, 105, 115);   // Grey
-    public override Color Error => new(230, 90, 90);              // Soft red
-    public override Color Warning => new(230, 180, 80);           // Warm amber
+    public override Color StatusActive => new(93, 138, 93);       // #5d8a5d muted sage green
+    public override Color StatusInactive => new(110, 110, 110);   // #6e6e6e grey
+    public override Color Error => new(166, 84, 84);              // #a65454 dusty brick red
+    public override Color Warning => new(201, 162, 39);           // #c9a227 mustard yellow
+
+    // OPC UA Status Colors per spec
+    public override Color StatusGood => new(93, 138, 93);         // #5d8a5d muted sage green
+    public override Color StatusBad => new(166, 84, 84);          // #a65454 dusty brick red
+    public override Color StatusUncertain => new(204, 120, 50);   // #cc7832 amber (same as accent)
+
+    // Muted text for timestamps, attribution
+    public override Color MutedText => new(128, 128, 128);        // #808080
 
     // Single-line box drawing for clean look
     public override char BoxTopLeft => '┌';
@@ -65,16 +75,16 @@ public class DarkTheme : RetroTheme
     // Enable subtle glow for dark backgrounds
     public override bool EnableGlow => true;
 
-    // Override color schemes for dark display with teal highlights
+    // Override color schemes for dark display with amber highlights
     private ColorScheme? _mainColorScheme;
     private ColorScheme? _menuColorScheme;
 
     public override ColorScheme MainColorScheme => _mainColorScheme ??= new()
     {
         Normal = NormalAttr,
-        Focus = new Attribute(ForegroundBright, new Color(55, 60, 68)),  // Slightly lighter background for focus
+        Focus = new Attribute(ForegroundBright, new Color(45, 45, 45)),  // #2d2d2d panel background
         HotNormal = AccentAttr,
-        HotFocus = new Attribute(AccentBright, new Color(55, 60, 68)),
+        HotFocus = new Attribute(AccentBright, new Color(45, 45, 45)),
         Disabled = new Attribute(StatusInactive, Background)
     };
 

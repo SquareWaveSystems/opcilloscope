@@ -32,6 +32,12 @@ public class MainWindow : Toplevel
     private readonly CsvRecordingManager _csvRecordingManager;
     private object? _recordingStatusTimer;
 
+    // Connecting animation state
+    private object? _connectingAnimationTimer;
+    private int _connectingDotCount = 1;
+    private bool _isConnecting;
+    private bool _isConnected;
+
     private string? _lastEndpoint;
 
     public MainWindow()
@@ -152,9 +158,37 @@ public class MainWindow : Toplevel
         // Apply initial theme (after all controls are created)
         ApplyTheme();
 
-        // Log startup
-        _logger.Info("OPC Scope started - Square Wave Systems");
-        _logger.Info("Press F10 for menu, or use Connection -> Connect");
+        // Run startup sequence
+        _ = RunStartupSequenceAsync();
+    }
+
+    private async Task RunStartupSequenceAsync()
+    {
+        // Show initializing message
+        UiThread.Run(() =>
+        {
+            Title = "OPC Scope - INITIALIZING..";
+            SetNeedsLayout();
+        });
+
+        await Task.Delay(800);
+
+        // Show nominal message
+        UiThread.Run(() =>
+        {
+            Title = "OPC Scope - All systems nominal.";
+            SetNeedsLayout();
+        });
+
+        await Task.Delay(600);
+
+        // Show normal disconnected state and log startup
+        UiThread.Run(() =>
+        {
+            UpdateConnectionStatus(isConnected: false);
+            _logger.Info("OPC Scope started - Square Wave Systems");
+            _logger.Info("Press F10 for menu, or use Connection -> Connect");
+        });
     }
 
     private MenuBar CreateMenuBar()
@@ -209,23 +243,46 @@ public class MainWindow : Toplevel
     {
         var theme = ThemeManager.Current;
 
-        // Apply main window styling
+        // Apply main window styling - double-line for emphasis
         ColorScheme = theme.MainColorScheme;
-        BorderStyle = theme.BorderLineStyle;
+        BorderStyle = theme.EmphasizedBorderStyle;
+
+        // Apply grey border color to main window border (consistent across terminals)
+        if (Border != null)
+        {
+            Border.ColorScheme = theme.BorderColorScheme;
+        }
 
         // Apply styling to company label (subtle in status bar)
         _companyLabel.ColorScheme = new ColorScheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.ForegroundDim, theme.Background)
+            Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
 
-        // Apply styling to menu and status bar
+        // Apply styling to menu bar
         ThemeStyler.ApplyToMenuBar(_menuBar, theme);
-        ThemeStyler.ApplyToStatusBar(_statusBar, theme);
 
-        // Apply to all child views
-        ThemeStyler.ApplyToFrame(_addressSpaceView, theme);
+        // Apply clean status bar styling (no blue background)
+        var cleanStatusBarScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+        _statusBar.ColorScheme = cleanStatusBarScheme;
+
+        // Apply to child views with border differentiation
+        // MonitoredItems gets double-line (emphasized)
+        _monitoredItemsView.BorderStyle = theme.EmphasizedBorderStyle;
         ThemeStyler.ApplyToFrame(_monitoredItemsView, theme);
+
+        // Other panels get single-line (secondary)
+        _addressSpaceView.BorderStyle = theme.SecondaryBorderStyle;
+        _nodeDetailsView.BorderStyle = theme.SecondaryBorderStyle;
+        _logView.BorderStyle = theme.SecondaryBorderStyle;
+        ThemeStyler.ApplyToFrame(_addressSpaceView, theme);
         ThemeStyler.ApplyToFrame(_nodeDetailsView, theme);
         ThemeStyler.ApplyToFrame(_logView, theme);
     }
@@ -257,7 +314,7 @@ public class MainWindow : Toplevel
         // Disconnect if already connected
         Disconnect();
 
-        UpdateConnectionStatus("Connecting...");
+        StartConnectingAnimation();
         ShowActivity("Connecting...");
 
         try
@@ -271,6 +328,7 @@ public class MainWindow : Toplevel
         }
         finally
         {
+            StopConnectingAnimation();
             UiThread.Run(HideActivity);
         }
     }
@@ -296,7 +354,7 @@ public class MainWindow : Toplevel
         _addressSpaceView.Initialize(_nodeBrowser);
 
         // Update status on UI thread
-        UiThread.Run(() => UpdateConnectionStatus($"Connected to {_client.CurrentEndpoint}"));
+        UiThread.Run(() => UpdateConnectionStatus(isConnected: true));
     }
 
     private void Disconnect()
@@ -316,7 +374,7 @@ public class MainWindow : Toplevel
         _monitoredItemsView.Clear();
         _nodeDetailsView.Clear();
 
-        UpdateConnectionStatus("Disconnected");
+        UpdateConnectionStatus(isConnected: false);
     }
 
     private async Task ReconnectAsync()
@@ -327,7 +385,7 @@ public class MainWindow : Toplevel
             return;
         }
 
-        UpdateConnectionStatus("Reconnecting...");
+        StartConnectingAnimation();
         ShowActivity("Reconnecting...");
 
         try
@@ -341,6 +399,7 @@ public class MainWindow : Toplevel
         }
         finally
         {
+            StopConnectingAnimation();
             UiThread.Run(HideActivity);
         }
     }
@@ -422,7 +481,7 @@ public class MainWindow : Toplevel
     {
         UiThread.Run(() =>
         {
-            UpdateConnectionStatus("Disconnected");
+            UpdateConnectionStatus(isConnected: false);
         });
     }
 
@@ -434,10 +493,41 @@ public class MainWindow : Toplevel
         });
     }
 
-    private void UpdateConnectionStatus(string status)
+    private void UpdateConnectionStatus(bool isConnected)
     {
-        Title = $"OPC Scope - {status}";
+        _isConnected = isConnected;
+        var theme = ThemeManager.Current;
+        Title = isConnected
+            ? $"OPC Scope - {theme.ConnectedIndicator}"
+            : $"OPC Scope - {theme.DisconnectedIndicator}";
         SetNeedsLayout();
+    }
+
+    private void StartConnectingAnimation()
+    {
+        _isConnecting = true;
+        _connectingDotCount = 1;
+        _connectingAnimationTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(400), () =>
+        {
+            if (!_isConnecting)
+                return false; // Stop animation
+
+            _connectingDotCount = (_connectingDotCount % 3) + 1;
+            var dots = new string('.', _connectingDotCount);
+            Title = $"OPC Scope - Connecting{dots}";
+            SetNeedsLayout();
+            return true; // Continue animation
+        });
+    }
+
+    private void StopConnectingAnimation()
+    {
+        _isConnecting = false;
+        if (_connectingAnimationTimer != null)
+        {
+            Application.RemoveTimeout(_connectingAnimationTimer);
+            _connectingAnimationTimer = null;
+        }
     }
 
     /// <summary>
@@ -750,6 +840,7 @@ License: MIT
         if (disposing)
         {
             StopRecordingStatusUpdates();
+            StopConnectingAnimation();
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _subscriptionManager?.Dispose();

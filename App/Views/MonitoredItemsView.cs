@@ -22,9 +22,8 @@ public class MonitoredItemsView : FrameView
     private readonly Label _recordingStatus;
     private bool _isRecording;
 
-    // Unicode symbols for record/stop
-    private const string RecordSymbol = "●";  // Red circle for record
-    private const string StopSymbol = "■";    // Square for stop
+    // Empty state
+    private readonly Label _emptyStateLabel;
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
@@ -49,17 +48,18 @@ public class MonitoredItemsView : FrameView
         Title = " Monitored Items ";
         CanFocus = true;
 
-        // Apply theme styling
+        // Apply theme styling - emphasized (double-line) for this panel
         var theme = AppThemeManager.Current;
-        BorderStyle = theme.FrameLineStyle;
+        BorderStyle = theme.EmphasizedBorderStyle;
 
-        // Create recording toggle button (right-aligned)
+        // Create recording toggle button with text label (right-aligned)
         _toggleRecordButton = new Button
         {
-            Text = $" {RecordSymbol} ",
-            X = Pos.AnchorEnd(5),  // Right-aligned
+            Text = $" {theme.StoppedLabel} ",
+            X = Pos.AnchorEnd(10),  // Right-aligned, wider for text
             Y = 0
         };
+        UpdateRecordingButtonStyle();
         _toggleRecordButton.Accepting += (_, _) =>
         {
             if (_isRecording)
@@ -73,7 +73,11 @@ public class MonitoredItemsView : FrameView
             Text = "",
             X = 0,
             Y = 0,
-            Width = Dim.Fill()! - 6  // Leave room for the button
+            Width = Dim.Fill()! - 12,  // Leave room for the button
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background)
+            }
         };
 
         _dataTable = new DataTable();
@@ -102,7 +106,22 @@ public class MonitoredItemsView : FrameView
         _tableView.Style.ShowVerticalHeaderLines = false;
         _tableView.Style.ExpandLastColumn = true;
 
+        // Note: Status icons (●/▲/✕) in text provide visual status indication
+        // Terminal.Gui v2 TableView doesn't support per-row coloring
+
         _tableView.KeyDown += HandleKeyDown;
+
+        // Create empty state label
+        _emptyStateLabel = new Label
+        {
+            X = Pos.Center(),
+            Y = Pos.Center(),
+            Text = "Select nodes to monitor",
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background)
+            }
+        };
 
         // Subscribe to theme changes
         AppThemeManager.ThemeChanged += OnThemeChanged;
@@ -110,6 +129,42 @@ public class MonitoredItemsView : FrameView
         Add(_recordingStatus);
         Add(_toggleRecordButton);
         Add(_tableView);
+        Add(_emptyStateLabel);
+
+        // Initial state
+        UpdateEmptyState();
+    }
+
+    private void UpdateEmptyState()
+    {
+        var isEmpty = _dataTable.Rows.Count == 0;
+        _emptyStateLabel.Visible = isEmpty;
+        _tableView.Visible = !isEmpty;
+    }
+
+    private void UpdateRecordingButtonStyle()
+    {
+        var theme = AppThemeManager.Current;
+        _toggleRecordButton.Text = _isRecording
+            ? $" {theme.RecordingLabel} "
+            : $" {theme.StoppedLabel} ";
+
+        _toggleRecordButton.ColorScheme = new ColorScheme
+        {
+            Normal = new Attribute(
+                _isRecording ? theme.Accent : theme.MutedText,
+                theme.Background),
+            Focus = new Attribute(
+                _isRecording ? theme.AccentBright : theme.Foreground,
+                theme.Background),
+            HotNormal = new Attribute(
+                _isRecording ? theme.Accent : theme.MutedText,
+                theme.Background),
+            HotFocus = new Attribute(
+                _isRecording ? theme.AccentBright : theme.Foreground,
+                theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        };
     }
 
     /// <summary>
@@ -118,7 +173,7 @@ public class MonitoredItemsView : FrameView
     public void SetRecordingState(bool isRecording, string statusText = "")
     {
         _isRecording = isRecording;
-        _toggleRecordButton.Text = isRecording ? $" {StopSymbol} " : $" {RecordSymbol} ";
+        UpdateRecordingButtonStyle();
         _recordingStatus.Text = statusText;
     }
 
@@ -134,7 +189,21 @@ public class MonitoredItemsView : FrameView
     {
         Application.Invoke(() =>
         {
-            BorderStyle = theme.FrameLineStyle;
+            BorderStyle = theme.EmphasizedBorderStyle;
+            UpdateRecordingButtonStyle();
+
+            // Update recording status label color
+            _recordingStatus.ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background)
+            };
+
+            // Update empty state label color
+            _emptyStateLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background)
+            };
+
             SetNeedsLayout();
         });
     }
@@ -148,13 +217,14 @@ public class MonitoredItemsView : FrameView
         row["Name"] = item.DisplayName;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
-        row["Status"] = item.StatusString;
+        row["Status"] = FormatStatusWithIcon(item);
         row["_Item"] = item;
 
         _dataTable.Rows.Add(row);
         _rowsByHandle[item.ClientHandle] = row;
 
         _tableView.Update();
+        UpdateEmptyState();
     }
 
     public void UpdateItem(MonitoredNode item)
@@ -164,7 +234,7 @@ public class MonitoredItemsView : FrameView
 
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
-        row["Status"] = item.StatusString;
+        row["Status"] = FormatStatusWithIcon(item);
 
         _tableView.Update();
     }
@@ -178,6 +248,7 @@ public class MonitoredItemsView : FrameView
         _rowsByHandle.Remove(clientHandle);
 
         _tableView.Update();
+        UpdateEmptyState();
     }
 
     public void Clear()
@@ -185,6 +256,21 @@ public class MonitoredItemsView : FrameView
         _dataTable.Rows.Clear();
         _rowsByHandle.Clear();
         _tableView.Update();
+        UpdateEmptyState();
+    }
+
+    private string FormatStatusWithIcon(MonitoredNode item)
+    {
+        var theme = AppThemeManager.Current;
+
+        if (item.IsGood)
+            return $"{theme.StatusGoodIcon} Good";
+        else if (item.IsUncertain)
+            return $"{theme.StatusUncertainIcon} Uncertain";
+        else if (item.IsBad)
+            return $"{theme.StatusBadIcon} Bad";
+
+        return item.StatusString;
     }
 
     private void HandleKeyDown(object? _, Key e)

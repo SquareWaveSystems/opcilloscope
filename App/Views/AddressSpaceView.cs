@@ -14,6 +14,7 @@ namespace OpcScope.App.Views;
 public class AddressSpaceView : FrameView
 {
     private readonly TreeView<BrowsedNode> _treeView;
+    private readonly Label _emptyStateLabel;
     private NodeBrowser? _nodeBrowser;
     private BrowsedNode? _rootNode;
 
@@ -59,12 +60,46 @@ public class AddressSpaceView : FrameView
         _treeView.KeyDown += HandleKeyDown;
         _treeView.ObjectActivated += HandleObjectActivated;
 
+        // Create empty state label
+        _emptyStateLabel = new Label
+        {
+            X = Pos.Center(),
+            Y = Pos.Center(),
+            Text = "Connect to browse address space",
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+            }
+        };
+
         Add(_treeView);
+        Add(_emptyStateLabel);
+
+        // Subscribe to theme changes
+        AppThemeManager.ThemeChanged += OnThemeChanged;
+
+        // Initially show empty state
+        _treeView.Visible = false;
+        _emptyStateLabel.Visible = true;
+    }
+
+    private void OnThemeChanged(RetroTheme theme)
+    {
+        Application.Invoke(() =>
+        {
+            _emptyStateLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+            };
+            SetNeedsLayout();
+        });
     }
 
     public void Initialize(NodeBrowser nodeBrowser)
     {
         _nodeBrowser = nodeBrowser;
+        _emptyStateLabel.Visible = false;
+        _treeView.Visible = true;
         _ = RefreshAsync();
     }
 
@@ -105,6 +140,8 @@ public class AddressSpaceView : FrameView
     {
         _treeView.ClearObjects();
         _rootNode = null;
+        _treeView.Visible = false;
+        _emptyStateLabel.Visible = true;
     }
 
     private IEnumerable<BrowsedNode> GetChildrenForNode(BrowsedNode node)

@@ -27,9 +27,13 @@ public class WriteValueDialog : Dialog
         Height = 12;
         _dataType = dataType ?? "String";
 
-        // Apply theme styling
+        // Apply theme styling - double-line border for emphasis with grey border color
         ColorScheme = theme.DialogColorScheme;
-        BorderStyle = theme.BorderLineStyle;
+        BorderStyle = LineStyle.Double;
+        if (Border != null)
+        {
+            Border.ColorScheme = theme.BorderColorScheme;
+        }
 
         var nodeLabel = new Label
         {
@@ -67,13 +71,23 @@ public class WriteValueDialog : Dialog
             Text = currentValue ?? ""
         };
 
+        // Default button highlighted with amber
+        var defaultButtonScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+
         var writeButton = new Button
         {
             X = Pos.Center() - 10,
             Y = 8,
             Text = $"{theme.ButtonPrefix}Write{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = theme.ButtonColorScheme
+            ColorScheme = defaultButtonScheme
         };
 
         writeButton.Accepting += (_, _) =>
