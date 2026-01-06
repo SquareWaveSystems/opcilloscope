@@ -4,7 +4,6 @@ using OpcScope.App.Dialogs;
 using OpcScope.App.Themes;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
-using OpcScope.OpcUa.TestServer;
 using OpcScope.Utilities;
 using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
@@ -20,8 +19,6 @@ public class MainWindow : Toplevel
     private readonly OpcUaClientWrapper _client;
     private readonly NodeBrowser _nodeBrowser;
     private SubscriptionManager? _subscriptionManager;
-    private EmbeddedTestServer? _testServer;
-    private bool _isStartingTestServer;
 
     private readonly Label _titleBanner;
     private readonly MenuBar _menuBar;
@@ -194,10 +191,7 @@ public class MainWindow : Toplevel
                 {
                     new MenuItem("_Connect...", "", ShowConnectDialog),
                     new MenuItem("_Disconnect", "", Disconnect),
-                    new MenuItem("_Reconnect", "", () => _ = ReconnectAsync()),
-                    null!, // Separator
-                    new MenuItem("_Start Test Server", "", () => _ = StartTestServerAsync()),
-                    new MenuItem("S_top Test Server", "", () => _ = StopTestServerAsync())
+                    new MenuItem("_Reconnect", "", () => _ = ReconnectAsync())
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
@@ -358,82 +352,6 @@ public class MainWindow : Toplevel
         finally
         {
             HideActivity();
-        }
-    }
-
-    private async Task StartTestServerAsync()
-    {
-        if (_testServer?.IsRunning == true)
-        {
-            _logger.Warning("Test server is already running");
-            return;
-        }
-
-        if (_isStartingTestServer)
-        {
-            _logger.Warning("Test server is already starting");
-            return;
-        }
-
-        _isStartingTestServer = true;
-        try
-        {
-            _testServer = new EmbeddedTestServer();
-            _logger.Info("Starting embedded test server...");
-
-            await _testServer.StartAsync();
-
-            _logger.Info($"Test server started at {_testServer.EndpointUrl}");
-
-            // Ask if user wants to connect
-            var result = MessageBox.Query(
-                "Test Server Started",
-                $"Test server is running at:\n{_testServer.EndpointUrl}\n\nConnect now?",
-                "Yes", "No");
-
-            if (result == 0) // Yes
-            {
-                _lastEndpoint = _testServer.EndpointUrl;
-                await ConnectAsync(_testServer.EndpointUrl);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"Failed to start test server: {ex.Message}");
-            MessageBox.ErrorQuery("Error", $"Failed to start test server:\n{ex.Message}", "OK");
-            _testServer?.Dispose();
-            _testServer = null;
-        }
-        finally
-        {
-            _isStartingTestServer = false;
-        }
-    }
-
-    private async Task StopTestServerAsync()
-    {
-        if (_testServer == null || !_testServer.IsRunning)
-        {
-            _logger.Warning("Test server is not running");
-            return;
-        }
-
-        try
-        {
-            // Disconnect if connected to the test server
-            if (_client.IsConnected && _client.CurrentEndpoint == _testServer.EndpointUrl)
-            {
-                Disconnect();
-            }
-
-            await _testServer.StopAsync();
-            _logger.Info("Test server stopped");
-
-            _testServer = null;
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"Failed to stop test server: {ex.Message}");
         }
     }
 
@@ -766,7 +684,6 @@ License: MIT
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _subscriptionManager?.Dispose();
             _client.Dispose();
-            _testServer?.Dispose();
         }
         base.Dispose(disposing);
     }

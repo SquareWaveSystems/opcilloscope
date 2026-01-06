@@ -52,13 +52,13 @@ public class OpcUaClientWrapper : IDisposable
         };
 
         // Accept all certificates for simplicity
-        _appConfig.CertificateValidator = new CertificateValidator(null);
+        _appConfig.CertificateValidator = new CertificateValidator();
         _appConfig.CertificateValidator.CertificateValidation += (_, e) =>
         {
             e.Accept = true;
         };
 
-        await _appConfig.ValidateAsync(ApplicationType.Client);
+        await _appConfig.Validate(ApplicationType.Client);
 
         return _appConfig;
     }
@@ -80,10 +80,7 @@ public class OpcUaClientWrapper : IDisposable
             var endpointConfig = EndpointConfiguration.Create(config);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
 
-#pragma warning disable CS0618 // DefaultSessionFactory obsolete warning - ITelemetryContext not needed for basic usage
-            var sessionFactory = new DefaultSessionFactory();
-#pragma warning restore CS0618
-            _session = await sessionFactory.CreateAsync(
+            _session = await Opc.Ua.Client.Session.Create(
                 config,
                 endpoint,
                 false,
@@ -194,7 +191,7 @@ public class OpcUaClientWrapper : IDisposable
             ResultMask = (uint)BrowseResultMask.All
         };
 
-        return await browser.BrowseAsync(nodeId);
+        return await Task.Run(() => browser.Browse(nodeId));
     }
 
     public async Task<DataValue?> ReadValueAsync(NodeId nodeId)
