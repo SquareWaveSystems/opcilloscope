@@ -18,7 +18,6 @@ public class MainWindow : Toplevel
     private readonly Logger _logger;
     private readonly ConnectionManager _connectionManager;
 
-    private readonly Label _titleBanner;
     private readonly MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
     private readonly MonitoredItemsView _monitoredItemsView;
@@ -26,16 +25,35 @@ public class MainWindow : Toplevel
     private readonly LogView _logView;
     private readonly StatusBar _statusBar;
     private readonly Label _companyLabel;
+    private readonly Label _connectionStatusLabel;
     private readonly SpinnerView _activitySpinner;
     private readonly Label _activityLabel;
     private readonly CsvRecordingManager _csvRecordingManager;
     private object? _recordingStatusTimer;
+
+    // Connecting animation state
+    private object? _connectingAnimationTimer;
+    private int _connectingDotCount = 1;
+    private bool _isConnecting;
+    private bool _isConnected;
 
     public MainWindow()
     {
         _logger = new Logger();
         _connectionManager = new ConnectionManager(_logger);
         _csvRecordingManager = new CsvRecordingManager(_logger);
+
+        // Override global "Menu" ColorScheme BEFORE creating any views
+        // This prevents StatusBar's blue background flash on first render
+        var theme = ThemeManager.Current;
+        Colors.ColorSchemes["Menu"] = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
 
         // Wire up connection manager events
         _connectionManager.StateChanged += OnConnectionStateChanged;
@@ -47,14 +65,8 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
-        // Create title banner
-        _titleBanner = new Label
-        {
-            X = Pos.Center(),
-            Y = 0,
-            Text = "═══╡ OPC Scope ╞═══",
-            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.BrightCyan, Color.Black) }
-        };
+        // Set initial window title (status shown in status bar)
+        Title = "OPC Scope";
 
         // Create menu bar
         _menuBar = CreateMenuBar();
@@ -63,7 +75,7 @@ public class MainWindow : Toplevel
         _addressSpaceView = new AddressSpaceView
         {
             X = 0,
-            Y = 2,
+            Y = 1,
             Width = Dim.Percent(35),
             Height = Dim.Percent(60)
         };
@@ -71,7 +83,7 @@ public class MainWindow : Toplevel
         _monitoredItemsView = new MonitoredItemsView
         {
             X = Pos.Right(_addressSpaceView),
-            Y = 2,
+            Y = 1,
             Width = Dim.Fill(),
             Height = Dim.Percent(60)
         };
@@ -97,26 +109,49 @@ public class MainWindow : Toplevel
         {
             Visible = true
         };
+
+        // Also set ColorScheme directly on the StatusBar instance
+        _statusBar.ColorScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+
         _statusBar.Add(new Shortcut(Key.F1, "Help", ShowHelp));
         _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
+        _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
+        _statusBar.Add(new Shortcut(Key.Space, "Select", null));  // Visual hint only - handled in MonitoredItemsView
+        _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
-        // Company branding label (bottom right)
+        // Company branding label (width-aware, overlaid on status bar row)
+        // ColorScheme is set in ApplyTheme() to use theme colors
         _companyLabel = new Label
         {
-            X = Pos.AnchorEnd(25),
-            Y = 0,
-            Text = "Square Wave Systems 2026",
-            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.DarkGray, Color.Black) }
+            X = Pos.AnchorEnd(46),
+            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
+            Text = "Square Wave Systems 2026"
         };
-        _statusBar.Add(_companyLabel);
 
-        // Create activity spinner for async operations
+        // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
+        _connectionStatusLabel = new Label
+        {
+            X = Pos.AnchorEnd(26),  // Wide enough for " ■ All systems nominal. "
+            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
+            Text = $" {theme.DisconnectedIndicator} "
+        };
+        UpdateConnectionStatusLabelStyle(isConnected: false);
+
+        // Create activity spinner for async operations (left of company label)
+        // ColorScheme is set in ApplyTheme() to use theme colors
         _activitySpinner = new SpinnerView
         {
-            X = Pos.AnchorEnd(20),
+            X = Pos.AnchorEnd(62),
             Y = 0,
             Visible = false,
             AutoSpin = true
@@ -133,11 +168,14 @@ public class MainWindow : Toplevel
         _statusBar.Add(_activitySpinner);
         _statusBar.Add(_activityLabel);
 
+        // Initial width-aware update (will also be called from ApplyTheme)
+        Initialized += (_, _) => UpdateCompanyLabelForWidth();
+
         // Wire up view events
         _addressSpaceView.NodeSelected += OnNodeSelected;
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
-        _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredItemsView.WriteRequested += OnWriteRequested;
         _monitoredItemsView.RecordRequested += OnRecordRequested;
         _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
@@ -146,20 +184,60 @@ public class MainWindow : Toplevel
         _nodeDetailsView.Initialize(_connectionManager.NodeBrowser);
 
         // Add all views
-        Add(_titleBanner);
         Add(_menuBar);
         Add(_addressSpaceView);
         Add(_monitoredItemsView);
         Add(_nodeDetailsView);
         Add(_logView);
         Add(_statusBar);
+        Add(_companyLabel);
+        Add(_connectionStatusLabel);
 
         // Apply initial theme (after all controls are created)
         ApplyTheme();
 
-        // Log startup
-        _logger.Info("OPC Scope started - Square Wave Systems");
-        _logger.Info("Press F10 for menu, or use Connection -> Connect");
+        // Run startup sequence
+        _ = RunStartupSequenceAsync();
+    }
+
+    private async Task RunStartupSequenceAsync()
+    {
+        var theme = ThemeManager.Current;
+
+        // Show initializing message in accent color
+        UiThread.Run(() =>
+        {
+            Title = "OPC Scope";
+            _connectionStatusLabel.Text = " ■ INITIALIZING... ";
+            _connectionStatusLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background)
+            };
+            SetNeedsLayout();
+        });
+
+        await Task.Delay(2000);
+
+        // Show nominal message in bright/success style
+        UiThread.Run(() =>
+        {
+            _connectionStatusLabel.Text = " ■ All systems nominal. ";
+            _connectionStatusLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.StatusGood, theme.Background)
+            };
+            SetNeedsLayout();
+        });
+
+        await Task.Delay(3400);
+
+        // Show normal disconnected state and log startup
+        UiThread.Run(() =>
+        {
+            UpdateConnectionStatus(isConnected: false);
+            _logger.Info("OPC Scope started - Square Wave Systems");
+            _logger.Info("Press F10 for menu, or use Connection -> Connect");
+        });
     }
 
     private MenuBar CreateMenuBar()
@@ -174,7 +252,8 @@ public class MainWindow : Toplevel
 
         return new MenuBar
         {
-            Y = 1,
+            X = 0,
+            Y = 0,
             Menus = new MenuBarItem[]
             {
                 new MenuBarItem("_File", new MenuItem[]
@@ -194,7 +273,7 @@ public class MainWindow : Toplevel
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
-                    new MenuItem("_Trend Plot...", "", ShowTrendPlot),
+                    new MenuItem("_Scope...", "Ctrl+G", LaunchScope),
                     new MenuItem("_Refresh Tree", "", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     new MenuItem("_Settings...", "", ShowSettings)
@@ -213,29 +292,68 @@ public class MainWindow : Toplevel
     {
         var theme = ThemeManager.Current;
 
-        // Apply main window styling
-        ColorScheme = theme.MainColorScheme;
-        BorderStyle = theme.BorderLineStyle;
-
-        // Apply styling to title banner (use accent color for branding)
-        _titleBanner.ColorScheme = new ColorScheme
+        // Update global "Menu" ColorScheme (used by StatusBar)
+        Colors.ColorSchemes["Menu"] = new ColorScheme
         {
-            Normal = theme.AccentBrightAttr
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
+
+        // Apply main window styling - double-line for emphasis
+        ColorScheme = theme.MainColorScheme;
+        BorderStyle = theme.EmphasizedBorderStyle;
+
+        // Apply grey border color to main window border (consistent across terminals)
+        if (Border != null)
+        {
+            Border.ColorScheme = theme.BorderColorScheme;
+        }
 
         // Apply styling to company label (subtle in status bar)
         _companyLabel.ColorScheme = new ColorScheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.ForegroundDim, theme.Background)
+            Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
 
-        // Apply styling to menu and status bar
+        // Apply styling to menu bar
         ThemeStyler.ApplyToMenuBar(_menuBar, theme);
-        ThemeStyler.ApplyToStatusBar(_statusBar, theme);
 
-        // Apply to all child views
-        ThemeStyler.ApplyToFrame(_addressSpaceView, theme);
+        // Apply clean status bar styling (no blue background)
+        // Must set ColorScheme AND call SetNeedsDisplay to override Terminal.Gui defaults
+        var cleanStatusBarScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+        _statusBar.ColorScheme = cleanStatusBarScheme;
+        _statusBar.SetNeedsLayout();
+
+        // Also apply theme to connection status label
+        UpdateConnectionStatusLabelStyle(_isConnected);
+
+        // Apply theme to activity spinner and label (for async operations)
+        _activitySpinner.ColorScheme = cleanStatusBarScheme;
+        _activityLabel.ColorScheme = cleanStatusBarScheme;
+
+        // Update width-aware company label
+        UpdateCompanyLabelForWidth();
+
+        // Apply to child views with border differentiation
+        // MonitoredItems gets double-line (emphasized)
+        _monitoredItemsView.BorderStyle = theme.EmphasizedBorderStyle;
         ThemeStyler.ApplyToFrame(_monitoredItemsView, theme);
+
+        // Other panels get single-line (secondary)
+        _addressSpaceView.BorderStyle = theme.SecondaryBorderStyle;
+        _nodeDetailsView.BorderStyle = theme.SecondaryBorderStyle;
+        _logView.BorderStyle = theme.SecondaryBorderStyle;
+        ThemeStyler.ApplyToFrame(_addressSpaceView, theme);
         ThemeStyler.ApplyToFrame(_nodeDetailsView, theme);
         ThemeStyler.ApplyToFrame(_logView, theme);
     }
@@ -245,6 +363,13 @@ public class MainWindow : Toplevel
         UiThread.Run(() =>
         {
             ApplyTheme();
+
+            // Update connection status label with new theme colors
+            _connectionStatusLabel.Text = _isConnected
+                ? $" {theme.ConnectedIndicator} "
+                : $" {theme.DisconnectedIndicator} ";
+            UpdateConnectionStatusLabelStyle(_isConnected);
+
             _logger.Info($"Theme changed to: {theme.Name}");
             SetNeedsLayout();
         });
@@ -263,6 +388,7 @@ public class MainWindow : Toplevel
 
     private async Task ConnectAsync(string endpoint)
     {
+        StartConnectingAnimation();
         ShowActivity("Connecting...");
 
         try
@@ -276,7 +402,8 @@ public class MainWindow : Toplevel
         }
         finally
         {
-            HideActivity();
+            StopConnectingAnimation();
+            UiThread.Run(HideActivity);
         }
     }
 
@@ -297,6 +424,7 @@ public class MainWindow : Toplevel
 
     private async Task ReconnectAsync()
     {
+        StartConnectingAnimation();
         ShowActivity("Reconnecting...");
 
         try
@@ -310,7 +438,8 @@ public class MainWindow : Toplevel
         }
         finally
         {
-            HideActivity();
+            StopConnectingAnimation();
+            UiThread.Run(HideActivity);
         }
     }
 
@@ -341,6 +470,15 @@ public class MainWindow : Toplevel
         }
     }
 
+    private void WriteSelected()
+    {
+        var item = _monitoredItemsView.SelectedItem;
+        if (item != null)
+        {
+            OnWriteRequested(item);
+        }
+    }
+
     private void OnNodeSelected(BrowsedNode node)
     {
         _nodeDetailsView.ShowNodeAsync(node).FireAndForget(_logger);
@@ -368,6 +506,88 @@ public class MainWindow : Toplevel
         _connectionManager.UnsubscribeAsync(item.ClientHandle).FireAndForget(_logger);
     }
 
+    private void OnWriteRequested(MonitoredNode item)
+    {
+        if (!_connectionManager.IsConnected)
+        {
+            _logger.Warning("Cannot write: not connected");
+            return;
+        }
+
+        // Check if node is writable
+        if (!item.IsWritable)
+        {
+            _logger.Warning($"Cannot write to {item.DisplayName}: node is read-only");
+            MessageBox.Query("Write", $"Node '{item.DisplayName}' is read-only", "OK");
+            return;
+        }
+
+        // Check if data type is supported for writing
+        if (!Utilities.OpcValueConverter.IsWriteSupported(item.DataType))
+        {
+            _logger.Warning($"Write not supported for data type: {item.DataTypeName}");
+            MessageBox.Query("Write", $"Write not supported for data type: {item.DataTypeName}", "OK");
+            return;
+        }
+
+        // Show write dialog
+        var dialog = new WriteValueDialog(
+            item.NodeId,
+            item.DisplayName,
+            item.DataType,
+            item.DataTypeName,
+            item.Value);
+
+        Application.Run(dialog);
+
+        if (dialog.Confirmed && dialog.ParsedValue != null)
+        {
+            _ = WriteValueAsync(item, dialog.ParsedValue);
+        }
+    }
+
+    private async Task WriteValueAsync(MonitoredNode item, object value)
+    {
+        try
+        {
+            ShowActivity("Writing...");
+
+            var statusCode = await _connectionManager.Client.WriteValueAsync(item.NodeId, value);
+
+            UiThread.Run(() =>
+            {
+                HideActivity();
+
+                if (Opc.Ua.StatusCode.IsGood(statusCode))
+                {
+                    _logger.Info($"Wrote {FormatValueForLog(value)} to {item.NodeId}");
+                }
+                else
+                {
+                    var statusName = $"0x{statusCode.Code:X8}";
+                    _logger.Error($"Write failed ({statusName}): {item.NodeId}");
+                    MessageBox.ErrorQuery("Write Failed", $"Write failed: {statusName}", "OK");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            UiThread.Run(() =>
+            {
+                HideActivity();
+                _logger.Error($"Write error: {ex.Message}");
+                MessageBox.ErrorQuery("Write Error", ex.Message, "OK");
+            });
+        }
+    }
+
+    private static string FormatValueForLog(object value)
+    {
+        if (value is string s)
+            return $"\"{s}\"";
+        return value.ToString() ?? "null";
+    }
+
     private void OnValueChanged(MonitoredNode item)
     {
         // Record to CSV if recording is active
@@ -380,14 +600,20 @@ public class MainWindow : Toplevel
     {
         UiThread.Run(() =>
         {
-            var statusText = state switch
+            switch (state)
             {
-                ConnectionState.Connected => $"Connected to {_connectionManager.CurrentEndpoint}",
-                ConnectionState.Connecting => "Connecting...",
-                ConnectionState.Reconnecting => "Reconnecting...",
-                _ => "Disconnected"
-            };
-            UpdateConnectionStatus(statusText);
+                case ConnectionState.Connected:
+                    _logger.Info($"Connected to {_connectionManager.CurrentEndpoint}");
+                    UpdateConnectionStatus(isConnected: true);
+                    break;
+                case ConnectionState.Disconnected:
+                    UpdateConnectionStatus(isConnected: false);
+                    break;
+                case ConnectionState.Connecting:
+                case ConnectionState.Reconnecting:
+                    // Animation handles the visual feedback
+                    break;
+            }
         });
     }
 
@@ -399,10 +625,81 @@ public class MainWindow : Toplevel
         });
     }
 
-    private void UpdateConnectionStatus(string status)
+    private void UpdateConnectionStatus(bool isConnected)
     {
-        Title = $"OPC Scope - {status}";
+        _isConnected = isConnected;
+        var theme = ThemeManager.Current;
+
+        // Update title (plain text)
+        Title = "OPC Scope";
+
+        // Update colored status label in status bar
+        _connectionStatusLabel.Text = isConnected
+            ? $" {theme.ConnectedIndicator} "
+            : $" {theme.DisconnectedIndicator} ";
+        UpdateConnectionStatusLabelStyle(isConnected);
+
         SetNeedsLayout();
+    }
+
+    private void UpdateConnectionStatusLabelStyle(bool isConnected)
+    {
+        var theme = ThemeManager.Current;
+        _connectionStatusLabel.ColorScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background),
+            Focus = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background)
+        };
+    }
+
+    private void UpdateCompanyLabelForWidth()
+    {
+        var width = _statusBar.Frame.Width;
+
+        // Width-aware company branding
+        if (width >= 120)
+            _companyLabel.Text = "Square Wave Systems 2026";
+        else if (width >= 90)
+            _companyLabel.Text = "SWS 2026";
+        else
+            _companyLabel.Text = "SWS";
+    }
+
+    private void StartConnectingAnimation()
+    {
+        _isConnecting = true;
+        _connectingDotCount = 1;
+        _connectingAnimationTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(400), () =>
+        {
+            if (!_isConnecting)
+                return false; // Stop animation
+
+            _connectingDotCount = (_connectingDotCount % 3) + 1;
+            var dots = new string('.', _connectingDotCount);
+            _connectionStatusLabel.Text = $" Connecting{dots} ";
+            SetNeedsLayout();
+            return true; // Continue animation
+        });
+    }
+
+    private void StopConnectingAnimation()
+    {
+        _isConnecting = false;
+        if (_connectingAnimationTimer != null)
+        {
+            Application.RemoveTimeout(_connectingAnimationTimer);
+            _connectingAnimationTimer = null;
+        }
     }
 
     /// <summary>
@@ -441,15 +738,24 @@ public class MainWindow : Toplevel
         }
     }
 
-    private void ShowTrendPlot()
+    private void LaunchScope()
     {
-        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager);
-        Application.Run(dialog);
-    }
+        var subscriptionManager = _connectionManager.SubscriptionManager;
+        if (subscriptionManager == null)
+        {
+            MessageBox.Query("Scope", "Connect to a server first.", "OK");
+            return;
+        }
 
-    private void OnTrendPlotRequested(MonitoredNode node)
-    {
-        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager, node);
+        var selectedNodes = _monitoredItemsView.ScopeSelectedNodes;
+
+        if (selectedNodes.Count == 0)
+        {
+            MessageBox.Query("Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored items.", "OK");
+            return;
+        }
+
+        var dialog = new ScopeDialog(selectedNodes, subscriptionManager);
         Application.Run(dialog);
     }
 
@@ -652,8 +958,10 @@ Keyboard Shortcuts:
   F5        - Refresh address space tree
   F10       - Open menu
   Enter     - Subscribe to selected node
-  Space     - Show trend plot for selected item
+  Space     - Toggle scope selection (in Monitored Items)
   Delete    - Unsubscribe from selected item
+  W         - Write value to selected item
+  Ctrl+G    - Open Scope with selected items
   Ctrl+O    - Connect to server
   Ctrl+Q    - Quit
 
@@ -662,7 +970,13 @@ Navigation:
   Arrow Keys - Navigate within panel
   Space     - Expand/collapse tree node (in tree view)
 
-Trend Plot (in dialog):
+Scope View:
+  - Select up to 5 items using Space in Monitored Items
+  - Press Ctrl+G to launch Scope with selected items
+  - X-axis shows elapsed time
+  - Each signal displayed with distinct color
+
+Scope Controls (in dialog):
   Space     - Pause/resume plotting
   +/-       - Adjust vertical scale
   R         - Reset to auto-scale
@@ -677,7 +991,6 @@ Tips:
   - Only Variable nodes can be subscribed
   - Double-click a node to subscribe
   - Values update in real-time via subscription
-  - Use View > Trend Plot to visualize values
 ";
         MessageBox.Query("OPC Scope Help", help, "OK");
     }
@@ -691,8 +1004,13 @@ Tips:
 ╚══════════════════════════════════════╝
 
 A lightweight terminal-based OPC UA client
-for browsing, monitoring, and subscribing
-to industrial automation data.
+for browsing, monitoring, and visualizing
+industrial automation data in real-time.
+
+Features:
+  - Multi-signal Scope view (up to 5 signals)
+  - Time-based plotting with auto-scale
+  - CSV recording of monitored values
 
 Current Theme: {theme.Name}
   {theme.Description}
@@ -717,6 +1035,7 @@ License: MIT
         if (disposing)
         {
             StopRecordingStatusUpdates();
+            StopConnectingAnimation();
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _connectionManager.Dispose();
