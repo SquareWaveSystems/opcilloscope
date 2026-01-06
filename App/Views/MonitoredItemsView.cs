@@ -45,7 +45,7 @@ public class MonitoredItemsView : FrameView
             if (_tableView.SelectedRow >= 0 && _tableView.SelectedRow < _dataTable.Rows.Count)
             {
                 var row = _dataTable.Rows[_tableView.SelectedRow];
-                return row["_Item"] as MonitoredNode;
+                return row["_ItemRef"] as MonitoredNode;
             }
             return null;
         }
@@ -61,7 +61,7 @@ public class MonitoredItemsView : FrameView
             var selected = new List<MonitoredNode>();
             foreach (DataRow row in _dataTable.Rows)
             {
-                if (row["_Item"] is MonitoredNode node && node.IsSelectedForScope)
+                if (row["_ItemRef"] is MonitoredNode node && node.IsSelectedForScope)
                 {
                     selected.Add(node);
                 }
@@ -96,11 +96,12 @@ public class MonitoredItemsView : FrameView
         _dataTable = new DataTable();
         _dataTable.Columns.Add("Rec", typeof(string));  // Recording selection (◉ = record this item)
         _dataTable.Columns.Add("Name", typeof(string));
+        _dataTable.Columns.Add("NodeId", typeof(string));
         _dataTable.Columns.Add("Access", typeof(string));
-        _dataTable.Columns.Add("Value", typeof(string));
         _dataTable.Columns.Add("Time", typeof(string));
         _dataTable.Columns.Add("Status", typeof(string));
-        _dataTable.Columns.Add("_Item", typeof(MonitoredNode)); // Hidden reference
+        _dataTable.Columns.Add("Value", typeof(string));  // Far right - width varies
+        _dataTable.Columns.Add("_ItemRef", typeof(MonitoredNode)); // Hidden reference
 
         _tableView = new TableView
         {
@@ -224,11 +225,12 @@ public class MonitoredItemsView : FrameView
         var row = _dataTable.NewRow();
         row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Name"] = item.DisplayName;
+        row["NodeId"] = item.NodeId.ToString();
         row["Access"] = item.AccessString;
-        row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
         row["Status"] = FormatStatusWithIcon(item);
-        row["_Item"] = item;
+        row["Value"] = item.Value;
+        row["_ItemRef"] = item;
 
         _dataTable.Rows.Add(row);
         _rowsByHandle[item.ClientHandle] = row;
@@ -263,7 +265,7 @@ public class MonitoredItemsView : FrameView
             return;
 
         // Clear scope selection before removing
-        if (row["_Item"] is MonitoredNode node && node.IsSelectedForScope)
+        if (row["_ItemRef"] is MonitoredNode node && node.IsSelectedForScope)
         {
             node.IsSelectedForScope = false;
             _cachedScopeSelectionCount--;
@@ -282,7 +284,7 @@ public class MonitoredItemsView : FrameView
         // Clear all scope selections before clearing table
         foreach (DataRow row in _dataTable.Rows)
         {
-            if (row["_Item"] is MonitoredNode node)
+            if (row["_ItemRef"] is MonitoredNode node)
             {
                 node.IsSelectedForScope = false;
             }
