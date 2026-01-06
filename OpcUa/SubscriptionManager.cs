@@ -277,7 +277,7 @@ public class SubscriptionManager : IDisposable
         ValueChanged?.Invoke(item);
     }
 
-    private static string FormatValue(object? value)
+    internal static string FormatValue(object? value)
     {
         if (value == null) return "null";
         if (value is byte[] bytes) return $"[{bytes.Length} bytes]";
