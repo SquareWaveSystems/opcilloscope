@@ -25,6 +25,8 @@ public class MonitoredItemsView : FrameView
     // Scope selection
     private const int MaxScopeSelections = 5;
     private readonly Label _selectionFeedback;
+    private object? _feedbackTimerToken;
+    private int _cachedScopeSelectionCount;
 
     // Unicode symbols for record/stop and checkbox
     private const string RecordSymbol = "●";  // Red circle for record
@@ -72,7 +74,7 @@ public class MonitoredItemsView : FrameView
     /// <summary>
     /// Gets the count of items selected for Scope.
     /// </summary>
-    public int ScopeSelectionCount => ScopeSelectedNodes.Count;
+    public int ScopeSelectionCount => _cachedScopeSelectionCount;
 
     public MonitoredItemsView()
     {
@@ -196,6 +198,12 @@ public class MonitoredItemsView : FrameView
         _dataTable.Rows.Add(row);
         _rowsByHandle[item.ClientHandle] = row;
 
+        // Update cache if item is already selected
+        if (item.IsSelectedForScope)
+        {
+            _cachedScopeSelectionCount++;
+        }
+
         _tableView.Update();
     }
 
@@ -221,6 +229,7 @@ public class MonitoredItemsView : FrameView
         if (row["_Item"] is MonitoredNode node && node.IsSelectedForScope)
         {
             node.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
             ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
         }
 
@@ -241,6 +250,7 @@ public class MonitoredItemsView : FrameView
             }
         }
 
+        _cachedScopeSelectionCount = 0;
         _dataTable.Rows.Clear();
         _rowsByHandle.Clear();
         _tableView.Update();
@@ -260,6 +270,7 @@ public class MonitoredItemsView : FrameView
         {
             // Deselect
             selected.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
             UpdateScopeCheckbox(selected);
             HideSelectionFeedback();
             ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
@@ -275,6 +286,7 @@ public class MonitoredItemsView : FrameView
 
             // Select
             selected.IsSelectedForScope = true;
+            _cachedScopeSelectionCount++;
             UpdateScopeCheckbox(selected);
             HideSelectionFeedback();
             ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
@@ -292,12 +304,19 @@ public class MonitoredItemsView : FrameView
 
     private void ShowSelectionFeedback(string message)
     {
+        // Cancel any existing timer
+        if (_feedbackTimerToken != null)
+        {
+            Application.RemoveTimeout(_feedbackTimerToken);
+            _feedbackTimerToken = null;
+        }
+
         _selectionFeedback.Text = message;
         _selectionFeedback.Visible = true;
         SetNeedsLayout();
 
         // Auto-hide after 2 seconds
-        Application.AddTimeout(TimeSpan.FromSeconds(2), () =>
+        _feedbackTimerToken = Application.AddTimeout(TimeSpan.FromSeconds(2), () =>
         {
             Application.Invoke(HideSelectionFeedback);
             return false;  // Don't repeat
@@ -306,6 +325,13 @@ public class MonitoredItemsView : FrameView
 
     private void HideSelectionFeedback()
     {
+        // Clear any existing timer
+        if (_feedbackTimerToken != null)
+        {
+            Application.RemoveTimeout(_feedbackTimerToken);
+            _feedbackTimerToken = null;
+        }
+
         _selectionFeedback.Visible = false;
         _selectionFeedback.Text = "";
         SetNeedsLayout();
