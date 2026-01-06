@@ -7,6 +7,23 @@
     <Nullable>enable</Nullable>
     <RootNamespace>OpcScope</RootNamespace>
     <AssemblyName>OpcScope</AssemblyName>
+
+    <!-- Package metadata -->
+    <Version>1.0.0</Version>
+    <Authors>Brett Kinny</Authors>
+    <Description>A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data.</Description>
+    <PackageProjectUrl>https://github.com/BrettKinny/OpcScope</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/BrettKinny/OpcScope.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>opcua;opc-ua;terminal;tui;industrial;automation;scada</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Publishing options -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +33,10 @@
   <ItemGroup>
     <PackageReference Include="Terminal.Gui" Version="2.*" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <ItemGroup>
