@@ -1,9 +1,7 @@
-using System.Text;
 using Terminal.Gui;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
-using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -29,7 +27,7 @@ public class AddressSpaceView : FrameView
         CanFocus = true;
 
         // Apply initial theme styling
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
         _treeView = new TreeView<BrowsedNode>
@@ -176,8 +174,10 @@ public class AddressSpaceView : FrameView
                 }
             });
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
+            System.Diagnostics.Debug.WriteLine($"Failed to load children for {node.DisplayName}: {ex.Message}");
+            return Enumerable.Empty<BrowsedNode>();
             // Ignore load errors
         }
     }

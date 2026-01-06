@@ -16,9 +16,7 @@ namespace OpcScope.App;
 public class MainWindow : Toplevel
 {
     private readonly Logger _logger;
-    private readonly OpcUaClientWrapper _client;
-    private readonly NodeBrowser _nodeBrowser;
-    private SubscriptionManager? _subscriptionManager;
+    private readonly ConnectionManager _connectionManager;
 
     private readonly MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
@@ -44,10 +42,15 @@ public class MainWindow : Toplevel
     public MainWindow()
     {
         _logger = new Logger();
-        _client = new OpcUaClientWrapper(_logger);
-        _nodeBrowser = new NodeBrowser(_client, _logger);
+        _connectionManager = new ConnectionManager(_logger);
         _csvRecordingManager = new CsvRecordingManager(_logger);
 
+        // Wire up connection manager events
+        _connectionManager.StateChanged += OnConnectionStateChanged;
+        _connectionManager.ConnectionError += OnConnectionError;
+        _connectionManager.ValueChanged += OnValueChanged;
+        _connectionManager.ItemAdded += item => UiThread.Run(() => _monitoredItemsView.AddItem(item));
+        _connectionManager.ItemRemoved += handle => UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
         // Override global "Menu" ColorScheme BEFORE creating any views
         // This prevents StatusBar's blue background flash on first render
         var theme = ThemeManager.Current;
@@ -184,7 +187,7 @@ public class MainWindow : Toplevel
 
         // Initialize views
         _logView.Initialize(_logger);
-        _nodeDetailsView.Initialize(_nodeBrowser);
+        _nodeDetailsView.Initialize(_connectionManager.NodeBrowser);
 
         // Add all views
         Add(_menuBar);
@@ -272,7 +275,7 @@ public class MainWindow : Toplevel
                 {
                     new MenuItem("_Connect...", "", ShowConnectDialog),
                     new MenuItem("_Disconnect", "", Disconnect),
-                    new MenuItem("_Reconnect", "", () => _ = ReconnectAsync())
+                    new MenuItem("_Reconnect", "", () => ReconnectAsync().FireAndForget(_logger))
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
@@ -363,7 +366,7 @@ public class MainWindow : Toplevel
 
     private void OnThemeChanged(RetroTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             ApplyTheme();
 
@@ -380,13 +383,12 @@ public class MainWindow : Toplevel
 
     private void ShowConnectDialog()
     {
-        var dialog = new ConnectDialog(_lastEndpoint);
+        var dialog = new ConnectDialog(_connectionManager.LastEndpoint);
         Application.Run(dialog);
 
         if (dialog.Confirmed)
         {
-            _lastEndpoint = dialog.EndpointUrl;
-            _ = ConnectAsync(dialog.EndpointUrl);
+            ConnectAsync(dialog.EndpointUrl).FireAndForget(_logger);
         }
     }
 
@@ -400,11 +402,11 @@ public class MainWindow : Toplevel
 
         try
         {
-            var success = await _client.ConnectAsync(endpoint);
+            var success = await _connectionManager.ConnectAsync(endpoint);
 
             if (success)
             {
-                await InitializeAfterConnectAsync();
+                _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
             }
         }
         finally
@@ -446,10 +448,7 @@ public class MainWindow : Toplevel
             OnStopRecordingRequested();
         }
 
-        _subscriptionManager?.Dispose();
-        _subscriptionManager = null;
-
-        _client.Disconnect();
+        _connectionManager.Disconnect();
 
         _addressSpaceView.Clear();
         _monitoredItemsView.Clear();
@@ -471,11 +470,11 @@ public class MainWindow : Toplevel
 
         try
         {
-            var success = await _client.ReconnectAsync();
+            var success = await _connectionManager.ReconnectAsync();
 
             if (success)
             {
-                await InitializeAfterConnectAsync();
+                _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
             }
         }
         finally
@@ -487,7 +486,7 @@ public class MainWindow : Toplevel
 
     private void RefreshTree()
     {
-        if (_client.IsConnected)
+        if (_connectionManager.IsConnected)
         {
             _addressSpaceView.Refresh();
             _logger.Info("Address space refreshed");
@@ -523,12 +522,12 @@ public class MainWindow : Toplevel
 
     private void OnNodeSelected(BrowsedNode node)
     {
-        _ = _nodeDetailsView.ShowNodeAsync(node);
+        _nodeDetailsView.ShowNodeAsync(node).FireAndForget(_logger);
     }
 
     private void OnSubscribeRequested(BrowsedNode node)
     {
-        if (_subscriptionManager == null)
+        if (!_connectionManager.IsConnected)
         {
             _logger.Warning("Not connected");
             return;
@@ -540,12 +539,12 @@ public class MainWindow : Toplevel
             return;
         }
 
-        _ = _subscriptionManager.AddNodeAsync(node.NodeId, node.DisplayName);
+        _connectionManager.SubscribeAsync(node.NodeId, node.DisplayName).FireAndForget(_logger);
     }
 
     private void OnUnsubscribeRequested(MonitoredNode item)
     {
-        _ = _subscriptionManager?.RemoveNodeAsync(item.ClientHandle);
+        _connectionManager.UnsubscribeAsync(item.ClientHandle).FireAndForget(_logger);
     }
 
     private void OnWriteRequested(MonitoredNode item)
@@ -635,16 +634,21 @@ public class MainWindow : Toplevel
         // Record to CSV if recording is active
         _csvRecordingManager.RecordValue(item);
 
-        UiThread.Run(() =>
-        {
-            _monitoredItemsView.UpdateItem(item);
-        });
+        UiThread.Run(() => _monitoredItemsView.UpdateItem(item));
     }
 
-    private void OnClientConnected()
+    private void OnConnectionStateChanged(ConnectionState state)
     {
         UiThread.Run(() =>
         {
+            var statusText = state switch
+            {
+                ConnectionState.Connected => $"Connected to {_connectionManager.CurrentEndpoint}",
+                ConnectionState.Connecting => "Connecting...",
+                ConnectionState.Reconnecting => "Reconnecting...",
+                _ => "Disconnected"
+            };
+            UpdateConnectionStatus(statusText);
             _logger.Info("Connected successfully");
         });
     }
@@ -767,19 +771,26 @@ public class MainWindow : Toplevel
 
     private void ShowSettings()
     {
-        var currentInterval = _subscriptionManager?.PublishingInterval ?? 1000;
+        var currentInterval = _connectionManager.SubscriptionManager?.PublishingInterval ?? 1000;
         var dialog = new SettingsDialog(currentInterval);
         Application.Run(dialog);
 
-        if (dialog.Confirmed && _subscriptionManager != null)
+        if (dialog.Confirmed && _connectionManager.SubscriptionManager != null)
         {
-            _subscriptionManager.PublishingInterval = dialog.PublishingInterval;
+            _connectionManager.SubscriptionManager.PublishingInterval = dialog.PublishingInterval;
             _logger.Info($"Publishing interval changed to {dialog.PublishingInterval}ms");
         }
     }
 
     private void LaunchScope()
     {
+        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager);
+        Application.Run(dialog);
+    }
+
+    private void OnTrendPlotRequested(MonitoredNode node)
+    {
+        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager, node);
         if (_subscriptionManager == null)
         {
             MessageBox.Query("Scope", "Connect to a server first.", "OK");
@@ -806,7 +817,8 @@ public class MainWindow : Toplevel
             return;
         }
 
-        if (_subscriptionManager == null || !_subscriptionManager.MonitoredItems.Any())
+        var subscriptionManager = _connectionManager.SubscriptionManager;
+        if (subscriptionManager == null || !subscriptionManager.MonitoredItems.Any())
         {
             MessageBox.Query("Record", "No items to record. Subscribe to items first.", "OK");
             return;
@@ -880,7 +892,8 @@ public class MainWindow : Toplevel
 
     private void ExportToCsv()
     {
-        if (_subscriptionManager == null || !_subscriptionManager.MonitoredItems.Any())
+        var subscriptionManager = _connectionManager.SubscriptionManager;
+        if (subscriptionManager == null || !subscriptionManager.MonitoredItems.Any())
         {
             MessageBox.Query("Export", "No items to export", "OK");
             return;
@@ -895,7 +908,7 @@ public class MainWindow : Toplevel
 
         if (!dialog.Canceled && dialog.Path != null)
         {
-            var items = _subscriptionManager.MonitoredItems.ToList();
+            var items = subscriptionManager.MonitoredItems.ToList();
             var path = dialog.Path.ToString();
 
             // Create progress dialog
@@ -1075,8 +1088,7 @@ License: MIT
             StopConnectingAnimation();
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
-            _subscriptionManager?.Dispose();
-            _client.Dispose();
+            _connectionManager.Dispose();
         }
         base.Dispose(disposing);
     }

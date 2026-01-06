@@ -127,8 +127,10 @@ public class NodeBrowser
             var refs = await _client.BrowseAsync(nodeId);
             return refs.Count > 0;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
+            // Node may not be browsable - this is expected for some node types
+            _logger.Warning($"Could not check children for {nodeId}: {ex.Message}");
             return false;
         }
     }
@@ -169,9 +171,10 @@ public class NodeBrowser
                 }
             }
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
-            // Ignore errors reading data type
+            // Data type lookup failure is non-critical - node will still be displayed
+            System.Diagnostics.Debug.WriteLine($"Data type lookup failed for {nodeId}: {ex.Message}");
         }
 
         return null;
@@ -232,9 +235,10 @@ public class NodeBrowser
             if (attrs.Count > 0 && attrs[0].Value is LocalizedText lt)
                 return lt.Text;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
-            // Ignore
+            // Fall back to NodeId string representation
+            System.Diagnostics.Debug.WriteLine($"Could not resolve data type name for {dataTypeId}: {ex.Message}");
         }
 
         return dataTypeId.ToString();

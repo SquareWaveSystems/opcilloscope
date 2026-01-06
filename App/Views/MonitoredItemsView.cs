@@ -3,7 +3,6 @@ using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
 using System.Data;
 using Attribute = Terminal.Gui.Attribute;
-using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -73,9 +72,9 @@ public class MonitoredItemsView : FrameView
         Title = " Monitored Items ";
         CanFocus = true;
 
-        // Apply theme styling - emphasized (double-line) for this panel
-        var theme = AppThemeManager.Current;
-        BorderStyle = theme.EmphasizedBorderStyle;
+        // Apply theme styling
+        var theme = ThemeManager.Current;
+        BorderStyle = theme.FrameLineStyle;
 
         // Create recording toggle button with text label (right-aligned)
         _toggleRecordButton = new Button
@@ -176,7 +175,7 @@ public class MonitoredItemsView : FrameView
         };
 
         // Subscribe to theme changes
-        AppThemeManager.ThemeChanged += OnThemeChanged;
+        ThemeManager.ThemeChanged += OnThemeChanged;
 
         Add(_recordingStatus);
         Add(_selectionFeedback);
@@ -404,7 +403,7 @@ public class MonitoredItemsView : FrameView
     {
         if (disposing)
         {
-            AppThemeManager.ThemeChanged -= OnThemeChanged;
+            ThemeManager.ThemeChanged -= OnThemeChanged;
         }
         base.Dispose(disposing);
     }

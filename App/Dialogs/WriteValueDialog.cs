@@ -23,6 +23,7 @@ public class WriteValueDialog : Dialog
 
     public WriteValueDialog(NodeId nodeId, string nodeName, BuiltInType dataType, string dataTypeName, string? currentValue)
     {
+        var theme = ThemeManager.Current;
         var theme = AppThemeManager.Current;
         _dataType = dataType;
 

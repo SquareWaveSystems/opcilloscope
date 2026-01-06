@@ -2,7 +2,6 @@ using Terminal.Gui;
 using Opc.Ua;
 using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
-using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -20,7 +19,7 @@ public class NodeDetailsView : FrameView
         Title = " Node Details ";
 
         // Apply theme styling
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
         _detailsLabel = new Label

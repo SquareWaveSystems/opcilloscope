@@ -3,7 +3,6 @@ using OpcScope.Utilities;
 using OpcScope.App.Themes;
 using System.Collections.ObjectModel;
 using Attribute = Terminal.Gui.Attribute;
-using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -24,7 +23,7 @@ public class LogView : FrameView
         Title = " Log ";
 
         // Apply theme styling
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
         // Copy button in top-right corner of the frame
@@ -54,7 +53,7 @@ public class LogView : FrameView
         _listView.RowRender += OnRowRender;
 
         // Subscribe to theme changes to update colors
-        AppThemeManager.ThemeChanged += OnThemeChanged;
+        ThemeManager.ThemeChanged += OnThemeChanged;
 
         Add(_copyButton);
         Add(_listView);
@@ -79,7 +78,7 @@ public class LogView : FrameView
             return;
 
         var entry = _entries[e.Row];
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
 
         e.RowAttribute = entry.Level switch
         {
@@ -154,7 +153,7 @@ public class LogView : FrameView
         {
             _copyButton.Accepting -= OnCopyClicked;
             _listView.RowRender -= OnRowRender;
-            AppThemeManager.ThemeChanged -= OnThemeChanged;
+            ThemeManager.ThemeChanged -= OnThemeChanged;
         }
         base.Dispose(disposing);
     }
