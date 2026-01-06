@@ -35,6 +35,7 @@ public class MonitoredItemsView : FrameView
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? WriteRequested;
+    public event Action<MonitoredNode>? TrendPlotRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
 
     public MonitoredNode? SelectedItem
@@ -93,7 +94,7 @@ public class MonitoredItemsView : FrameView
         };
 
         _dataTable = new DataTable();
-        _dataTable.Columns.Add("Scope", typeof(string));  // Checkbox column for scope selection
+        _dataTable.Columns.Add("Rec", typeof(string));  // Recording selection (◉ = record this item)
         _dataTable.Columns.Add("Name", typeof(string));
         _dataTable.Columns.Add("Access", typeof(string));
         _dataTable.Columns.Add("Value", typeof(string));
@@ -221,7 +222,7 @@ public class MonitoredItemsView : FrameView
             return;
 
         var row = _dataTable.NewRow();
-        row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
+        row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Name"] = item.DisplayName;
         row["Access"] = item.AccessString;
         row["Value"] = item.Value;
@@ -248,7 +249,7 @@ public class MonitoredItemsView : FrameView
             return;
 
         row["Access"] = item.AccessString;
-        row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
+        row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
         row["Status"] = FormatStatusWithIcon(item);
@@ -308,6 +309,59 @@ public class MonitoredItemsView : FrameView
         return item.StatusString;
     }
 
+    private void ToggleScopeSelection()
+    {
+        var item = SelectedItem;
+        if (item == null) return;
+
+        if (item.IsSelectedForScope)
+        {
+            // Deselect
+            item.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
+        }
+        else
+        {
+            // Check if we've reached the max
+            if (_cachedScopeSelectionCount >= MaxScopeSelections)
+            {
+                // Show feedback that max is reached
+                var theme = ThemeManager.Current;
+                _selectionFeedback.Text = $"Max {MaxScopeSelections} items for Rec/Scope";
+                _selectionFeedback.ColorScheme = new ColorScheme
+                {
+                    Normal = new Attribute(theme.Warning, theme.Background),
+                    Focus = new Attribute(theme.Warning, theme.Background),
+                    HotNormal = new Attribute(theme.Warning, theme.Background),
+                    HotFocus = new Attribute(theme.Warning, theme.Background),
+                    Disabled = new Attribute(theme.Warning, theme.Background)
+                };
+                _selectionFeedback.Visible = true;
+
+                // Hide after a delay
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(2000);
+                    Application.Invoke(() => _selectionFeedback.Visible = false);
+                });
+                return;
+            }
+
+            // Select
+            item.IsSelectedForScope = true;
+            _cachedScopeSelectionCount++;
+        }
+
+        // Update the row display
+        if (_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
+        {
+            row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
+            _tableView.Update();
+        }
+
+        ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
+    }
+
     private void HandleKeyDown(object? _, Key e)
     {
         if (e == Key.Delete || e == Key.Backspace)
@@ -334,47 +388,15 @@ public class MonitoredItemsView : FrameView
                 e.Handled = true;
             }
         }
-    }
-
-    /// <summary>
-    /// Toggle scope selection for the currently highlighted item.
-    /// </summary>
-    private void ToggleScopeSelection()
-    {
-        var selected = SelectedItem;
-        if (selected == null) return;
-
-        if (selected.IsSelectedForScope)
+        else if (e == Key.T)
         {
-            // Deselect
-            selected.IsSelectedForScope = false;
-            _cachedScopeSelectionCount--;
-            _selectionFeedback.Visible = false;
-        }
-        else
-        {
-            // Check if at max selections
-            if (_cachedScopeSelectionCount >= MaxScopeSelections)
+            var selected = SelectedItem;
+            if (selected != null)
             {
-                _selectionFeedback.Text = $"Max {MaxScopeSelections} items for Scope";
-                _selectionFeedback.Visible = true;
-                return;
+                TrendPlotRequested?.Invoke(selected);
+                e.Handled = true;
             }
-
-            // Select
-            selected.IsSelectedForScope = true;
-            _cachedScopeSelectionCount++;
-            _selectionFeedback.Visible = false;
         }
-
-        // Update the row display
-        if (_rowsByHandle.TryGetValue(selected.ClientHandle, out var row))
-        {
-            row["Scope"] = selected.IsSelectedForScope ? CheckedBox : UncheckedBox;
-            _tableView.Update();
-        }
-
-        ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
     }
 
     /// <summary>
