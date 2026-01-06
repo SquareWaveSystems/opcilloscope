@@ -20,6 +20,11 @@ public class MonitoredNode
     public DateTime LastChangeTime { get; set; } = DateTime.MinValue;
     public bool RecentlyChanged => (DateTime.Now - LastChangeTime).TotalMilliseconds < 500;
 
+    /// <summary>
+    /// Indicates if this node is selected for display in the Scope view.
+    /// </summary>
+    public bool IsSelectedForScope { get; set; }
+
     public string StatusString
     {
         get
