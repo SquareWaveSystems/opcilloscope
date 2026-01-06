@@ -11,7 +11,7 @@ namespace OpcScope.App.Themes;
 public class LightTheme : RetroTheme
 {
     public override string Name => "Light";
-    public override string Description => "Light theme with dark grey highlights";
+    public override string Description => "Light theme";
 
     // Use single-line borders for clean look
     public override LineStyle BorderLineStyle => LineStyle.Single;

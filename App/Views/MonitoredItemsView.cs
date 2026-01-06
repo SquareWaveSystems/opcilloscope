@@ -70,7 +70,19 @@ public class MonitoredItemsView : FrameView
 
         _tableView.KeyDown += HandleKeyDown;
 
+        // Subscribe to theme changes
+        AppThemeManager.ThemeChanged += OnThemeChanged;
+
         Add(_tableView);
+    }
+
+    private void OnThemeChanged(RetroTheme theme)
+    {
+        Application.Invoke(() =>
+        {
+            BorderStyle = theme.FrameLineStyle;
+            SetNeedsLayout();
+        });
     }
 
     public void AddItem(MonitoredNode item)
@@ -141,5 +153,14 @@ public class MonitoredItemsView : FrameView
                 e.Handled = true;
             }
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            AppThemeManager.ThemeChanged -= OnThemeChanged;
+        }
+        base.Dispose(disposing);
     }
 }
