@@ -249,8 +249,8 @@ public class CsvRecordingManagerTests : IDisposable
 
         // Assert
         var content = File.ReadAllText(filePath);
-        // Status should be escaped because it contains parentheses which don't have commas
-        // but the format is "Bad (0x80020000)" which contains parentheses
+        // Status field contains parentheses: "Bad (0x80020000)"
+        // Our CSV escaping only handles commas, quotes, and newlines, not parentheses
         Assert.Contains("Bad", content);
     }
 
@@ -427,7 +427,6 @@ public class CsvRecordingManagerTests : IDisposable
             Value = "100",
             Timestamp = null // No timestamp
         };
-        var beforeRecord = DateTime.Now;
 
         // Act
         _manager.RecordValue(node);
