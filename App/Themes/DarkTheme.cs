@@ -24,9 +24,9 @@ public class DarkTheme : RetroTheme
     public override Color ForegroundBright => new(245, 246, 248); // Near-white
     public override Color ForegroundDim => new(130, 135, 140);    // Mid grey
 
-    // Teal accent for highlights
-    public override Color Accent => new(80, 180, 160);            // Soft teal
-    public override Color AccentBright => new(100, 210, 185);     // Brighter teal
+    // Deep CRT retro orange accent for highlights
+    public override Color Accent => new(204, 102, 0);             // Deep amber/orange
+    public override Color AccentBright => new(255, 140, 26);      // Brighter CRT orange
 
     // Subtle borders that don't compete
     public override Color Border => new(70, 75, 82);              // Dark grey

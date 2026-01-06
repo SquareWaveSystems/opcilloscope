@@ -20,7 +20,6 @@ public class MainWindow : Toplevel
     private readonly NodeBrowser _nodeBrowser;
     private SubscriptionManager? _subscriptionManager;
 
-    private readonly Label _titleBanner;
     private readonly MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
     private readonly MonitoredItemsView _monitoredItemsView;
@@ -50,14 +49,8 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
-        // Create title banner
-        _titleBanner = new Label
-        {
-            X = Pos.Center(),
-            Y = 0,
-            Text = "═══╡ OPC Scope ╞═══",
-            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.BrightCyan, Color.Black) }
-        };
+        // Set initial window title
+        Title = "OPC Scope - Not Connected";
 
         // Create menu bar
         _menuBar = CreateMenuBar();
@@ -66,7 +59,7 @@ public class MainWindow : Toplevel
         _addressSpaceView = new AddressSpaceView
         {
             X = 0,
-            Y = 2,
+            Y = 1,
             Width = Dim.Percent(35),
             Height = Dim.Percent(60)
         };
@@ -74,7 +67,7 @@ public class MainWindow : Toplevel
         _monitoredItemsView = new MonitoredItemsView
         {
             X = Pos.Right(_addressSpaceView),
-            Y = 2,
+            Y = 1,
             Width = Dim.Fill(),
             Height = Dim.Percent(60)
         };
@@ -148,7 +141,6 @@ public class MainWindow : Toplevel
         _nodeDetailsView.Initialize(_nodeBrowser);
 
         // Add all views
-        Add(_titleBanner);
         Add(_menuBar);
         Add(_addressSpaceView);
         Add(_monitoredItemsView);
@@ -177,7 +169,8 @@ public class MainWindow : Toplevel
 
         return new MenuBar
         {
-            Y = 1,
+            X = 0,
+            Y = 0,
             Menus = new MenuBarItem[]
             {
                 new MenuBarItem("_File", new MenuItem[]
@@ -219,12 +212,6 @@ public class MainWindow : Toplevel
         // Apply main window styling
         ColorScheme = theme.MainColorScheme;
         BorderStyle = theme.BorderLineStyle;
-
-        // Apply styling to title banner (use accent color for branding)
-        _titleBanner.ColorScheme = new ColorScheme
-        {
-            Normal = theme.AccentBrightAttr
-        };
 
         // Apply styling to company label (subtle in status bar)
         _companyLabel.ColorScheme = new ColorScheme
