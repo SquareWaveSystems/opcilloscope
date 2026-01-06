@@ -112,11 +112,12 @@ This setup ensures builds work in GitHub Actions CI (uses nuget.org) and in rest
 ### Command Line Options
 
 ```bash
-# Auto-connect to a server on startup
-dotnet run -- --connect opc.tcp://localhost:4840
+# Load a configuration file
+dotnet run -- config.opcscope
+dotnet run -- --config production.json
 
-# Or simply pass the endpoint URL
-dotnet run -- opc.tcp://192.168.1.50:4840
+# Show help
+dotnet run -- --help
 ```
 
 ## Keyboard Shortcuts
