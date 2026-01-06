@@ -144,8 +144,17 @@ public class WriteValueDialog : Dialog
         {
             if (ValidateAndParse())
             {
-                _confirmed = true;
-                Application.RequestStop();
+                // Show confirmation dialog before writing
+                var confirmResult = MessageBox.Query(
+                    "Confirm Write",
+                    $"Write '{_valueField.Text}' to {nodeName}?",
+                    "Yes", "No");
+                
+                if (confirmResult == 0) // Yes was selected
+                {
+                    _confirmed = true;
+                    Application.RequestStop();
+                }
             }
         };
 
@@ -182,15 +191,7 @@ public class WriteValueDialog : Dialog
         }
 
         var (success, _, error) = OpcValueConverter.TryConvert(text, _dataType);
-
-        if (!success)
-        {
-            _errorLabel.Text = error ?? "Invalid value";
-        }
-        else
-        {
-            _errorLabel.Text = "";
-        }
+        _errorLabel.Text = success ? "" : error ?? "Invalid value";
     }
 
     private bool ValidateAndParse()

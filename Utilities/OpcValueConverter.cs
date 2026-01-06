@@ -13,9 +13,12 @@ public static class OpcValueConverter
     /// <param name="input">The string input to convert.</param>
     /// <param name="dataType">The target BuiltInType.</param>
     /// <returns>A tuple containing success status, the converted value (if successful), and an error message (if failed).</returns>
+    /// <remarks>
+    /// Empty strings are rejected for all types except String and Variant.
+    /// </remarks>
     public static (bool Success, object? Value, string? Error) TryConvert(string input, BuiltInType dataType)
     {
-        if (string.IsNullOrEmpty(input))
+        if (string.IsNullOrEmpty(input) && dataType is not BuiltInType.String and not BuiltInType.Variant)
         {
             return (false, null, "Value cannot be empty");
         }
@@ -33,10 +36,10 @@ public static class OpcValueConverter
             BuiltInType.UInt64 => TryParse<ulong>(input, ulong.TryParse, "Enter a valid unsigned 64-bit integer"),
             BuiltInType.Float => TryParseFloat(input),
             BuiltInType.Double => TryParseDouble(input),
-            BuiltInType.String => (true, input, null),
+            BuiltInType.String => (true, input ?? "", null),
             BuiltInType.DateTime => TryParseDateTime(input),
             BuiltInType.Guid => TryParseGuid(input),
-            BuiltInType.Variant => (true, input, null), // Accept as string for Variant
+            BuiltInType.Variant => (true, new Variant(input ?? ""), null),
             _ => (false, null, $"Unsupported data type: {dataType}")
         };
     }
@@ -64,6 +67,14 @@ public static class OpcValueConverter
         return (false, null, errorMessage);
     }
 
+    /// <summary>
+    /// Parses a Float value. Rejects NaN and Infinity values for safety.
+    /// </summary>
+    /// <remarks>
+    /// Note: float.TryParse can successfully parse "NaN", "Infinity", and "-Infinity" 
+    /// into their respective special floating-point values. These are explicitly rejected 
+    /// to prevent unintended writes of special values to OPC UA nodes.
+    /// </remarks>
     private static (bool, object?, string?) TryParseFloat(string input)
     {
         if (float.TryParse(input.Trim(), out var result))
@@ -77,6 +88,14 @@ public static class OpcValueConverter
         return (false, null, "Enter a valid decimal number");
     }
 
+    /// <summary>
+    /// Parses a Double value. Rejects NaN and Infinity values for safety.
+    /// </summary>
+    /// <remarks>
+    /// Note: double.TryParse can successfully parse "NaN", "Infinity", and "-Infinity" 
+    /// into their respective special floating-point values. These are explicitly rejected 
+    /// to prevent unintended writes of special values to OPC UA nodes.
+    /// </remarks>
     private static (bool, object?, string?) TryParseDouble(string input)
     {
         if (double.TryParse(input.Trim(), out var result))

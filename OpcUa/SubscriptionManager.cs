@@ -249,30 +249,42 @@ public class SubscriptionManager : IDisposable
 
     private (BuiltInType, string) ResolveDataType(NodeId dataTypeNodeId)
     {
-        // Map common OPC UA data type NodeIds to BuiltInType
-        // Standard data types are in namespace 0 with numeric identifiers
+        // Compare against standard OPC UA DataType NodeIds explicitly for clarity and maintainability
         if (dataTypeNodeId.NamespaceIndex == 0 && dataTypeNodeId.IdType == IdType.Numeric)
         {
-            var id = (uint)dataTypeNodeId.Identifier;
-            return id switch
-            {
-                (uint)BuiltInType.Boolean => (BuiltInType.Boolean, "Boolean"),
-                (uint)BuiltInType.SByte => (BuiltInType.SByte, "SByte"),
-                (uint)BuiltInType.Byte => (BuiltInType.Byte, "Byte"),
-                (uint)BuiltInType.Int16 => (BuiltInType.Int16, "Int16"),
-                (uint)BuiltInType.UInt16 => (BuiltInType.UInt16, "UInt16"),
-                (uint)BuiltInType.Int32 => (BuiltInType.Int32, "Int32"),
-                (uint)BuiltInType.UInt32 => (BuiltInType.UInt32, "UInt32"),
-                (uint)BuiltInType.Int64 => (BuiltInType.Int64, "Int64"),
-                (uint)BuiltInType.UInt64 => (BuiltInType.UInt64, "UInt64"),
-                (uint)BuiltInType.Float => (BuiltInType.Float, "Float"),
-                (uint)BuiltInType.Double => (BuiltInType.Double, "Double"),
-                (uint)BuiltInType.String => (BuiltInType.String, "String"),
-                (uint)BuiltInType.DateTime => (BuiltInType.DateTime, "DateTime"),
-                (uint)BuiltInType.Guid => (BuiltInType.Guid, "Guid"),
-                (uint)BuiltInType.ByteString => (BuiltInType.ByteString, "ByteString"),
-                _ => (BuiltInType.Variant, dataTypeNodeId.ToString())
-            };
+            if (dataTypeNodeId.Equals(DataTypeIds.Boolean))
+                return (BuiltInType.Boolean, "Boolean");
+            if (dataTypeNodeId.Equals(DataTypeIds.SByte))
+                return (BuiltInType.SByte, "SByte");
+            if (dataTypeNodeId.Equals(DataTypeIds.Byte))
+                return (BuiltInType.Byte, "Byte");
+            if (dataTypeNodeId.Equals(DataTypeIds.Int16))
+                return (BuiltInType.Int16, "Int16");
+            if (dataTypeNodeId.Equals(DataTypeIds.UInt16))
+                return (BuiltInType.UInt16, "UInt16");
+            if (dataTypeNodeId.Equals(DataTypeIds.Int32))
+                return (BuiltInType.Int32, "Int32");
+            if (dataTypeNodeId.Equals(DataTypeIds.UInt32))
+                return (BuiltInType.UInt32, "UInt32");
+            if (dataTypeNodeId.Equals(DataTypeIds.Int64))
+                return (BuiltInType.Int64, "Int64");
+            if (dataTypeNodeId.Equals(DataTypeIds.UInt64))
+                return (BuiltInType.UInt64, "UInt64");
+            if (dataTypeNodeId.Equals(DataTypeIds.Float))
+                return (BuiltInType.Float, "Float");
+            if (dataTypeNodeId.Equals(DataTypeIds.Double))
+                return (BuiltInType.Double, "Double");
+            if (dataTypeNodeId.Equals(DataTypeIds.String))
+                return (BuiltInType.String, "String");
+            if (dataTypeNodeId.Equals(DataTypeIds.DateTime))
+                return (BuiltInType.DateTime, "DateTime");
+            if (dataTypeNodeId.Equals(DataTypeIds.Guid))
+                return (BuiltInType.Guid, "Guid");
+            if (dataTypeNodeId.Equals(DataTypeIds.ByteString))
+                return (BuiltInType.ByteString, "ByteString");
+
+            // Fallback for other namespace 0 numeric types
+            return (BuiltInType.Variant, dataTypeNodeId.ToString());
         }
 
         return (BuiltInType.Variant, dataTypeNodeId.ToString());

@@ -104,7 +104,6 @@ public class MonitoredItemsView : FrameView
         _tableView.Style.ShowVerticalHeaderLines = false;
         _tableView.Style.ExpandLastColumn = true;
 
-
         _tableView.KeyDown += HandleKeyDown;
 
         // Subscribe to theme changes
