@@ -3,6 +3,7 @@ using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
 using System.Data;
 using Attribute = Terminal.Gui.Attribute;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -12,6 +13,11 @@ namespace OpcScope.App.Views;
 /// </summary>
 public class MonitoredItemsView : FrameView
 {
+    // Checkbox display constants
+    private const string CheckedBox = "[●]";
+    private const string UncheckedBox = "[ ]";
+    private const int MaxScopeSelections = 5;
+
     private readonly TableView _tableView;
     private readonly DataTable _dataTable;
     private readonly Dictionary<uint, DataRow> _rowsByHandle = new();
@@ -20,6 +26,10 @@ public class MonitoredItemsView : FrameView
     private readonly Button _toggleRecordButton;
     private readonly Label _recordingStatus;
     private bool _isRecording;
+
+    // Scope selection
+    private readonly Label _selectionFeedback;
+    private int _cachedScopeSelectionCount;
 
     // Empty state
     private readonly Label _emptyStateLabel;
@@ -196,7 +206,7 @@ public class MonitoredItemsView : FrameView
 
     private void UpdateRecordingButtonStyle()
     {
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
         _toggleRecordButton.Text = _isRecording
             ? $" {theme.RecordingLabel} "
             : $" {theme.StoppedLabel} ";
@@ -359,7 +369,7 @@ public class MonitoredItemsView : FrameView
 
     private string FormatStatusWithIcon(MonitoredNode item)
     {
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
 
         if (item.IsGood)
             return $"{theme.StatusGoodIcon} Good";
@@ -397,6 +407,47 @@ public class MonitoredItemsView : FrameView
                 e.Handled = true;
             }
         }
+    }
+
+    /// <summary>
+    /// Toggle scope selection for the currently highlighted item.
+    /// </summary>
+    private void ToggleScopeSelection()
+    {
+        var selected = SelectedItem;
+        if (selected == null) return;
+
+        if (selected.IsSelectedForScope)
+        {
+            // Deselect
+            selected.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
+            _selectionFeedback.Visible = false;
+        }
+        else
+        {
+            // Check if at max selections
+            if (_cachedScopeSelectionCount >= MaxScopeSelections)
+            {
+                _selectionFeedback.Text = $"Max {MaxScopeSelections} items for Scope";
+                _selectionFeedback.Visible = true;
+                return;
+            }
+
+            // Select
+            selected.IsSelectedForScope = true;
+            _cachedScopeSelectionCount++;
+            _selectionFeedback.Visible = false;
+        }
+
+        // Update the row display
+        if (_rowsByHandle.TryGetValue(selected.ClientHandle, out var row))
+        {
+            row["Scope"] = selected.IsSelectedForScope ? CheckedBox : UncheckedBox;
+            _tableView.Update();
+        }
+
+        ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
     }
 
     protected override void Dispose(bool disposing)

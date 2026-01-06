@@ -63,11 +63,6 @@ public class MainWindow : Toplevel
             Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
 
-        // Wire up client events
-        _client.Connected += OnClientConnected;
-        _client.Disconnected += OnClientDisconnected;
-        _client.ConnectionError += OnConnectionError;
-
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
@@ -416,30 +411,6 @@ public class MainWindow : Toplevel
         }
     }
 
-    private async Task InitializeAfterConnectAsync()
-    {
-        // Initialize subscription manager
-        _subscriptionManager = new SubscriptionManager(_client, _logger);
-        await _subscriptionManager.InitializeAsync();
-
-        // Wire up subscription events
-        _subscriptionManager.ValueChanged += OnValueChanged;
-        _subscriptionManager.ItemAdded += item =>
-        {
-            UiThread.Run(() => _monitoredItemsView.AddItem(item));
-        };
-        _subscriptionManager.ItemRemoved += handle =>
-        {
-            UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
-        };
-
-        // Initialize address space view (handles its own async loading)
-        _addressSpaceView.Initialize(_nodeBrowser);
-
-        // Update status on UI thread
-        UiThread.Run(() => UpdateConnectionStatus(isConnected: true));
-    }
-
     private void Disconnect()
     {
         // Stop recording if active
@@ -549,7 +520,7 @@ public class MainWindow : Toplevel
 
     private void OnWriteRequested(MonitoredNode item)
     {
-        if (!_client.IsConnected)
+        if (!_connectionManager.IsConnected)
         {
             _logger.Warning("Cannot write: not connected");
             return;
@@ -593,7 +564,7 @@ public class MainWindow : Toplevel
         {
             ShowActivity("Writing...");
 
-            var statusCode = await _client.WriteValueAsync(item.NodeId, value);
+            var statusCode = await _connectionManager.Client!.WriteValueAsync(item.NodeId, value);
 
             UiThread.Run(() =>
             {
@@ -641,15 +612,13 @@ public class MainWindow : Toplevel
     {
         UiThread.Run(() =>
         {
-            var statusText = state switch
+            var isConnected = state == ConnectionState.Connected;
+            UpdateConnectionStatus(isConnected);
+
+            if (isConnected)
             {
-                ConnectionState.Connected => $"Connected to {_connectionManager.CurrentEndpoint}",
-                ConnectionState.Connecting => "Connecting...",
-                ConnectionState.Reconnecting => "Reconnecting...",
-                _ => "Disconnected"
-            };
-            UpdateConnectionStatus(statusText);
-            _logger.Info("Connected successfully");
+                _logger.Info($"Connected to {_connectionManager.CurrentEndpoint}");
+            }
         });
     }
 
@@ -784,14 +753,7 @@ public class MainWindow : Toplevel
 
     private void LaunchScope()
     {
-        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager);
-        Application.Run(dialog);
-    }
-
-    private void OnTrendPlotRequested(MonitoredNode node)
-    {
-        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager, node);
-        if (_subscriptionManager == null)
+        if (_connectionManager.SubscriptionManager == null)
         {
             MessageBox.Query("Scope", "Connect to a server first.", "OK");
             return;
@@ -805,7 +767,7 @@ public class MainWindow : Toplevel
             return;
         }
 
-        var dialog = new ScopeDialog(selectedNodes, _subscriptionManager);
+        var dialog = new ScopeDialog(selectedNodes, _connectionManager.SubscriptionManager);
         Application.Run(dialog);
     }
 

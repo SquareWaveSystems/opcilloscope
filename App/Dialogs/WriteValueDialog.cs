@@ -23,7 +23,6 @@ public class WriteValueDialog : Dialog
 
     public WriteValueDialog(NodeId nodeId, string nodeName, BuiltInType dataType, string dataTypeName, string? currentValue)
     {
-        var theme = ThemeManager.Current;
         var theme = AppThemeManager.Current;
         _dataType = dataType;
 
@@ -113,6 +112,18 @@ public class WriteValueDialog : Dialog
             Y = Pos.Bottom(newValueLabel),
             Width = Dim.Fill()! - 1,
             Text = currentValue ?? ""
+        };
+
+        _errorLabel = new Label
+        {
+            X = 1,
+            Y = Pos.Bottom(_valueField),
+            Width = Dim.Fill()! - 1,
+            Text = "",
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.StatusBad, theme.Background)
+            }
         };
 
         // Default button highlighted with amber

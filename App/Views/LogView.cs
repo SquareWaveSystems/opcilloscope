@@ -3,6 +3,7 @@ using OpcScope.Utilities;
 using OpcScope.App.Themes;
 using System.Collections.ObjectModel;
 using Attribute = Terminal.Gui.Attribute;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 

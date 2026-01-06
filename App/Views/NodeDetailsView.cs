@@ -2,6 +2,7 @@ using Terminal.Gui;
 using Opc.Ua;
 using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -37,7 +38,7 @@ public class NodeDetailsView : FrameView
         };
 
         // Subscribe to theme changes
-        AppThemeManager.ThemeChanged += OnThemeChanged;
+        ThemeManager.ThemeChanged += OnThemeChanged;
 
         Add(_detailsLabel);
     }
@@ -126,7 +127,7 @@ public class NodeDetailsView : FrameView
 
     private void SetMutedColor()
     {
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
         _detailsLabel.ColorScheme = new ColorScheme
         {
             Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
@@ -135,7 +136,7 @@ public class NodeDetailsView : FrameView
 
     private void SetNormalColor()
     {
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
         _detailsLabel.ColorScheme = new ColorScheme
         {
             Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background)

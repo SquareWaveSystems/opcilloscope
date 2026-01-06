@@ -1,7 +1,9 @@
+using System.Text;
 using Terminal.Gui;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -74,7 +76,7 @@ public class AddressSpaceView : FrameView
         Add(_emptyStateLabel);
 
         // Subscribe to theme changes
-        AppThemeManager.ThemeChanged += OnThemeChanged;
+        ThemeManager.ThemeChanged += OnThemeChanged;
 
         // Initially show empty state
         _treeView.Visible = false;
@@ -177,7 +179,6 @@ public class AddressSpaceView : FrameView
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to load children for {node.DisplayName}: {ex.Message}");
-            return Enumerable.Empty<BrowsedNode>();
             // Ignore load errors
         }
     }
