@@ -119,7 +119,6 @@ public class MonitoredItemsView : FrameView
         _recordButton.Enabled = !isRecording;
         _stopButton.Enabled = isRecording;
         _recordingStatus.Text = statusText;
-        _recordingStatus.Update();
     }
 
     /// <summary>
@@ -128,7 +127,6 @@ public class MonitoredItemsView : FrameView
     public void UpdateRecordingStatus(string statusText)
     {
         _recordingStatus.Text = statusText;
-        _recordingStatus.Update();
     }
 
     public void AddItem(MonitoredNode item)

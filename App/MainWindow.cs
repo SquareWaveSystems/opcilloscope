@@ -420,7 +420,7 @@ public class MainWindow : Toplevel
         using var dialog = new SaveDialog
         {
             Title = "Save Recording As",
-            AllowedTypes = new[] { new AllowedType("CSV Files", ".csv") }
+            AllowedTypes = new List<IAllowedType> { new AllowedType("CSV Files", ".csv") }
         };
 
         Application.Run(dialog);
