@@ -9,7 +9,7 @@ namespace OpcScope.App.Views;
 
 /// <summary>
 /// Scrolling event log panel with color-coded severity.
-/// Uses Terminal.Gui v2 ColorGetter for per-row coloring.
+/// Uses Terminal.Gui v2 RowRender event for per-row coloring.
 /// </summary>
 public class LogView : FrameView
 {
@@ -36,6 +36,12 @@ public class LogView : FrameView
 
         _listView.SetSource(_displayedEntries);
 
+        // Add row coloring based on log level
+        _listView.RowRender += OnRowRender;
+
+        // Subscribe to theme changes to update colors
+        AppThemeManager.ThemeChanged += OnThemeChanged;
+
         Add(_listView);
     }
 
@@ -50,6 +56,31 @@ public class LogView : FrameView
             _entries.Add(entry);
             _displayedEntries.Add(FormatEntry(entry));
         }
+    }
+
+    private void OnRowRender(object? sender, ListViewRowEventArgs e)
+    {
+        if (e.Row < 0 || e.Row >= _entries.Count)
+            return;
+
+        var entry = _entries[e.Row];
+        var theme = AppThemeManager.Current;
+
+        e.RowAttribute = entry.Level switch
+        {
+            LogLevel.Error => theme.ErrorAttr,
+            LogLevel.Warning => theme.WarningAttr,
+            _ => theme.NormalAttr
+        };
+    }
+
+    private void OnThemeChanged(RetroTheme theme)
+    {
+        Application.Invoke(() =>
+        {
+            BorderStyle = theme.FrameLineStyle;
+            SetNeedsLayout();
+        });
     }
 
     private void OnLogAdded(LogEntry entry)
@@ -91,5 +122,15 @@ public class LogView : FrameView
         _entries.Clear();
         _displayedEntries.Clear();
         _logger?.Clear();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _listView.RowRender -= OnRowRender;
+            AppThemeManager.ThemeChanged -= OnThemeChanged;
+        }
+        base.Dispose(disposing);
     }
 }

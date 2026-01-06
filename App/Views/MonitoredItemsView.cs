@@ -104,10 +104,25 @@ public class MonitoredItemsView : FrameView
 
         _tableView.KeyDown += HandleKeyDown;
 
+        // Subscribe to theme changes
+        AppThemeManager.ThemeChanged += OnThemeChanged;
+
+        // Subscribe to theme changes
+        AppThemeManager.ThemeChanged += OnThemeChanged;
+
         Add(_recordButton);
         Add(_stopButton);
         Add(_recordingStatus);
         Add(_tableView);
+    }
+
+    private void OnThemeChanged(RetroTheme theme)
+    {
+        Application.Invoke(() =>
+        {
+            BorderStyle = theme.FrameLineStyle;
+            SetNeedsLayout();
+        });
     }
 
     /// <summary>
@@ -197,5 +212,14 @@ public class MonitoredItemsView : FrameView
                 e.Handled = true;
             }
         }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            AppThemeManager.ThemeChanged -= OnThemeChanged;
+        }
+        base.Dispose(disposing);
     }
 }

@@ -16,14 +16,15 @@ public class RetroThemeTests
     public void DarkTheme_HasCorrectDescription()
     {
         var theme = new DarkTheme();
-        Assert.Equal("Classic green monochrome terminal", theme.Description);
+        Assert.Equal("Dark theme", theme.Description);
     }
 
     [Fact]
-    public void DarkTheme_HasBlackBackground()
+    public void DarkTheme_HasDarkBackground()
     {
         var theme = new DarkTheme();
-        Assert.Equal(Color.Black, theme.Background);
+        // Dark charcoal background
+        Assert.Equal(new Color(30, 32, 36), theme.Background);
     }
 
     [Fact]
@@ -37,7 +38,7 @@ public class RetroThemeTests
     public void LightTheme_HasCorrectDescription()
     {
         var theme = new LightTheme();
-        Assert.Equal("Light theme with dark grey highlights", theme.Description);
+        Assert.Equal("Light theme", theme.Description);
     }
 
     [Fact]
@@ -45,7 +46,7 @@ public class RetroThemeTests
     {
         var theme = new LightTheme();
         // Off-white background
-        Assert.NotEqual(Color.Black, theme.Background);
+        Assert.Equal(new Color(245, 245, 242), theme.Background);
     }
 
     [Theory]
@@ -95,34 +96,20 @@ public class RetroThemeTests
         Assert.NotNull(theme.FrameColorScheme);
     }
 
-    [Fact]
-    public void DarkTheme_HasDoubleLineBorders()
+    [Theory]
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
+    public void AllThemes_HaveSingleLineBoxDrawingCharacters(Type themeType)
     {
-        var theme = new DarkTheme();
+        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
 
-        Assert.Equal('╔', theme.BoxTopLeft);
-        Assert.Equal('╗', theme.BoxTopRight);
-        Assert.Equal('╚', theme.BoxBottomLeft);
-        Assert.Equal('╝', theme.BoxBottomRight);
-        Assert.Equal('═', theme.BoxHorizontal);
-        Assert.Equal('║', theme.BoxVertical);
-        Assert.Equal('╡', theme.BoxTitleLeft);
-        Assert.Equal('╞', theme.BoxTitleRight);
-    }
-
-    [Fact]
-    public void LightTheme_HasSingleLineBorders()
-    {
-        var theme = new LightTheme();
-
+        // Both themes use single-line box drawing for clean look
         Assert.Equal('┌', theme.BoxTopLeft);
         Assert.Equal('┐', theme.BoxTopRight);
         Assert.Equal('└', theme.BoxBottomLeft);
         Assert.Equal('┘', theme.BoxBottomRight);
         Assert.Equal('─', theme.BoxHorizontal);
         Assert.Equal('│', theme.BoxVertical);
-        Assert.Equal('┤', theme.BoxTitleLeft);
-        Assert.Equal('├', theme.BoxTitleRight);
     }
 
     [Theory]
@@ -140,29 +127,50 @@ public class RetroThemeTests
         Assert.NotNull(theme.NoSignalMessage);
     }
 
-    [Theory]
-    [InlineData(typeof(DarkTheme))]
-    [InlineData(typeof(LightTheme))]
-    public void AllThemes_HaveDefaultEnableGlow(Type themeType)
+    [Fact]
+    public void DarkTheme_HasErrorColor()
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = new DarkTheme();
+        // Soft red for dark backgrounds
+        Assert.Equal(new Color(230, 90, 90), theme.Error);
+    }
 
-        // Default EnableGlow is true in RetroTheme base class
+    [Fact]
+    public void DarkTheme_HasWarningColor()
+    {
+        var theme = new DarkTheme();
+        // Warm amber for dark backgrounds
+        Assert.Equal(new Color(230, 180, 80), theme.Warning);
+    }
+
+    [Fact]
+    public void LightTheme_HasErrorColor()
+    {
+        var theme = new LightTheme();
+        // Dark red for light backgrounds
+        Assert.Equal(new Color(180, 60, 60), theme.Error);
+    }
+
+    [Fact]
+    public void LightTheme_HasWarningColor()
+    {
+        var theme = new LightTheme();
+        // Dark amber for light backgrounds
+        Assert.Equal(new Color(180, 140, 40), theme.Warning);
+    }
+
+    [Fact]
+    public void DarkTheme_EnablesGlow()
+    {
+        var theme = new DarkTheme();
         Assert.True(theme.EnableGlow);
     }
 
     [Fact]
-    public void DarkTheme_ErrorColorIsRed()
+    public void LightTheme_DisablesGlow()
     {
-        var theme = new DarkTheme();
-        Assert.Equal(Color.Red, theme.Error);
-    }
-
-    [Fact]
-    public void DarkTheme_WarningColorIsBrightYellow()
-    {
-        var theme = new DarkTheme();
-        Assert.Equal(Color.BrightYellow, theme.Warning);
+        var theme = new LightTheme();
+        Assert.False(theme.EnableGlow);
     }
 
     [Fact]
@@ -202,19 +210,19 @@ public class RetroThemeTests
     }
 
     [Fact]
-    public void ButtonDecorations_AreSymmetric()
+    public void ButtonDecorations_AreMinimal()
     {
         var theme = new DarkTheme();
 
-        // Both should have similar visual weight
-        Assert.False(string.IsNullOrEmpty(theme.ButtonPrefix));
-        Assert.False(string.IsNullOrEmpty(theme.ButtonSuffix));
+        // Both themes use minimal bracket style
+        Assert.Equal("[ ", theme.ButtonPrefix);
+        Assert.Equal(" ]", theme.ButtonSuffix);
     }
 
     [Theory]
     [InlineData(typeof(DarkTheme), "Dark")]
     [InlineData(typeof(LightTheme), "Light")]
-    public void AllThemes_NameMatchesClassName(Type themeType, string expectedName)
+    public void AllThemes_NameMatchesExpected(Type themeType, string expectedName)
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
         Assert.Equal(expectedName, theme.Name);
@@ -256,12 +264,11 @@ public class RetroThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
-    public void AllThemes_HaveLineStyleSettings(Type themeType)
+    public void AllThemes_UseSingleLineBorders(Type themeType)
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
 
-        // LineStyle is an enum, verify it's a valid value
-        Assert.True(Enum.IsDefined(typeof(LineStyle), theme.BorderLineStyle));
-        Assert.True(Enum.IsDefined(typeof(LineStyle), theme.FrameLineStyle));
+        Assert.Equal(LineStyle.Single, theme.BorderLineStyle);
+        Assert.Equal(LineStyle.Single, theme.FrameLineStyle);
     }
 }
