@@ -860,7 +860,8 @@ public class MainWindow : Toplevel
         using var dialog = new SaveDialog
         {
             Title = "Save Recording As",
-            AllowedTypes = new List<IAllowedType> { new AllowedType("CSV Files", ".csv") }
+            AllowedTypes = new List<IAllowedType> { new AllowedType("CSV Files", ".csv") },
+            Path = $"recording_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
         };
 
         Application.Run(dialog);
