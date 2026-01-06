@@ -71,11 +71,49 @@ public class ConfigurationService
         // Handle version migrations if needed
         config = MigrateIfNeeded(config);
 
+        // Validate the loaded configuration
+        ValidateConfiguration(config);
+
         CurrentFilePath = filePath;
         HasUnsavedChanges = false;
         UnsavedChangesStateChanged?.Invoke(false);
 
         return config;
+    }
+
+    /// <summary>
+    /// Validates a configuration object for common issues.
+    /// </summary>
+    /// <param name="config">The configuration to validate.</param>
+    /// <exception cref="InvalidDataException">Thrown if validation fails.</exception>
+    private void ValidateConfiguration(OpcScopeConfig config)
+    {
+        // Validate publishing interval
+        if (config.Settings.PublishingIntervalMs < 0)
+        {
+            throw new InvalidDataException($"Invalid PublishingIntervalMs: {config.Settings.PublishingIntervalMs}. Must be non-negative.");
+        }
+
+        // Validate sampling interval
+        if (config.Settings.SamplingIntervalMs < 0)
+        {
+            throw new InvalidDataException($"Invalid SamplingIntervalMs: {config.Settings.SamplingIntervalMs}. Must be non-negative.");
+        }
+
+        // Validate monitored nodes
+        foreach (var node in config.MonitoredNodes)
+        {
+            if (string.IsNullOrWhiteSpace(node.NodeId))
+            {
+                throw new InvalidDataException("Monitored node has empty NodeId.");
+            }
+
+            // Basic NodeId format check (should contain at least one character)
+            if (node.NodeId.Length == 0)
+            {
+                throw new InvalidDataException($"Monitored node '{node.DisplayName}' has invalid NodeId format.");
+            }
+        }
     }
 
     /// <summary>

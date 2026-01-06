@@ -50,6 +50,10 @@ public class MainWindow : Toplevel
         _csvRecordingManager = new CsvRecordingManager(_logger);
         _configService = new ConfigurationService();
         _recentFiles = new RecentFilesManager();
+        _recentFiles.FilesChanged += (_, _) =>
+        {
+            UiThread.Run(RebuildMenuBar);
+        };
 
         // Wire up connection manager events
         _connectionManager.StateChanged += OnConnectionStateChanged;
@@ -1102,9 +1106,9 @@ License: MIT
 
         foreach (var filePath in existingFiles.Take(10))
         {
-            var displayName = Path.GetFileNameWithoutExtension(filePath);
+            var displayName = TruncatePathForMenu(filePath);
             var path = filePath; // Capture for closure
-            menuItems.Add(new MenuItem(displayName, "", () => LoadConfigurationAsync(path).FireAndForget(_logger)));
+            menuItems.Add(new MenuItem(displayName, path, () => LoadConfigurationAsync(path).FireAndForget(_logger)));
         }
 
         menuItems.Add(null!); // Separator
@@ -1118,23 +1122,59 @@ License: MIT
     }
 
     /// <summary>
+    /// Truncates a file path for display in menu items.
+    /// Shows only filename if short, or uses ellipsis for long paths.
+    /// </summary>
+    private string TruncatePathForMenu(string filePath, int maxLength = 50)
+    {
+        var fileName = Path.GetFileName(filePath);
+        
+        // If just the filename fits comfortably, use it
+        if (fileName.Length <= maxLength)
+        {
+            return fileName;
+        }
+        
+        // Otherwise, truncate the filename itself
+        return fileName.Length > maxLength 
+            ? fileName.Substring(0, maxLength - 3) + "..." 
+            : fileName;
+    }
+
+    /// <summary>
     /// Rebuilds the menu bar to refresh dynamic menus (like Recent Configs).
     /// </summary>
     private void RebuildMenuBar()
     {
-        // Remove and recreate the menu bar to update dynamic menus
-        Remove(_menuBar);
+        // Capture current position (if any) before removing the existing menu bar
+        int x = 0;
+        int y = 0;
+
+        if (_menuBar != null)
+        {
+            x = _menuBar.X;
+            y = _menuBar.Y;
+
+            // Remove and dispose the old menu bar to avoid leaks and stale references
+            Remove(_menuBar);
+            _menuBar.Dispose();
+        }
+
         var newMenuBar = CreateMenuBar();
 
-        // Copy position
-        newMenuBar.X = _menuBar.X;
-        newMenuBar.Y = _menuBar.Y;
+        // Restore position
+        newMenuBar.X = x;
+        newMenuBar.Y = y;
 
         // Apply theme
         var theme = ThemeManager.Current;
         ThemeStyler.ApplyToMenuBar(newMenuBar, theme);
 
         Add(newMenuBar);
+
+        // Update field to reference the new menu bar instance
+        _menuBar = newMenuBar;
+
         SetNeedsLayout();
     }
 
@@ -1249,25 +1289,8 @@ License: MIT
 
             var config = await _configService.LoadAsync(filePath);
 
-            // Disconnect from current server if connected
-            if (_connectionManager.IsConnected)
-            {
-                _connectionManager.Disconnect();
-            }
-
-            // Clear views
-            _addressSpaceView.Clear();
-            _monitoredItemsView.Clear();
-            _nodeDetailsView.Clear();
-
             // Store metadata
             _currentMetadata = config.Metadata;
-
-            // Apply subscription settings
-            if (_connectionManager.SubscriptionManager != null)
-            {
-                _connectionManager.SubscriptionManager.PublishingInterval = config.Settings.PublishingIntervalMs;
-            }
 
             // Connect to server and subscribe to nodes
             if (!string.IsNullOrEmpty(config.Server.EndpointUrl))
@@ -1276,6 +1299,11 @@ License: MIT
 
                 if (connected)
                 {
+                    // Only after successful connection, disconnect old and clear views
+                    _addressSpaceView.Clear();
+                    _monitoredItemsView.Clear();
+                    _nodeDetailsView.Clear();
+                    
                     _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
 
                     // Apply publishing interval to the newly created subscription manager
@@ -1297,15 +1325,37 @@ License: MIT
                             _logger.Warning($"Failed to subscribe to {node.DisplayName}: {ex.Message}");
                         }
                     }
+
+                    _recentFiles.Add(filePath);
+                    UpdateWindowTitle();
+
+                    var nodeCount = config.MonitoredNodes.Count(n => n.Enabled);
+                    _logger.Info($"Configuration loaded: {nodeCount} nodes");
+                }
+                else
+                {
+                    _logger.Error($"Failed to connect to {config.Server.EndpointUrl}");
+                    MessageBox.ErrorQuery("Connection Failed", 
+                        $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection and data have been preserved.", 
+                        "OK");
                 }
             }
-
-            _recentFiles.Add(filePath);
-            RebuildMenuBar();
-            UpdateWindowTitle();
-
-            var nodeCount = config.MonitoredNodes.Count(n => n.Enabled);
-            _logger.Info($"Configuration loaded: {nodeCount} nodes");
+            else
+            {
+                // No endpoint URL, just clear views and apply settings
+                if (_connectionManager.IsConnected)
+                {
+                    _connectionManager.Disconnect();
+                }
+                
+                _addressSpaceView.Clear();
+                _monitoredItemsView.Clear();
+                _nodeDetailsView.Clear();
+                
+                _recentFiles.Add(filePath);
+                UpdateWindowTitle();
+                _logger.Info("Configuration loaded (no server connection)");
+            }
         }
         catch (Exception ex)
         {
@@ -1371,14 +1421,9 @@ License: MIT
         var configName = _configService.GetDisplayName();
         var unsavedMarker = _configService.HasUnsavedChanges ? "*" : "";
 
-        if (string.IsNullOrEmpty(_configService.CurrentFilePath) && !_configService.HasUnsavedChanges)
-        {
-            Title = "OPC Scope";
-        }
-        else
-        {
-            Title = $"OPC Scope - {configName}{unsavedMarker}";
-        }
+        Title = string.IsNullOrEmpty(_configService.CurrentFilePath) && !_configService.HasUnsavedChanges
+            ? "OPC Scope"
+            : $"OPC Scope - {configName}{unsavedMarker}";
 
         SetNeedsLayout();
     }

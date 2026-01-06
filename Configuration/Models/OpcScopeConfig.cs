@@ -17,9 +17,42 @@ public class OpcScopeConfig
 /// </summary>
 public class ServerConfig
 {
+    /// <summary>
+    /// OPC UA server endpoint URL.
+    /// </summary>
     public string EndpointUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Requested message security mode (for example: None, Sign, SignAndEncrypt).
+    /// <para>
+    /// Warning: As of version 1.0, this value is not currently used by the
+    /// connection logic. It is included in the configuration model to
+    /// document intended security settings and to support future versions
+    /// of OpcScope that negotiate security based on this value.
+    /// </para>
+    /// </summary>
     public string SecurityMode { get; set; } = "None";
+
+    /// <summary>
+    /// Requested security policy URI or shorthand (for example:
+    /// Basic256Sha256 or the full policy URI).
+    /// <para>
+    /// Warning: As of version 1.0, this value is not currently used by the
+    /// connection logic. It is provided for forward compatibility and
+    /// documentation of the desired security policy.
+    /// </para>
+    /// </summary>
     public string? SecurityPolicy { get; set; }
+
+    /// <summary>
+    /// Authentication settings for the OPC UA server.
+    /// <para>
+    /// Warning: As of version 1.0, these authentication settings are not
+    /// yet applied when sessions are created. They are included for
+    /// future support of non-anonymous authentication and to document
+    /// the intended credentials strategy.
+    /// </para>
+    /// </summary>
     public AuthenticationConfig Authentication { get; set; } = new();
 }
 
@@ -44,8 +77,29 @@ public class AuthenticationConfig
 /// </summary>
 public class SubscriptionSettings
 {
+    /// <summary>
+    /// Default publishing interval (in milliseconds) for OPC UA subscriptions created by OpcScope.
+    /// This value is applied when configurations are loaded.
+    /// Valid range: 100-10000ms (values outside this range will be clamped by SubscriptionManager).
+    /// </summary>
     public int PublishingIntervalMs { get; set; } = 1000;
+
+    /// <summary>
+    /// Default sampling interval (in milliseconds) for monitored items.
+    /// <para>
+    /// Note: As of version 1.0, this setting is defined in the configuration model but is not yet
+    /// applied by the configuration loading logic. It is reserved for future use.
+    /// </para>
+    /// </summary>
     public int SamplingIntervalMs { get; set; } = 500;
+
+    /// <summary>
+    /// Default queue size for monitored items.
+    /// <para>
+    /// Note: As of version 1.0, this setting is defined in the configuration model but is not yet
+    /// applied by the configuration loading logic. It is reserved for future use.
+    /// </para>
+    /// </summary>
     public uint QueueSize { get; set; } = 10;
 }
 
