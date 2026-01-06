@@ -45,38 +45,41 @@ public class NodeDetailsView : FrameView
     {
         if (node == null || _nodeBrowser == null)
         {
-            _detailsLabel.Text = "Select a node to view details";
+            Application.Invoke(() => _detailsLabel.Text = "Select a node to view details");
             return;
         }
 
         var attrs = await _nodeBrowser.GetNodeAttributesAsync(node.NodeId);
 
-        if (attrs == null)
+        Application.Invoke(() =>
         {
-            _detailsLabel.Text = $"NodeId: {node.NodeId}\nFailed to read attributes";
-            return;
-        }
+            if (attrs == null)
+            {
+                _detailsLabel.Text = $"NodeId: {node.NodeId}\nFailed to read attributes";
+                return;
+            }
 
-        // Build a cleaner inline format for the details bar
-        var parts = new List<string>
-        {
-            $"NodeId: {attrs.NodeId}",
-            $"Class: {attrs.NodeClass}",
-            $"Name: {attrs.DisplayName ?? attrs.BrowseName ?? "N/A"}"
-        };
+            // Build a cleaner inline format for the details bar
+            var parts = new List<string>
+            {
+                $"NodeId: {attrs.NodeId}",
+                $"Class: {attrs.NodeClass}",
+                $"Name: {attrs.DisplayName ?? attrs.BrowseName ?? "N/A"}"
+            };
 
-        if (attrs.NodeClass == NodeClass.Variable)
-        {
-            parts.Add($"Type: {attrs.DataType ?? "N/A"}");
-            parts.Add($"Access: {attrs.AccessLevelString}");
-        }
+            if (attrs.NodeClass == NodeClass.Variable)
+            {
+                parts.Add($"Type: {attrs.DataType ?? "N/A"}");
+                parts.Add($"Access: {attrs.AccessLevelString}");
+            }
 
-        if (!string.IsNullOrEmpty(attrs.Description))
-        {
-            parts.Add($"Desc: {TruncateString(attrs.Description, 40)}");
-        }
+            if (!string.IsNullOrEmpty(attrs.Description))
+            {
+                parts.Add($"Desc: {TruncateString(attrs.Description, 40)}");
+            }
 
-        _detailsLabel.Text = string.Join("  │  ", parts);
+            _detailsLabel.Text = string.Join("  │  ", parts);
+        });
     }
 
     public void Clear()

@@ -284,7 +284,7 @@ public class MainWindow : Toplevel
         }
         finally
         {
-            HideActivity();
+            UiThread.Run(HideActivity);
         }
     }
 
@@ -305,10 +305,11 @@ public class MainWindow : Toplevel
             UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
         };
 
-        // Initialize address space view
+        // Initialize address space view (handles its own async loading)
         _addressSpaceView.Initialize(_nodeBrowser);
 
-        UpdateConnectionStatus($"Connected to {_client.CurrentEndpoint}");
+        // Update status on UI thread
+        UiThread.Run(() => UpdateConnectionStatus($"Connected to {_client.CurrentEndpoint}"));
     }
 
     private void Disconnect()
@@ -353,7 +354,7 @@ public class MainWindow : Toplevel
         }
         finally
         {
-            HideActivity();
+            UiThread.Run(HideActivity);
         }
     }
 
