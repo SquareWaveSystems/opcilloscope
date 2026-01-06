@@ -128,9 +128,10 @@ public class OpcUaClientWrapper : IDisposable
                 _session.CloseAsync().GetAwaiter().GetResult();
                 _session.Dispose();
             }
-            catch
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
             {
-                // Ignore dispose errors
+                // Session cleanup errors are expected during network issues
+                System.Diagnostics.Debug.WriteLine($"Session cleanup error (non-critical): {ex.Message}");
             }
             _session = null;
             _currentEndpoint = null;

@@ -16,9 +16,7 @@ namespace OpcScope.App;
 public class MainWindow : Toplevel
 {
     private readonly Logger _logger;
-    private readonly OpcUaClientWrapper _client;
-    private readonly NodeBrowser _nodeBrowser;
-    private SubscriptionManager? _subscriptionManager;
+    private readonly ConnectionManager _connectionManager;
 
     private readonly Label _titleBanner;
     private readonly MenuBar _menuBar;
@@ -33,19 +31,18 @@ public class MainWindow : Toplevel
     private readonly CsvRecordingManager _csvRecordingManager;
     private object? _recordingStatusTimer;
 
-    private string? _lastEndpoint;
-
     public MainWindow()
     {
         _logger = new Logger();
-        _client = new OpcUaClientWrapper(_logger);
-        _nodeBrowser = new NodeBrowser(_client, _logger);
+        _connectionManager = new ConnectionManager(_logger);
         _csvRecordingManager = new CsvRecordingManager(_logger);
 
-        // Wire up client events
-        _client.Connected += OnClientConnected;
-        _client.Disconnected += OnClientDisconnected;
-        _client.ConnectionError += OnConnectionError;
+        // Wire up connection manager events
+        _connectionManager.StateChanged += OnConnectionStateChanged;
+        _connectionManager.ConnectionError += OnConnectionError;
+        _connectionManager.ValueChanged += OnValueChanged;
+        _connectionManager.ItemAdded += item => UiThread.Run(() => _monitoredItemsView.AddItem(item));
+        _connectionManager.ItemRemoved += handle => UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
 
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
@@ -146,7 +143,7 @@ public class MainWindow : Toplevel
 
         // Initialize views
         _logView.Initialize(_logger);
-        _nodeDetailsView.Initialize(_nodeBrowser);
+        _nodeDetailsView.Initialize(_connectionManager.NodeBrowser);
 
         // Add all views
         Add(_titleBanner);
@@ -193,7 +190,7 @@ public class MainWindow : Toplevel
                 {
                     new MenuItem("_Connect...", "", ShowConnectDialog),
                     new MenuItem("_Disconnect", "", Disconnect),
-                    new MenuItem("_Reconnect", "", () => _ = ReconnectAsync())
+                    new MenuItem("_Reconnect", "", () => ReconnectAsync().FireAndForget(_logger))
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
@@ -245,7 +242,7 @@ public class MainWindow : Toplevel
 
     private void OnThemeChanged(RetroTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             ApplyTheme();
             _logger.Info($"Theme changed to: {theme.Name}");
@@ -255,60 +252,32 @@ public class MainWindow : Toplevel
 
     private void ShowConnectDialog()
     {
-        var dialog = new ConnectDialog(_lastEndpoint);
+        var dialog = new ConnectDialog(_connectionManager.LastEndpoint);
         Application.Run(dialog);
 
         if (dialog.Confirmed)
         {
-            _lastEndpoint = dialog.EndpointUrl;
-            _ = ConnectAsync(dialog.EndpointUrl);
+            ConnectAsync(dialog.EndpointUrl).FireAndForget(_logger);
         }
     }
 
     private async Task ConnectAsync(string endpoint)
     {
-        // Disconnect if already connected
-        Disconnect();
-
-        UpdateConnectionStatus("Connecting...");
         ShowActivity("Connecting...");
 
         try
         {
-            var success = await _client.ConnectAsync(endpoint);
+            var success = await _connectionManager.ConnectAsync(endpoint);
 
             if (success)
             {
-                await InitializeAfterConnectAsync();
+                _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
             }
         }
         finally
         {
             HideActivity();
         }
-    }
-
-    private async Task InitializeAfterConnectAsync()
-    {
-        // Initialize subscription manager
-        _subscriptionManager = new SubscriptionManager(_client, _logger);
-        await _subscriptionManager.InitializeAsync();
-
-        // Wire up subscription events
-        _subscriptionManager.ValueChanged += OnValueChanged;
-        _subscriptionManager.ItemAdded += item =>
-        {
-            UiThread.Run(() => _monitoredItemsView.AddItem(item));
-        };
-        _subscriptionManager.ItemRemoved += handle =>
-        {
-            UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
-        };
-
-        // Initialize address space view
-        _addressSpaceView.Initialize(_nodeBrowser);
-
-        UpdateConnectionStatus($"Connected to {_client.CurrentEndpoint}");
     }
 
     private void Disconnect()
@@ -319,36 +288,24 @@ public class MainWindow : Toplevel
             OnStopRecordingRequested();
         }
 
-        _subscriptionManager?.Dispose();
-        _subscriptionManager = null;
-
-        _client.Disconnect();
+        _connectionManager.Disconnect();
 
         _addressSpaceView.Clear();
         _monitoredItemsView.Clear();
         _nodeDetailsView.Clear();
-
-        UpdateConnectionStatus("Disconnected");
     }
 
     private async Task ReconnectAsync()
     {
-        if (string.IsNullOrEmpty(_lastEndpoint))
-        {
-            _logger.Warning("No previous connection to reconnect");
-            return;
-        }
-
-        UpdateConnectionStatus("Reconnecting...");
         ShowActivity("Reconnecting...");
 
         try
         {
-            var success = await _client.ReconnectAsync();
+            var success = await _connectionManager.ReconnectAsync();
 
             if (success)
             {
-                await InitializeAfterConnectAsync();
+                _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
             }
         }
         finally
@@ -359,7 +316,7 @@ public class MainWindow : Toplevel
 
     private void RefreshTree()
     {
-        if (_client.IsConnected)
+        if (_connectionManager.IsConnected)
         {
             _addressSpaceView.Refresh();
             _logger.Info("Address space refreshed");
@@ -386,12 +343,12 @@ public class MainWindow : Toplevel
 
     private void OnNodeSelected(BrowsedNode node)
     {
-        _ = _nodeDetailsView.ShowNodeAsync(node);
+        _nodeDetailsView.ShowNodeAsync(node).FireAndForget(_logger);
     }
 
     private void OnSubscribeRequested(BrowsedNode node)
     {
-        if (_subscriptionManager == null)
+        if (!_connectionManager.IsConnected)
         {
             _logger.Warning("Not connected");
             return;
@@ -403,12 +360,12 @@ public class MainWindow : Toplevel
             return;
         }
 
-        _ = _subscriptionManager.AddNodeAsync(node.NodeId, node.DisplayName);
+        _connectionManager.SubscribeAsync(node.NodeId, node.DisplayName).FireAndForget(_logger);
     }
 
     private void OnUnsubscribeRequested(MonitoredNode item)
     {
-        _ = _subscriptionManager?.RemoveNodeAsync(item.ClientHandle);
+        _connectionManager.UnsubscribeAsync(item.ClientHandle).FireAndForget(_logger);
     }
 
     private void OnValueChanged(MonitoredNode item)
@@ -416,25 +373,21 @@ public class MainWindow : Toplevel
         // Record to CSV if recording is active
         _csvRecordingManager.RecordValue(item);
 
-        UiThread.Run(() =>
-        {
-            _monitoredItemsView.UpdateItem(item);
-        });
+        UiThread.Run(() => _monitoredItemsView.UpdateItem(item));
     }
 
-    private void OnClientConnected()
+    private void OnConnectionStateChanged(ConnectionState state)
     {
         UiThread.Run(() =>
         {
-            _logger.Info("Connected successfully");
-        });
-    }
-
-    private void OnClientDisconnected()
-    {
-        UiThread.Run(() =>
-        {
-            UpdateConnectionStatus("Disconnected");
+            var statusText = state switch
+            {
+                ConnectionState.Connected => $"Connected to {_connectionManager.CurrentEndpoint}",
+                ConnectionState.Connecting => "Connecting...",
+                ConnectionState.Reconnecting => "Reconnecting...",
+                _ => "Disconnected"
+            };
+            UpdateConnectionStatus(statusText);
         });
     }
 
@@ -477,26 +430,26 @@ public class MainWindow : Toplevel
 
     private void ShowSettings()
     {
-        var currentInterval = _subscriptionManager?.PublishingInterval ?? 1000;
+        var currentInterval = _connectionManager.SubscriptionManager?.PublishingInterval ?? 1000;
         var dialog = new SettingsDialog(currentInterval);
         Application.Run(dialog);
 
-        if (dialog.Confirmed && _subscriptionManager != null)
+        if (dialog.Confirmed && _connectionManager.SubscriptionManager != null)
         {
-            _subscriptionManager.PublishingInterval = dialog.PublishingInterval;
+            _connectionManager.SubscriptionManager.PublishingInterval = dialog.PublishingInterval;
             _logger.Info($"Publishing interval changed to {dialog.PublishingInterval}ms");
         }
     }
 
     private void ShowTrendPlot()
     {
-        var dialog = new TrendPlotDialog(_subscriptionManager);
+        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager);
         Application.Run(dialog);
     }
 
     private void OnTrendPlotRequested(MonitoredNode node)
     {
-        var dialog = new TrendPlotDialog(_subscriptionManager, node);
+        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager, node);
         Application.Run(dialog);
     }
 
@@ -508,7 +461,8 @@ public class MainWindow : Toplevel
             return;
         }
 
-        if (_subscriptionManager == null || !_subscriptionManager.MonitoredItems.Any())
+        var subscriptionManager = _connectionManager.SubscriptionManager;
+        if (subscriptionManager == null || !subscriptionManager.MonitoredItems.Any())
         {
             MessageBox.Query("Record", "No items to record. Subscribe to items first.", "OK");
             return;
@@ -582,7 +536,8 @@ public class MainWindow : Toplevel
 
     private void ExportToCsv()
     {
-        if (_subscriptionManager == null || !_subscriptionManager.MonitoredItems.Any())
+        var subscriptionManager = _connectionManager.SubscriptionManager;
+        if (subscriptionManager == null || !subscriptionManager.MonitoredItems.Any())
         {
             MessageBox.Query("Export", "No items to export", "OK");
             return;
@@ -597,7 +552,7 @@ public class MainWindow : Toplevel
 
         if (!dialog.Canceled && dialog.Path != null)
         {
-            var items = _subscriptionManager.MonitoredItems.ToList();
+            var items = subscriptionManager.MonitoredItems.ToList();
             var path = dialog.Path.ToString();
 
             // Create progress dialog
@@ -764,8 +719,7 @@ License: MIT
             StopRecordingStatusUpdates();
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
-            _subscriptionManager?.Dispose();
-            _client.Dispose();
+            _connectionManager.Dispose();
         }
         base.Dispose(disposing);
     }

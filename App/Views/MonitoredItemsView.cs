@@ -3,7 +3,6 @@ using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
 using System.Data;
 using Attribute = Terminal.Gui.Attribute;
-using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -47,7 +46,7 @@ public class MonitoredItemsView : FrameView
         CanFocus = true;
 
         // Apply theme styling
-        var theme = AppThemeManager.Current;
+        var theme = ThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
         // Create recording control bar
@@ -105,7 +104,7 @@ public class MonitoredItemsView : FrameView
         _tableView.KeyDown += HandleKeyDown;
 
         // Subscribe to theme changes
-        AppThemeManager.ThemeChanged += OnThemeChanged;
+        ThemeManager.ThemeChanged += OnThemeChanged;
 
         Add(_recordButton);
         Add(_stopButton);
@@ -215,7 +214,7 @@ public class MonitoredItemsView : FrameView
     {
         if (disposing)
         {
-            AppThemeManager.ThemeChanged -= OnThemeChanged;
+            ThemeManager.ThemeChanged -= OnThemeChanged;
         }
         base.Dispose(disposing);
     }
