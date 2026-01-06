@@ -41,7 +41,7 @@ public class NodeDetailsView : FrameView
         _nodeBrowser = nodeBrowser;
     }
 
-    public void ShowNode(BrowsedNode? node)
+    public async Task ShowNodeAsync(BrowsedNode? node)
     {
         if (node == null || _nodeBrowser == null)
         {
@@ -49,7 +49,7 @@ public class NodeDetailsView : FrameView
             return;
         }
 
-        var attrs = _nodeBrowser.GetNodeAttributes(node.NodeId);
+        var attrs = await _nodeBrowser.GetNodeAttributesAsync(node.NodeId);
 
         if (attrs == null)
         {

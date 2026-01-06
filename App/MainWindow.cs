@@ -241,7 +241,7 @@ public class MainWindow : Toplevel
 
             if (success)
             {
-                InitializeAfterConnect();
+                await InitializeAfterConnectAsync();
             }
         }
         finally
@@ -250,11 +250,11 @@ public class MainWindow : Toplevel
         }
     }
 
-    private void InitializeAfterConnect()
+    private async Task InitializeAfterConnectAsync()
     {
         // Initialize subscription manager
         _subscriptionManager = new SubscriptionManager(_client, _logger);
-        _subscriptionManager.Initialize();
+        await _subscriptionManager.InitializeAsync();
 
         // Wire up subscription events
         _subscriptionManager.ValueChanged += OnValueChanged;
@@ -304,7 +304,7 @@ public class MainWindow : Toplevel
 
             if (success)
             {
-                InitializeAfterConnect();
+                await InitializeAfterConnectAsync();
             }
         }
         finally
@@ -418,7 +418,7 @@ public class MainWindow : Toplevel
 
     private void OnNodeSelected(BrowsedNode node)
     {
-        _nodeDetailsView.ShowNode(node);
+        _ = _nodeDetailsView.ShowNodeAsync(node);
     }
 
     private void OnSubscribeRequested(BrowsedNode node)
@@ -435,12 +435,12 @@ public class MainWindow : Toplevel
             return;
         }
 
-        _subscriptionManager.AddNode(node.NodeId, node.DisplayName);
+        _ = _subscriptionManager.AddNodeAsync(node.NodeId, node.DisplayName);
     }
 
     private void OnUnsubscribeRequested(MonitoredNode item)
     {
-        _subscriptionManager?.RemoveNode(item.ClientHandle);
+        _ = _subscriptionManager?.RemoveNodeAsync(item.ClientHandle);
     }
 
     private void OnValueChanged(MonitoredNode item)

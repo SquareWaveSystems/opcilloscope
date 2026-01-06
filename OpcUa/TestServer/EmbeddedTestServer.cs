@@ -23,7 +23,9 @@ public class EmbeddedTestServer : IAsyncDisposable, IDisposable
 
     public event Action? Started;
     public event Action? Stopped;
+#pragma warning disable CS0067 // Event is never used - kept for future error handling
     public event Action<string>? Error;
+#pragma warning restore CS0067
 
     /// <summary>
     /// Starts the test server asynchronously.
@@ -38,19 +40,12 @@ public class EmbeddedTestServer : IAsyncDisposable, IDisposable
         EndpointUrl = $"opc.tcp://localhost:{port}/UA/OpcScopeTest";
 
         var config = CreateApplicationConfiguration(port);
-        await config.Validate(ApplicationType.Server);
+        await config.ValidateAsync(ApplicationType.Server);
 
-        _application = new ApplicationInstance
-        {
-            ApplicationName = ApplicationName,
-            ApplicationType = ApplicationType.Server,
-            ApplicationConfiguration = config
-        };
+        _application = new ApplicationInstance(config, null);
 
         // Check certificate (create if needed)
-        var hasAppCertificate = await _application.CheckApplicationInstanceCertificate(
-            silent: true,
-            minimumKeySize: 0);
+        var hasAppCertificate = await _application.CheckApplicationInstanceCertificatesAsync(silent: true);
 
         if (!hasAppCertificate)
         {
@@ -62,7 +57,7 @@ public class EmbeddedTestServer : IAsyncDisposable, IDisposable
 
         // Create and start the server
         _server = new TestOpcUaServer();
-        await _application.Start(_server);
+        await _application.StartAsync(_server);
 
         Started?.Invoke();
     }
@@ -74,7 +69,7 @@ public class EmbeddedTestServer : IAsyncDisposable, IDisposable
     {
         if (_server != null)
         {
-            await Task.Run(() => _server.Stop());
+            await _server.StopAsync();
             _server.Dispose();
             _server = null;
 
@@ -205,10 +200,10 @@ public class EmbeddedTestServer : IAsyncDisposable, IDisposable
     {
         if (!_disposed)
         {
-            // Synchronous disposal - stop the server synchronously
+            // Synchronous disposal - stop the server
             if (_server != null)
             {
-                _server.Stop();
+                _server.StopAsync().GetAwaiter().GetResult();
                 _server.Dispose();
                 _server = null;
             }

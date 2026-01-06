@@ -94,7 +94,7 @@ public class AddressSpaceView : FrameView
 
         try
         {
-            return _nodeBrowser.GetChildren(node);
+            return _nodeBrowser.GetChildrenAsync(node).GetAwaiter().GetResult();
         }
         catch
         {

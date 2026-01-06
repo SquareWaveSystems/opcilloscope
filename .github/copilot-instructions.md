@@ -57,15 +57,38 @@ Application.Invoke(() => {
 
 ### OPC Foundation SDK Patterns
 
+#### Endpoint Discovery
+```csharp
+// DiscoveryClient.Create requires EndpointConfiguration, not ApplicationConfiguration
+var endpointConfig = EndpointConfiguration.Create(config);
+using var client = DiscoveryClient.Create(uri, endpointConfig);
+var endpoints = await client.GetEndpointsAsync(null);
+
+// Valid DiscoveryClient.Create overloads:
+// - DiscoveryClient.Create(Uri discoveryUrl)
+// - DiscoveryClient.Create(Uri discoveryUrl, EndpointConfiguration configuration)
+// - DiscoveryClient.Create(ApplicationConfiguration application, Uri discoveryUrl)
+```
+
+#### Server Setup (Async API)
+```csharp
+// Use async API variants for server setup
+await config.ValidateAsync(ApplicationType.Server);
+_application = new ApplicationInstance(config, null);
+var hasAppCertificate = await _application.CheckApplicationInstanceCertificatesAsync(silent: true);
+await _application.StartAsync(_server);
+await _server.StopAsync();
+```
+
 #### Session Creation
 ```csharp
 var session = await Session.Create(
-    config, 
-    endpoint, 
-    false, 
-    "SessionName", 
-    60000, 
-    new UserIdentity(new AnonymousIdentityToken()), 
+    config,
+    endpoint,
+    false,
+    "SessionName",
+    60000,
+    new UserIdentity(new AnonymousIdentityToken()),
     null
 );
 ```
