@@ -16,6 +16,11 @@ class Program
                 case "--port":
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], out var parsedPort))
                     {
+                        if (parsedPort < 1 || parsedPort > 65535)
+                        {
+                            Console.Error.WriteLine($"Error: Port must be between 1 and 65535, got {parsedPort}");
+                            return 1;
+                        }
                         port = parsedPort;
                         i++;
                     }
@@ -46,7 +51,7 @@ class Program
         Console.WriteLine("====================");
         Console.WriteLine();
 
-        var server = new TestServer();
+        await using var server = new TestServer();
         var cts = new CancellationTokenSource();
 
         Console.CancelKeyPress += (_, e) =>
@@ -88,8 +93,15 @@ class Program
                 // Expected when Ctrl+C is pressed
             }
 
-            await server.StopAsync();
-            Console.WriteLine("Server stopped.");
+            try
+            {
+                await server.StopAsync();
+                Console.WriteLine("Server stopped.");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Warning: Error during shutdown: {ex.Message}");
+            }
             return 0;
         }
         catch (Exception ex)
