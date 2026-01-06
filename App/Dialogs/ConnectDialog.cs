@@ -74,12 +74,14 @@ public class ConnectDialog : Dialog
 
         // Get default text with thread safety
         string defaultText;
-        ObservableCollection<string> historySource;
+        List<string> historyCopy;
         lock (_historyLock)
         {
             defaultText = lastEndpoint ?? _endpointHistory.FirstOrDefault() ?? "opc.tcp://localhost:4840";
-            historySource = new ObservableCollection<string>(_endpointHistory);
+            historyCopy = new List<string>(_endpointHistory);
         }
+
+        var historySource = new ObservableCollection<string>(historyCopy);
 
         _endpointComboBox = new ComboBox
         {
