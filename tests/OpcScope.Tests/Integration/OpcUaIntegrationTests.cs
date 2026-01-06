@@ -124,7 +124,7 @@ public class OpcUaIntegrationTests : IntegrationTestBase
 
         // Read current value
         var currentValue = await Client!.ReadValueAsync(nodeId);
-        var currentBool = (bool)currentValue.Value;
+        var currentBool = currentValue!.Value is bool b && b;
 
         // Write opposite
         var writeResult = await Client!.WriteValueAsync(nodeId, !currentBool);
@@ -142,14 +142,14 @@ public class OpcUaIntegrationTests : IntegrationTestBase
 
         // Read first value
         var value1 = await Client!.ReadValueAsync(nodeId);
-        var counter1 = (int)value1.Value;
+        var counter1 = value1!.Value is int c1 ? c1 : 0;
 
         // Wait for simulation tick
         await Task.Delay(1100);
 
         // Read second value
         var value2 = await Client!.ReadValueAsync(nodeId);
-        var counter2 = (int)value2.Value;
+        var counter2 = value2!.Value is int c2 ? c2 : 0;
 
         Assert.True(counter2 > counter1, $"Counter should increment: {counter1} -> {counter2}");
     }

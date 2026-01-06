@@ -3,6 +3,43 @@
 ## Overview
 OpcScope is a terminal-based OPC UA client/monitor application built with .NET 10, Terminal.Gui v2, and OPC Foundation Client SDK (`OPCFoundation.NetStandard.Opc.Ua.Client`).
 
+## Environment Setup
+
+### .NET SDK Installation
+If the `dotnet` command is not available, install .NET 10 SDK using Microsoft's install script:
+
+```bash
+# Download and run the install script
+curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+chmod +x /tmp/dotnet-install.sh
+/tmp/dotnet-install.sh --channel 10.0 --install-dir ~/.dotnet
+
+# Add to PATH for the current session
+export PATH="$HOME/.dotnet:$PATH"
+```
+
+### NuGet Package Restore
+
+The project uses a **dual-source NuGet configuration** that works in both CI and restricted network environments:
+
+**How it works:**
+- `NuGet.Config` lists **nuget.org first** (primary source) and **local packages second** (fallback)
+- In GitHub Actions CI: Uses nuget.org (network is available)
+- In restricted environments: Falls back to local packages if nuget.org fails
+
+**If `dotnet restore` fails due to proxy/network issues:**
+
+1. Run the package download script: `./scripts/download-packages.sh`
+2. The script uses `curl` to download packages from nuget.org (curl handles proxies better than .NET HttpClient)
+3. Packages are stored in `./packages/` directory
+4. Re-run `dotnet restore` - it will use the local packages as fallback
+
+**Why this design:**
+- .NET's HttpClient may fail to authenticate with corporate proxies even when `HTTP_PROXY`/`HTTPS_PROXY` are set
+- `curl` handles proxy authentication correctly
+- The dual-source approach ensures CI pipelines work without pre-downloaded packages
+- Local packages remain available for offline/restricted development
+
 ## Build & Run
 
 ```bash
@@ -215,8 +252,13 @@ Uses proper OPC UA Publish/Subscribe with `MonitoredItem.Notification` events - 
 
 ## Common Issues
 
-1. **NuGet restore fails**: Use local package source or `scripts/download-packages.sh`
-2. **Tests fail with Xunit errors in main project**: Ensure `tests/**` is excluded in OpcScope.csproj
-3. **UI thread exceptions**: Always use `Application.Invoke()` for UI updates from background threads
-4. **Ambiguous NodeBrowser reference**: OPC Foundation has its own `Browser` class - use fully qualified names if needed
-5. **Certificate validation errors**: Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
+1. **`dotnet` command not found**: Install .NET SDK using the install script (see Environment Setup above)
+2. **NuGet restore fails with proxy/401 errors**: Run `./scripts/download-packages.sh` to download packages via curl, then re-run `dotnet restore`
+3. **Tests fail with Xunit errors in main project**: Ensure `tests/**` is excluded in OpcScope.csproj
+4. **UI thread exceptions**: Always use `Application.Invoke()` for UI updates from background threads
+5. **Ambiguous NodeBrowser reference**: OPC Foundation has its own `Browser` class - use fully qualified names if needed
+6. **Certificate validation errors**: Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
+7. **Integration tests fail with "Unexpected error starting application"**: The OPC UA test server requires specific environment permissions - unit tests will still pass
+
+## Rules
+Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
