@@ -147,7 +147,7 @@ public class MainWindow : Toplevel
         var themeMenuItems = ThemeManager.AvailableThemes
             .Select((theme, index) => new MenuItem(
                 $"_{theme.Name}",
-                theme.Description,
+                "",
                 () => ThemeManager.SetThemeByIndex(index)))
             .ToArray();
 
