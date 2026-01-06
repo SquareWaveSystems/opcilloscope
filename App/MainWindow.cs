@@ -25,7 +25,6 @@ public class MainWindow : Toplevel
     private readonly StatusBar _statusBar;
     private readonly Label _companyLabel;
     private readonly Label _connectionStatusLabel;
-    private readonly Label _recordingStatusLabel;
     private readonly SpinnerView _activitySpinner;
     private readonly Label _activityLabel;
     private readonly CsvRecordingManager _csvRecordingManager;
@@ -140,20 +139,11 @@ public class MainWindow : Toplevel
         };
         UpdateConnectionStatusLabelStyle(isConnected: false);
 
-        // Recording status indicator (right side, left of connection status)
-        _recordingStatusLabel = new Label
-        {
-            X = Pos.Left(_connectionStatusLabel) - 4,
-            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
-            Text = " ○ "  // Stopped indicator (empty circle)
-        };
-        UpdateRecordingStatusLabelStyle(isRecording: false);
-
         // Company branding label (width-aware, overlaid on status bar row)
         // ColorScheme is set in ApplyTheme() to use theme colors
         _companyLabel = new Label
         {
-            X = Pos.Left(_recordingStatusLabel) - 28,
+            X = Pos.Left(_connectionStatusLabel) - 28,
             Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
             Text = "Square Wave Systems 2026 |"
         };
@@ -200,7 +190,6 @@ public class MainWindow : Toplevel
         Add(_logView);
         Add(_statusBar);
         Add(_companyLabel);
-        Add(_recordingStatusLabel);
         Add(_connectionStatusLabel);
 
         // Apply initial theme (after all controls are created)
@@ -344,9 +333,8 @@ public class MainWindow : Toplevel
         _statusBar.ColorScheme = cleanStatusBarScheme;
         _statusBar.SetNeedsLayout();
 
-        // Also apply theme to connection status label and recording label
+        // Also apply theme to connection status label
         UpdateConnectionStatusLabelStyle(_isConnected);
-        UpdateRecordingStatusLabelStyle(_csvRecordingManager.IsRecording);
 
         // Apply theme to activity spinner and label (for async operations)
         _activitySpinner.ColorScheme = cleanStatusBarScheme;
@@ -685,26 +673,6 @@ public class MainWindow : Toplevel
         };
     }
 
-    private void UpdateRecordingStatusLabelStyle(bool isRecording)
-    {
-        var theme = ThemeManager.Current;
-        _recordingStatusLabel.ColorScheme = new ColorScheme
-        {
-            Normal = new Terminal.Gui.Attribute(
-                isRecording ? theme.Accent : theme.MutedText,
-                theme.Background),
-            Focus = new Terminal.Gui.Attribute(
-                isRecording ? theme.AccentBright : theme.MutedText,
-                theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(
-                isRecording ? theme.Accent : theme.MutedText,
-                theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(
-                isRecording ? theme.AccentBright : theme.MutedText,
-                theme.Background)
-        };
-    }
-
     private void ToggleRecording()
     {
         if (_csvRecordingManager.IsRecording)
@@ -846,8 +814,7 @@ public class MainWindow : Toplevel
 
             if (_csvRecordingManager.StartRecording(path))
             {
-                _recordingStatusLabel.Text = " ◉ REC ";
-                UpdateRecordingStatusLabelStyle(isRecording: true);
+                _monitoredItemsView.UpdateRecordingStatus("◉ REC", true);
                 StartRecordingStatusUpdates();
             }
             else
@@ -866,8 +833,7 @@ public class MainWindow : Toplevel
 
         StopRecordingStatusUpdates();
         _csvRecordingManager.StopRecording();
-        _recordingStatusLabel.Text = " ○ ";
-        UpdateRecordingStatusLabelStyle(isRecording: false);
+        _monitoredItemsView.UpdateRecordingStatus("", false);
         MessageBox.Query("Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
     }
 
@@ -879,7 +845,7 @@ public class MainWindow : Toplevel
             if (_csvRecordingManager.IsRecording)
             {
                 var duration = _csvRecordingManager.RecordingDuration;
-                _recordingStatusLabel.Text = $" ◉ {duration:mm\\:ss} ";
+                _monitoredItemsView.UpdateRecordingStatus($"◉ {duration:mm\\:ss}", true);
                 return true; // Continue timer
             }
             return false; // Stop timer

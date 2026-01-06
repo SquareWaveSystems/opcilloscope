@@ -27,6 +27,9 @@ public class MonitoredItemsView : FrameView
     private readonly Label _selectionFeedback;
     private int _cachedScopeSelectionCount;
 
+    // Recording indicator (right-aligned in title bar)
+    private readonly Label _recordingIndicatorLabel;
+
     // Empty state
     private readonly Label _emptyStateLabel;
 
@@ -146,12 +149,30 @@ public class MonitoredItemsView : FrameView
             }
         };
 
+        // Recording indicator (right-aligned in title bar area)
+        _recordingIndicatorLabel = new Label
+        {
+            X = Pos.AnchorEnd(12),
+            Y = 0,
+            Text = "",
+            Visible = false,
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            }
+        };
+
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
         Add(_selectionFeedback);
         Add(_tableView);
         Add(_emptyStateLabel);
+        Add(_recordingIndicatorLabel);
 
         // Initial state
         UpdateEmptyState();
@@ -354,6 +375,30 @@ public class MonitoredItemsView : FrameView
         }
 
         ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
+    }
+
+    /// <summary>
+    /// Updates the recording status indicator in the title bar area.
+    /// </summary>
+    /// <param name="text">The text to display (e.g., "◉ REC", "◉ 01:23", or empty string).</param>
+    /// <param name="isRecording">Whether recording is active (affects color).</param>
+    public void UpdateRecordingStatus(string text, bool isRecording)
+    {
+        var theme = ThemeManager.Current;
+        var color = isRecording ? theme.Accent : theme.MutedText;
+
+        _recordingIndicatorLabel.Text = text;
+        _recordingIndicatorLabel.Visible = !string.IsNullOrEmpty(text);
+        _recordingIndicatorLabel.ColorScheme = new ColorScheme
+        {
+            Normal = new Attribute(color, theme.Background),
+            Focus = new Attribute(color, theme.Background),
+            HotNormal = new Attribute(color, theme.Background),
+            HotFocus = new Attribute(color, theme.Background),
+            Disabled = new Attribute(color, theme.Background)
+        };
+
+        SetNeedsLayout();
     }
 
     protected override void Dispose(bool disposing)
