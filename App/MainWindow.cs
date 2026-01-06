@@ -20,12 +20,16 @@ public class MainWindow : Toplevel
     private readonly NodeBrowser _nodeBrowser;
     private SubscriptionManager? _subscriptionManager;
 
+    private readonly Label _titleBanner;
     private readonly MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
     private readonly MonitoredItemsView _monitoredItemsView;
     private readonly NodeDetailsView _nodeDetailsView;
     private readonly LogView _logView;
     private readonly StatusBar _statusBar;
+    private readonly Label _companyLabel;
+    private readonly SpinnerView _activitySpinner;
+    private readonly Label _activityLabel;
 
     private string? _lastEndpoint;
 
@@ -34,6 +38,7 @@ public class MainWindow : Toplevel
         _logger = new Logger();
         _client = new OpcUaClientWrapper(_logger);
         _nodeBrowser = new NodeBrowser(_client, _logger);
+        _csvRecordingManager = new CsvRecordingManager(_logger);
 
         // Wire up client events
         _client.Connected += OnClientConnected;
@@ -43,6 +48,15 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
+        // Create title banner
+        _titleBanner = new Label
+        {
+            X = Pos.Center(),
+            Y = 0,
+            Text = "═══╡ OPC Scope ╞═══",
+            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.BrightCyan, Color.Black) }
+        };
+
         // Create menu bar
         _menuBar = CreateMenuBar();
 
@@ -50,7 +64,7 @@ public class MainWindow : Toplevel
         _addressSpaceView = new AddressSpaceView
         {
             X = 0,
-            Y = 1,
+            Y = 2,
             Width = Dim.Percent(35),
             Height = Dim.Percent(60)
         };
@@ -58,7 +72,7 @@ public class MainWindow : Toplevel
         _monitoredItemsView = new MonitoredItemsView
         {
             X = Pos.Right(_addressSpaceView),
-            Y = 1,
+            Y = 2,
             Width = Dim.Fill(),
             Height = Dim.Percent(60)
         };
@@ -90,17 +104,50 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
+        // Company branding label (bottom right)
+        _companyLabel = new Label
+        {
+            X = Pos.AnchorEnd(25),
+            Y = 0,
+            Text = "Square Wave Systems 2026",
+            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.DarkGray, Color.Black) }
+        };
+        _statusBar.Add(_companyLabel);
+
+        // Create activity spinner for async operations
+        _activitySpinner = new SpinnerView
+        {
+            X = Pos.AnchorEnd(20),
+            Y = 0,
+            Visible = false,
+            AutoSpin = true
+        };
+
+        _activityLabel = new Label
+        {
+            X = Pos.Right(_activitySpinner) + 1,
+            Y = 0,
+            Text = "",
+            Visible = false
+        };
+
+        _statusBar.Add(_activitySpinner);
+        _statusBar.Add(_activityLabel);
+
         // Wire up view events
         _addressSpaceView.NodeSelected += OnNodeSelected;
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredItemsView.RecordRequested += OnRecordRequested;
+        _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
         // Initialize views
         _logView.Initialize(_logger);
         _nodeDetailsView.Initialize(_nodeBrowser);
 
         // Add all views
+        Add(_titleBanner);
         Add(_menuBar);
         Add(_addressSpaceView);
         Add(_monitoredItemsView);
@@ -112,7 +159,7 @@ public class MainWindow : Toplevel
         ApplyTheme();
 
         // Log startup
-        _logger.Info("OpcScope started");
+        _logger.Info("OPC Scope started - Square Wave Systems");
         _logger.Info("Press F10 for menu, or use Connection -> Connect");
     }
 
@@ -122,17 +169,22 @@ public class MainWindow : Toplevel
         var themeMenuItems = ThemeManager.AvailableThemes
             .Select((theme, index) => new MenuItem(
                 $"_{theme.Name}",
-                theme.Description,
+                "",
                 () => ThemeManager.SetThemeByIndex(index)))
             .ToArray();
 
         return new MenuBar
         {
+            Y = 1,
             Menus = new MenuBarItem[]
             {
                 new MenuBarItem("_File", new MenuItem[]
                 {
                     new MenuItem("_Export to CSV...", "", ExportToCsv),
+                    null!, // Separator
+                    new MenuItem("Start _Recording...", "", () => OnRecordRequested()),
+                    new MenuItem("Sto_p Recording", "", () => OnStopRecordingRequested()),
+                    null!, // Separator
                     new MenuItem("E_xit", "", () => RequestStop())
                 }),
                 new MenuBarItem("_Connection", new MenuItem[]
@@ -165,6 +217,18 @@ public class MainWindow : Toplevel
         // Apply main window styling
         ColorScheme = theme.MainColorScheme;
         BorderStyle = theme.BorderLineStyle;
+
+        // Apply styling to title banner (use accent color for branding)
+        _titleBanner.ColorScheme = new ColorScheme
+        {
+            Normal = theme.AccentBrightAttr
+        };
+
+        // Apply styling to company label (subtle in status bar)
+        _companyLabel.ColorScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.ForegroundDim, theme.Background)
+        };
 
         // Apply styling to menu and status bar
         ThemeStyler.ApplyToMenuBar(_menuBar, theme);
@@ -205,20 +269,28 @@ public class MainWindow : Toplevel
         Disconnect();
 
         UpdateConnectionStatus("Connecting...");
+        ShowActivity("Connecting...");
 
-        var success = await _client.ConnectAsync(endpoint);
-
-        if (success)
+        try
         {
-            InitializeAfterConnect();
+            var success = await _client.ConnectAsync(endpoint);
+
+            if (success)
+            {
+                await InitializeAfterConnectAsync();
+            }
+        }
+        finally
+        {
+            HideActivity();
         }
     }
 
-    private void InitializeAfterConnect()
+    private async Task InitializeAfterConnectAsync()
     {
         // Initialize subscription manager
         _subscriptionManager = new SubscriptionManager(_client, _logger);
-        _subscriptionManager.Initialize();
+        await _subscriptionManager.InitializeAsync();
 
         // Wire up subscription events
         _subscriptionManager.ValueChanged += OnValueChanged;
@@ -239,6 +311,12 @@ public class MainWindow : Toplevel
 
     private void Disconnect()
     {
+        // Stop recording if active
+        if (_csvRecordingManager.IsRecording)
+        {
+            OnStopRecordingRequested();
+        }
+
         _subscriptionManager?.Dispose();
         _subscriptionManager = null;
 
@@ -260,11 +338,20 @@ public class MainWindow : Toplevel
         }
 
         UpdateConnectionStatus("Reconnecting...");
-        var success = await _client.ReconnectAsync();
+        ShowActivity("Reconnecting...");
 
-        if (success)
+        try
         {
-            InitializeAfterConnect();
+            var success = await _client.ReconnectAsync();
+
+            if (success)
+            {
+                await InitializeAfterConnectAsync();
+            }
+        }
+        finally
+        {
+            HideActivity();
         }
     }
 
@@ -297,7 +384,7 @@ public class MainWindow : Toplevel
 
     private void OnNodeSelected(BrowsedNode node)
     {
-        _nodeDetailsView.ShowNode(node);
+        _ = _nodeDetailsView.ShowNodeAsync(node);
     }
 
     private void OnSubscribeRequested(BrowsedNode node)
@@ -314,16 +401,19 @@ public class MainWindow : Toplevel
             return;
         }
 
-        _subscriptionManager.AddNode(node.NodeId, node.DisplayName);
+        _ = _subscriptionManager.AddNodeAsync(node.NodeId, node.DisplayName);
     }
 
     private void OnUnsubscribeRequested(MonitoredNode item)
     {
-        _subscriptionManager?.RemoveNode(item.ClientHandle);
+        _ = _subscriptionManager?.RemoveNodeAsync(item.ClientHandle);
     }
 
     private void OnValueChanged(MonitoredNode item)
     {
+        // Record to CSV if recording is active
+        _csvRecordingManager.RecordValue(item);
+
         UiThread.Run(() =>
         {
             _monitoredItemsView.UpdateItem(item);
@@ -356,7 +446,30 @@ public class MainWindow : Toplevel
 
     private void UpdateConnectionStatus(string status)
     {
-        Title = $"OpcScope - {status}";
+        Title = $"OPC Scope - {status}";
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Shows the activity spinner and message in the status bar during async operations.
+    /// </summary>
+    /// <param name="message">The message to display next to the spinner.</param>
+    private void ShowActivity(string message)
+    {
+        _activityLabel.Text = message;
+        _activityLabel.Visible = true;
+        _activitySpinner.Visible = true;
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Hides the activity spinner and clears the activity message in the status bar.
+    /// </summary>
+    private void HideActivity()
+    {
+        _activitySpinner.Visible = false;
+        _activityLabel.Visible = false;
+        _activityLabel.Text = "";
         SetNeedsLayout();
     }
 
@@ -402,31 +515,100 @@ public class MainWindow : Toplevel
 
         if (!dialog.Canceled && dialog.Path != null)
         {
-            try
-            {
-                var path = dialog.Path.ToString();
-                using var writer = new StreamWriter(path!);
-                writer.WriteLine("DisplayName,NodeId,Value,Timestamp,Status");
+            var items = _subscriptionManager.MonitoredItems.ToList();
+            var path = dialog.Path.ToString();
 
-                foreach (var item in _subscriptionManager.MonitoredItems)
+            // Create progress dialog
+            var progressDialog = new Dialog
+            {
+                Title = " Exporting ",
+                Width = 50,
+                Height = 7
+            };
+
+            var progressLabel = new Label
+            {
+                X = 1,
+                Y = 1,
+                Text = "Exporting data..."
+            };
+
+            var progressBar = new ProgressBar
+            {
+                X = 1,
+                Y = 2,
+                Width = Dim.Fill(1),
+                Fraction = 0f,
+                ProgressBarStyle = ProgressBarStyle.Continuous
+            };
+
+            var statusLabel = new Label
+            {
+                X = 1,
+                Y = 3,
+                Text = $"0 / {items.Count} items"
+            };
+
+            progressDialog.Add(progressLabel, progressBar, statusLabel);
+
+            // Export in background with proper exception handling
+            var exportTask = Task.Run(async () =>
+            {
+                try
                 {
-                    writer.WriteLine($"\"{item.DisplayName}\",\"{item.NodeId}\",\"{item.Value}\",\"{item.TimestampString}\",\"{item.StatusString}\"");
-                }
+                    using var writer = new StreamWriter(path!);
+                    await writer.WriteLineAsync("DisplayName,NodeId,Value,Timestamp,Status");
 
-                _logger.Info($"Exported {_subscriptionManager.MonitoredItems.Count} items to {path}");
-                MessageBox.Query("Export", $"Exported to {path}", "OK");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Export failed: {ex.Message}");
-                MessageBox.ErrorQuery("Export Error", ex.Message, "OK");
-            }
+                    for (int i = 0; i < items.Count; i++)
+                    {
+                        var item = items[i];
+                        await writer.WriteLineAsync($"\"{item.DisplayName}\",\"{item.NodeId}\",\"{item.Value}\",\"{item.TimestampString}\",\"{item.StatusString}\"");
+
+                        // Update progress on UI thread
+                        var progress = (float)(i + 1) / items.Count;
+                        var current = i + 1;
+                        Application.Invoke(() =>
+                        {
+                            progressBar.Fraction = progress;
+                            statusLabel.Text = $"{current} / {items.Count} items";
+                        });
+
+                        // Small delay for visual feedback on very small datasets
+                        if (items.Count < 10)
+                            await Task.Delay(10);
+                    }
+
+                    Application.Invoke(() =>
+                    {
+                        progressDialog.RequestStop();
+                        _logger.Info($"Exported {items.Count} items to {path}");
+                        MessageBox.Query("Export", $"Exported {items.Count} items to {path}", "OK");
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Application.Invoke(() =>
+                    {
+                        progressDialog.RequestStop();
+                        _logger.Error($"Export failed: {ex.Message}");
+                        MessageBox.ErrorQuery("Export Error", ex.Message, "OK");
+                    });
+                }
+            });
+
+            Application.Run(progressDialog);
+            
+            // Wait for the export task to complete before disposing
+            exportTask.Wait();
+
+            progressDialog.Dispose();
         }
     }
 
     private void ShowHelp()
     {
-        var help = @"OpcScope - Terminal OPC UA Client
+        var help = @"OPC Scope - Terminal OPC UA Client
+by Square Wave Systems
 
 Keyboard Shortcuts:
   F1        - Show this help
@@ -448,19 +630,28 @@ Trend Plot (in dialog):
   +/-       - Adjust vertical scale
   R         - Reset to auto-scale
 
+CSV Recording:
+  - Use Record/Stop buttons in Monitored Items panel
+  - Or use File > Start Recording / Stop Recording
+  - Records all value changes to CSV in real-time
+  - CSV format: Timestamp, DisplayName, NodeId, Value, Status
+
 Tips:
   - Only Variable nodes can be subscribed
   - Double-click a node to subscribe
   - Values update in real-time via subscription
   - Use View > Trend Plot to visualize values
 ";
-        MessageBox.Query("Help", help, "OK");
+        MessageBox.Query("OPC Scope Help", help, "OK");
     }
 
     private void ShowAbout()
     {
         var theme = ThemeManager.Current;
-        var about = $@"OpcScope v1.0.0
+        var about = $@"╔══════════════════════════════════════╗
+║           OPC Scope v1.0.0           ║
+║      by Square Wave Systems          ║
+╚══════════════════════════════════════╝
 
 A lightweight terminal-based OPC UA client
 for browsing, monitoring, and subscribing
@@ -477,17 +668,19 @@ Built with:
 Themes inspired by:
   - Cassette Futurism (Alien, Blade Runner)
   - github.com/Imetomi/retro-futuristic-ui-design
-  - squarewavesystems.github.io
 
+© 2026 Square Wave Systems
 License: MIT
 ";
-        MessageBox.Query("About OpcScope", about, "OK");
+        MessageBox.Query("About OPC Scope", about, "OK");
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            StopRecordingStatusUpdates();
+            _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _subscriptionManager?.Dispose();
             _client.Dispose();

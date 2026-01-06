@@ -47,7 +47,7 @@ public class SubscriptionManager : IDisposable
         _logger = logger;
     }
 
-    public bool Initialize()
+    public async Task<bool> InitializeAsync()
     {
         if (_clientWrapper.Session == null || !_clientWrapper.IsConnected)
         {
@@ -70,7 +70,7 @@ public class SubscriptionManager : IDisposable
             };
 
             _clientWrapper.Session.AddSubscription(_subscription);
-            _subscription.Create();
+            await _subscription.CreateAsync();
 
             _isInitialized = true;
             _logger.Info($"Subscription created (ID: {_subscription.Id}, Interval: {_publishingInterval}ms)");
@@ -84,7 +84,7 @@ public class SubscriptionManager : IDisposable
         }
     }
 
-    public MonitoredNode? AddNode(NodeId nodeId, string displayName)
+    public async Task<MonitoredNode?> AddNodeAsync(NodeId nodeId, string displayName)
     {
         if (!_isInitialized || _subscription == null || _clientWrapper.Session == null)
         {
@@ -121,7 +121,7 @@ public class SubscriptionManager : IDisposable
 
             // Add to subscription and create the monitored item on the server
             _subscription.AddItem(monitoredItem);
-            _subscription.ApplyChanges();
+            await _subscription.ApplyChangesAsync();
 
             if (ServiceResult.IsBad(monitoredItem.Status.Error))
             {
@@ -151,7 +151,7 @@ public class SubscriptionManager : IDisposable
             ItemAdded?.Invoke(item);
 
             // Read initial value
-            ReadInitialValue(item);
+            await ReadInitialValueAsync(item);
 
             return item;
         }
@@ -191,11 +191,11 @@ public class SubscriptionManager : IDisposable
         }
     }
 
-    private void ReadInitialValue(MonitoredNode item)
+    private async Task ReadInitialValueAsync(MonitoredNode item)
     {
         try
         {
-            var value = _clientWrapper.ReadValue(item.NodeId);
+            var value = await _clientWrapper.ReadValueAsync(item.NodeId);
             if (value != null)
             {
                 item.Value = FormatValue(value.Value);
@@ -210,7 +210,7 @@ public class SubscriptionManager : IDisposable
         }
     }
 
-    public bool RemoveNode(uint clientHandle)
+    public async Task<bool> RemoveNodeAsync(uint clientHandle)
     {
         MonitoredNode? item;
         MonitoredItem? opcItem;
@@ -231,7 +231,7 @@ public class SubscriptionManager : IDisposable
             {
                 opcItem.Notification -= MonitoredItem_Notification;
                 _subscription.RemoveItem(opcItem);
-                _subscription.ApplyChanges();
+                await _subscription.ApplyChangesAsync();
             }
             catch (Exception ex)
             {
@@ -244,7 +244,7 @@ public class SubscriptionManager : IDisposable
         return true;
     }
 
-    public bool RemoveNodeByNodeId(NodeId nodeId)
+    public async Task<bool> RemoveNodeByNodeIdAsync(NodeId nodeId)
     {
         MonitoredNode? item;
         lock (_lock)
@@ -254,7 +254,7 @@ public class SubscriptionManager : IDisposable
 
         if (item != null)
         {
-            return RemoveNode(item.ClientHandle);
+            return await RemoveNodeAsync(item.ClientHandle);
         }
         return false;
     }
@@ -287,15 +287,16 @@ public class SubscriptionManager : IDisposable
         return value.ToString() ?? "null";
     }
 
-    public void Clear()
+    public async Task ClearAsync()
     {
+        List<uint> handles;
         lock (_lock)
         {
-            var handles = _monitoredItems.Keys.ToList();
-            foreach (var handle in handles)
-            {
-                RemoveNode(handle);
-            }
+            handles = _monitoredItems.Keys.ToList();
+        }
+        foreach (var handle in handles)
+        {
+            await RemoveNodeAsync(handle);
         }
     }
 
@@ -305,7 +306,7 @@ public class SubscriptionManager : IDisposable
         {
             try
             {
-                _clientWrapper.Session.RemoveSubscription(_subscription);
+                _clientWrapper.Session.RemoveSubscriptionAsync(_subscription).GetAwaiter().GetResult();
                 _subscription.Dispose();
             }
             catch (Exception ex)

@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Disable certificate revocation checks during build to avoid network calls -->
+    <DotNetEnforceCodeSignRevocationCheck>false</DotNetEnforceCodeSignRevocationCheck>
+  </PropertyGroup>
+</Project>

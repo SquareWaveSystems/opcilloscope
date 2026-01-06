@@ -52,12 +52,11 @@ public class OpcUaClientWrapper : IDisposable
         };
 
         // Accept all certificates for simplicity
-        var certificateValidator = new CertificateValidator();
-        certificateValidator.CertificateValidation += (_, e) =>
+        _appConfig.CertificateValidator = new CertificateValidator();
+        _appConfig.CertificateValidator.CertificateValidation += (_, e) =>
         {
             e.Accept = true;
         };
-        _appConfig.CertificateValidator = certificateValidator;
 
         await _appConfig.Validate(ApplicationType.Client);
 
@@ -75,7 +74,7 @@ public class OpcUaClientWrapper : IDisposable
             var config = await GetApplicationConfigAsync();
 
             // Discover endpoints
-            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config, endpointUrl, useSecurity: false, 10000);
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, endpointUrl, useSecurity: false);
 
             // Create session
             var endpointConfig = EndpointConfiguration.Create(config);
@@ -129,7 +128,7 @@ public class OpcUaClientWrapper : IDisposable
             try
             {
                 _session.KeepAlive -= Session_KeepAlive;
-                _session.Close();
+                _session.CloseAsync().GetAwaiter().GetResult();
                 _session.Dispose();
             }
             catch
@@ -178,7 +177,7 @@ public class OpcUaClientWrapper : IDisposable
         return false;
     }
 
-    public ReferenceDescriptionCollection Browse(NodeId nodeId)
+    public async Task<ReferenceDescriptionCollection> BrowseAsync(NodeId nodeId)
     {
         if (_session == null)
             throw new InvalidOperationException("Not connected");
@@ -192,18 +191,18 @@ public class OpcUaClientWrapper : IDisposable
             ResultMask = (uint)BrowseResultMask.All
         };
 
-        return browser.Browse(nodeId);
+        return await Task.Run(() => browser.Browse(nodeId));
     }
 
-    public DataValue? ReadValue(NodeId nodeId)
+    public async Task<DataValue?> ReadValueAsync(NodeId nodeId)
     {
         if (_session == null)
             throw new InvalidOperationException("Not connected");
 
-        return _session.ReadValue(nodeId);
+        return await _session.ReadValueAsync(nodeId);
     }
 
-    public DataValueCollection ReadAttributes(NodeId nodeId, params uint[] attributeIds)
+    public async Task<DataValueCollection> ReadAttributesAsync(NodeId nodeId, params uint[] attributeIds)
     {
         if (_session == null)
             throw new InvalidOperationException("Not connected");
@@ -218,19 +217,18 @@ public class OpcUaClientWrapper : IDisposable
             });
         }
 
-        _session.Read(
+        var response = await _session.ReadAsync(
             null,
             0,
             TimestampsToReturn.Both,
             nodesToRead,
-            out var results,
-            out _
+            CancellationToken.None
         );
 
-        return results;
+        return response.Results;
     }
 
-    public StatusCode WriteValue(NodeId nodeId, object value)
+    public async Task<StatusCode> WriteValueAsync(NodeId nodeId, object value)
     {
         if (_session == null)
             throw new InvalidOperationException("Not connected");
@@ -245,24 +243,13 @@ public class OpcUaClientWrapper : IDisposable
             }
         };
 
-        _session.Write(
+        var response = await _session.WriteAsync(
             null,
             nodesToWrite,
-            out var results,
-            out _
+            CancellationToken.None
         );
 
-        return results?.Count > 0 ? results[0] : StatusCodes.BadUnexpectedError;
-    }
-
-    public Task<DataValue> ReadValueAsync(NodeId nodeId)
-    {
-        return Task.FromResult(ReadValue(nodeId) ?? new DataValue(StatusCodes.BadNodeIdUnknown));
-    }
-
-    public Task<StatusCode> WriteValueAsync(NodeId nodeId, object value)
-    {
-        return Task.FromResult(WriteValue(nodeId, value));
+        return response.Results?.Count > 0 ? response.Results[0] : StatusCodes.BadUnexpectedError;
     }
 
     public Task DisconnectAsync()
@@ -278,5 +265,69 @@ public class OpcUaClientWrapper : IDisposable
             _disposed = true;
             Disconnect();
         }
+    }
+
+    private static async Task<EndpointDescription> DiscoverAndSelectEndpointAsync(
+        ApplicationConfiguration config,
+        string endpointUrl,
+        bool useSecurity)
+    {
+        // Discover endpoints from the server
+        var uri = new Uri(endpointUrl);
+        var endpointConfig = EndpointConfiguration.Create(config);
+#pragma warning disable CS0618 // DiscoveryClient.Create is obsolete but CreateAsync requires ITelemetryContext
+        using var client = DiscoveryClient.Create(uri, endpointConfig);
+#pragma warning restore CS0618
+        var endpoints = await client.GetEndpointsAsync(null);
+
+        // Select the best endpoint based on security preference
+        EndpointDescription? selectedEndpoint = null;
+
+        foreach (var endpoint in endpoints)
+        {
+            // Skip endpoints that don't match our security preference
+            if (useSecurity)
+            {
+                if (endpoint.SecurityMode == MessageSecurityMode.None)
+                    continue;
+            }
+            else
+            {
+                if (endpoint.SecurityMode != MessageSecurityMode.None)
+                    continue;
+            }
+
+            // Prefer the first matching endpoint
+            if (selectedEndpoint == null)
+            {
+                selectedEndpoint = endpoint;
+            }
+        }
+
+        // If no endpoint matched our preference, try any endpoint
+        if (selectedEndpoint == null && endpoints.Count > 0)
+        {
+            selectedEndpoint = endpoints[0];
+        }
+
+        if (selectedEndpoint == null)
+        {
+            throw new ServiceResultException(StatusCodes.BadNotConnected,
+                $"No suitable endpoint found at {endpointUrl}");
+        }
+
+        // Update the endpoint URL to use the requested host if different
+        // (handles cases where server returns localhost but we connected via IP/hostname)
+        var selectedUri = new Uri(selectedEndpoint.EndpointUrl);
+        if (selectedUri.Host != uri.Host)
+        {
+            var builder = new UriBuilder(selectedEndpoint.EndpointUrl)
+            {
+                Host = uri.Host
+            };
+            selectedEndpoint.EndpointUrl = builder.ToString();
+        }
+
+        return selectedEndpoint;
     }
 }

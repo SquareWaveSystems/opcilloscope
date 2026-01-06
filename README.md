@@ -91,6 +91,25 @@ dotnet build
 dotnet run
 ```
 
+### NuGet Package Restore
+
+The project uses a dual-source NuGet configuration that works in both CI and restricted network environments:
+
+- **nuget.org** (primary) - Used by default when network access is available
+- **Local packages** (fallback) - Used when nuget.org is inaccessible
+
+**If `dotnet restore` fails due to proxy/network issues:**
+
+```bash
+# Download packages using curl (handles proxies better than .NET HttpClient)
+./scripts/download-packages.sh
+
+# Then restore will use the local packages as fallback
+dotnet restore
+```
+
+This setup ensures builds work in GitHub Actions CI (uses nuget.org) and in restricted environments like corporate proxies (uses local packages).
+
 ### Command Line Options
 
 ```bash
@@ -156,22 +175,6 @@ For testing, you can use:
 
 1. **Prosys OPC UA Simulation Server** (free): https://prosysopc.com/products/opc-ua-simulation-server/
 2. **Node-OPCUA sample server**: https://github.com/node-opcua/node-opcua
-
-## Technical Notes
-
-### Thread Safety
-OPC Foundation callbacks arrive on background threads. All UI updates are marshalled to the UI thread via `Application.Invoke()`.
-
-### Lazy Loading
-The address space tree uses lazy loading - child nodes are only fetched when a parent is expanded, preventing memory issues with large address spaces.
-
-### OPC UA Subscriptions
-Uses proper OPC UA Publish/Subscribe with `MonitoredItem.Notification` events - values are pushed by the server, no polling required.
-
-### Error Handling
-- Connection errors display in the log panel without crashing
-- Automatic reconnection with exponential backoff (1s, 2s, 4s, 8s)
-- Graceful handling of bad node IDs and access denied errors
 
 ## License
 

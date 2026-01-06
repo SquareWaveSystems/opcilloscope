@@ -61,14 +61,14 @@ public class NodeBrowser
         };
     }
 
-    public List<BrowsedNode> GetChildren(BrowsedNode parent)
+    public async Task<List<BrowsedNode>> GetChildrenAsync(BrowsedNode parent)
     {
         if (!_client.IsConnected)
             return new List<BrowsedNode>();
 
         try
         {
-            var refs = _client.Browse(parent.NodeId);
+            var refs = await _client.BrowseAsync(parent.NodeId);
             var children = new List<BrowsedNode>();
 
             foreach (var r in refs)
@@ -98,11 +98,11 @@ public class NodeBrowser
                 // For variables, try to get the data type
                 if (r.NodeClass == NodeClass.Variable)
                 {
-                    child.DataTypeName = GetDataTypeName(targetNodeId);
+                    child.DataTypeName = await GetDataTypeNameAsync(targetNodeId);
                 }
 
                 // Check if node has children by doing a quick browse
-                child.HasChildren = HasChildren(targetNodeId);
+                child.HasChildren = await HasChildrenAsync(targetNodeId);
 
                 children.Add(child);
             }
@@ -120,11 +120,11 @@ public class NodeBrowser
         }
     }
 
-    private bool HasChildren(NodeId nodeId)
+    private async Task<bool> HasChildrenAsync(NodeId nodeId)
     {
         try
         {
-            var refs = _client.Browse(nodeId);
+            var refs = await _client.BrowseAsync(nodeId);
             return refs.Count > 0;
         }
         catch
@@ -133,7 +133,7 @@ public class NodeBrowser
         }
     }
 
-    private string? GetDataTypeName(NodeId nodeId)
+    private async Task<string?> GetDataTypeNameAsync(NodeId nodeId)
     {
         var key = nodeId.ToString();
         if (_dataTypeCache.TryGetValue(key, out var cached))
@@ -141,7 +141,7 @@ public class NodeBrowser
 
         try
         {
-            var attrs = _client.ReadAttributes(nodeId, Attributes.DataType);
+            var attrs = await _client.ReadAttributesAsync(nodeId, Attributes.DataType);
             if (attrs.Count > 0 && attrs[0].Value is NodeId dataTypeId)
             {
                 string? name = null;
@@ -157,7 +157,7 @@ public class NodeBrowser
                 // If not built-in, browse for the type name
                 if (name == null)
                 {
-                    var typeAttrs = _client.ReadAttributes(dataTypeId, Attributes.DisplayName);
+                    var typeAttrs = await _client.ReadAttributesAsync(dataTypeId, Attributes.DisplayName);
                     if (typeAttrs.Count > 0 && typeAttrs[0].Value is LocalizedText lt)
                         name = lt.Text;
                 }
@@ -177,14 +177,14 @@ public class NodeBrowser
         return null;
     }
 
-    public NodeAttributes? GetNodeAttributes(NodeId nodeId)
+    public async Task<NodeAttributes?> GetNodeAttributesAsync(NodeId nodeId)
     {
         if (!_client.IsConnected)
             return null;
 
         try
         {
-            var attrs = _client.ReadAttributes(
+            var attrs = await _client.ReadAttributesAsync(
                 nodeId,
                 Attributes.NodeId,
                 Attributes.NodeClass,
@@ -204,7 +204,7 @@ public class NodeBrowser
                 BrowseName = attrs.Count > 2 && attrs[2].Value is QualifiedName qn ? qn.Name : null,
                 DisplayName = attrs.Count > 3 && attrs[3].Value is LocalizedText lt ? lt.Text : null,
                 Description = attrs.Count > 4 && attrs[4].Value is LocalizedText desc ? desc.Text : null,
-                DataType = attrs.Count > 5 && attrs[5].Value is NodeId dt ? GetDataTypeNameById(dt) : null,
+                DataType = attrs.Count > 5 && attrs[5].Value is NodeId dt ? await GetDataTypeNameByIdAsync(dt) : null,
                 ValueRank = attrs.Count > 6 && attrs[6].Value is int vr ? vr : null,
                 AccessLevel = attrs.Count > 7 && attrs[7].Value is byte al ? al : null,
                 UserAccessLevel = attrs.Count > 8 && attrs[8].Value is byte ual ? ual : null
@@ -217,7 +217,7 @@ public class NodeBrowser
         }
     }
 
-    private string? GetDataTypeNameById(NodeId dataTypeId)
+    private async Task<string?> GetDataTypeNameByIdAsync(NodeId dataTypeId)
     {
         if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == IdType.Numeric)
         {
@@ -228,7 +228,7 @@ public class NodeBrowser
 
         try
         {
-            var attrs = _client.ReadAttributes(dataTypeId, Attributes.DisplayName);
+            var attrs = await _client.ReadAttributesAsync(dataTypeId, Attributes.DisplayName);
             if (attrs.Count > 0 && attrs[0].Value is LocalizedText lt)
                 return lt.Text;
         }

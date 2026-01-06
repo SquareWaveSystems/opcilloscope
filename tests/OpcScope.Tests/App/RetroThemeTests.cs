@@ -6,80 +6,52 @@ namespace OpcScope.Tests.App;
 public class RetroThemeTests
 {
     [Fact]
-    public void AmberTheme_HasCorrectName()
+    public void DarkTheme_HasCorrectName()
     {
-        var theme = new AmberTheme();
-        Assert.Equal("Amber", theme.Name);
+        var theme = new DarkTheme();
+        Assert.Equal("Dark", theme.Name);
     }
 
     [Fact]
-    public void AmberTheme_HasCorrectDescription()
+    public void DarkTheme_HasCorrectDescription()
     {
-        var theme = new AmberTheme();
-        Assert.Equal("Classic amber monochrome terminal", theme.Description);
+        var theme = new DarkTheme();
+        Assert.Equal("Dark theme", theme.Description);
     }
 
     [Fact]
-    public void AmberTheme_HasBlackBackground()
+    public void DarkTheme_HasDarkBackground()
     {
-        var theme = new AmberTheme();
-        Assert.Equal(Color.Black, theme.Background);
+        var theme = new DarkTheme();
+        // Dark charcoal background
+        Assert.Equal(new Color(30, 32, 36), theme.Background);
     }
 
     [Fact]
-    public void GreenTheme_HasCorrectName()
+    public void LightTheme_HasCorrectName()
     {
-        var theme = new GreenTheme();
-        Assert.Equal("Green", theme.Name);
+        var theme = new LightTheme();
+        Assert.Equal("Light", theme.Name);
     }
 
     [Fact]
-    public void GreenTheme_HasCorrectDescription()
+    public void LightTheme_HasCorrectDescription()
     {
-        var theme = new GreenTheme();
-        Assert.Equal("Classic green monochrome terminal", theme.Description);
+        var theme = new LightTheme();
+        Assert.Equal("Light theme", theme.Description);
     }
 
     [Fact]
-    public void GreenTheme_HasBlackBackground()
+    public void LightTheme_HasLightBackground()
     {
-        var theme = new GreenTheme();
-        Assert.Equal(Color.Black, theme.Background);
-    }
-
-    [Fact]
-    public void BlueTheme_HasCorrectName()
-    {
-        var theme = new BlueTheme();
-        Assert.Equal("Blue", theme.Name);
-    }
-
-    [Fact]
-    public void BlueTheme_HasBlackBackground()
-    {
-        var theme = new BlueTheme();
-        Assert.Equal(Color.Black, theme.Background);
-    }
-
-    [Fact]
-    public void GreyTheme_HasCorrectName()
-    {
-        var theme = new GreyTheme();
-        Assert.Equal("Grey", theme.Name);
-    }
-
-    [Fact]
-    public void GreyTheme_HasBlackBackground()
-    {
-        var theme = new GreyTheme();
-        Assert.Equal(Color.Black, theme.Background);
+        var theme = new LightTheme();
+        // Off-white background
+        Assert.Equal(new Color(245, 245, 242), theme.Background);
     }
 
     [Theory]
-    [InlineData(typeof(AmberTheme))]
-    [InlineData(typeof(GreenTheme))]
-    [InlineData(typeof(BlueTheme))]
-    [InlineData(typeof(GreyTheme))]
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveNonNullColors(Type themeType)
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
@@ -99,10 +71,8 @@ public class RetroThemeTests
     }
 
     [Theory]
-    [InlineData(typeof(AmberTheme))]
-    [InlineData(typeof(GreenTheme))]
-    [InlineData(typeof(BlueTheme))]
-    [InlineData(typeof(GreyTheme))]
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveNonNullAttributes(Type themeType)
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
@@ -113,10 +83,8 @@ public class RetroThemeTests
     }
 
     [Theory]
-    [InlineData(typeof(AmberTheme))]
-    [InlineData(typeof(GreenTheme))]
-    [InlineData(typeof(BlueTheme))]
-    [InlineData(typeof(GreyTheme))]
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveNonNullColorSchemes(Type themeType)
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
@@ -129,35 +97,24 @@ public class RetroThemeTests
     }
 
     [Theory]
-    [InlineData(typeof(AmberTheme))]
-    [InlineData(typeof(GreenTheme))]
-    [InlineData(typeof(BlueTheme))]
-    [InlineData(typeof(GreyTheme))]
-    public void AllThemes_HaveBoxDrawingCharacters(Type themeType)
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
+    public void AllThemes_HaveSingleLineBoxDrawingCharacters(Type themeType)
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
 
-        Assert.Equal('╔', theme.BoxTopLeft);
-        Assert.Equal('╗', theme.BoxTopRight);
-        Assert.Equal('╚', theme.BoxBottomLeft);
-        Assert.Equal('╝', theme.BoxBottomRight);
-        Assert.Equal('═', theme.BoxHorizontal);
-        Assert.Equal('║', theme.BoxVertical);
-        Assert.Equal('╡', theme.BoxTitleLeft);
-        Assert.Equal('╞', theme.BoxTitleRight);
-        Assert.Equal('╤', theme.TickHorizontal);
-        Assert.Equal('╟', theme.TickVertical);
-        Assert.Equal('╧', theme.TickHorizontalBottom);
-        Assert.Equal('╢', theme.TickVerticalRight);
-        Assert.Equal('╠', theme.BoxLeftT);
-        Assert.Equal('╣', theme.BoxRightT);
+        // Both themes use single-line box drawing for clean look
+        Assert.Equal('┌', theme.BoxTopLeft);
+        Assert.Equal('┐', theme.BoxTopRight);
+        Assert.Equal('└', theme.BoxBottomLeft);
+        Assert.Equal('┘', theme.BoxBottomRight);
+        Assert.Equal('─', theme.BoxHorizontal);
+        Assert.Equal('│', theme.BoxVertical);
     }
 
     [Theory]
-    [InlineData(typeof(AmberTheme))]
-    [InlineData(typeof(GreenTheme))]
-    [InlineData(typeof(BlueTheme))]
-    [InlineData(typeof(GreyTheme))]
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveUIDecorations(Type themeType)
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
@@ -170,51 +127,56 @@ public class RetroThemeTests
         Assert.NotNull(theme.NoSignalMessage);
     }
 
-    [Theory]
-    [InlineData(typeof(AmberTheme))]
-    [InlineData(typeof(GreenTheme))]
-    [InlineData(typeof(BlueTheme))]
-    [InlineData(typeof(GreyTheme))]
-    public void AllThemes_HaveDefaultEnableGlow(Type themeType)
+    [Fact]
+    public void DarkTheme_HasErrorColor()
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = new DarkTheme();
+        // Soft red for dark backgrounds
+        Assert.Equal(new Color(230, 90, 90), theme.Error);
+    }
 
-        // Default EnableGlow is true in RetroTheme base class
+    [Fact]
+    public void DarkTheme_HasWarningColor()
+    {
+        var theme = new DarkTheme();
+        // Warm amber for dark backgrounds
+        Assert.Equal(new Color(230, 180, 80), theme.Warning);
+    }
+
+    [Fact]
+    public void LightTheme_HasErrorColor()
+    {
+        var theme = new LightTheme();
+        // Dark red for light backgrounds
+        Assert.Equal(new Color(180, 60, 60), theme.Error);
+    }
+
+    [Fact]
+    public void LightTheme_HasWarningColor()
+    {
+        var theme = new LightTheme();
+        // Dark amber for light backgrounds
+        Assert.Equal(new Color(180, 140, 40), theme.Warning);
+    }
+
+    [Fact]
+    public void DarkTheme_EnablesGlow()
+    {
+        var theme = new DarkTheme();
         Assert.True(theme.EnableGlow);
     }
 
     [Fact]
-    public void AmberTheme_ErrorColorIsRed()
+    public void LightTheme_DisablesGlow()
     {
-        var theme = new AmberTheme();
-        Assert.Equal(Color.Red, theme.Error);
-    }
-
-    [Fact]
-    public void AmberTheme_WarningColorIsBrightYellow()
-    {
-        var theme = new AmberTheme();
-        Assert.Equal(Color.BrightYellow, theme.Warning);
-    }
-
-    [Fact]
-    public void GreenTheme_ErrorColorIsRed()
-    {
-        var theme = new GreenTheme();
-        Assert.Equal(Color.Red, theme.Error);
-    }
-
-    [Fact]
-    public void GreenTheme_WarningColorIsBrightYellow()
-    {
-        var theme = new GreenTheme();
-        Assert.Equal(Color.BrightYellow, theme.Warning);
+        var theme = new LightTheme();
+        Assert.False(theme.EnableGlow);
     }
 
     [Fact]
     public void ThemeAttributes_AreCachedOnSecondAccess()
     {
-        var theme = new AmberTheme();
+        var theme = new DarkTheme();
 
         // Access attributes twice
         var attr1 = theme.NormalAttr;
@@ -227,7 +189,7 @@ public class RetroThemeTests
     [Fact]
     public void ThemeColorSchemes_AreCachedOnSecondAccess()
     {
-        var theme = new GreenTheme();
+        var theme = new LightTheme();
 
         // Access color schemes twice
         var scheme1 = theme.MainColorScheme;
@@ -240,7 +202,7 @@ public class RetroThemeTests
     [Fact]
     public void StatusDecorations_HaveExpectedFormat()
     {
-        var theme = new AmberTheme();
+        var theme = new DarkTheme();
 
         Assert.Contains("LIVE", theme.StatusLive);
         Assert.Contains("HOLD", theme.StatusHold);
@@ -248,21 +210,19 @@ public class RetroThemeTests
     }
 
     [Fact]
-    public void ButtonDecorations_AreSymmetric()
+    public void ButtonDecorations_AreMinimal()
     {
-        var theme = new AmberTheme();
+        var theme = new DarkTheme();
 
-        // Both should have similar visual weight
-        Assert.False(string.IsNullOrEmpty(theme.ButtonPrefix));
-        Assert.False(string.IsNullOrEmpty(theme.ButtonSuffix));
+        // Both themes use minimal bracket style
+        Assert.Equal("[ ", theme.ButtonPrefix);
+        Assert.Equal(" ]", theme.ButtonSuffix);
     }
 
     [Theory]
-    [InlineData(typeof(AmberTheme), "Amber")]
-    [InlineData(typeof(GreenTheme), "Green")]
-    [InlineData(typeof(BlueTheme), "Blue")]
-    [InlineData(typeof(GreyTheme), "Grey")]
-    public void AllThemes_NameMatchesClassName(Type themeType, string expectedName)
+    [InlineData(typeof(DarkTheme), "Dark")]
+    [InlineData(typeof(LightTheme), "Light")]
+    public void AllThemes_NameMatchesExpected(Type themeType, string expectedName)
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
         Assert.Equal(expectedName, theme.Name);
@@ -271,7 +231,7 @@ public class RetroThemeTests
     [Fact]
     public void MainColorScheme_HasAllRequiredProperties()
     {
-        var theme = new AmberTheme();
+        var theme = new DarkTheme();
         var scheme = theme.MainColorScheme;
 
         // ColorScheme properties return Attribute (value type), which can never be null
@@ -282,7 +242,7 @@ public class RetroThemeTests
     [Fact]
     public void DialogColorScheme_HasAllRequiredProperties()
     {
-        var theme = new BlueTheme();
+        var theme = new LightTheme();
         var scheme = theme.DialogColorScheme;
 
         // ColorScheme properties return Attribute (value type), which can never be null
@@ -293,11 +253,22 @@ public class RetroThemeTests
     [Fact]
     public void MenuColorScheme_HasAllRequiredProperties()
     {
-        var theme = new GreyTheme();
+        var theme = new DarkTheme();
         var scheme = theme.MenuColorScheme;
 
         // ColorScheme properties return Attribute (value type), which can never be null
         // We just verify the scheme itself is not null
         Assert.NotNull(scheme);
+    }
+
+    [Theory]
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
+    public void AllThemes_UseSingleLineBorders(Type themeType)
+    {
+        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+
+        Assert.Equal(LineStyle.Single, theme.BorderLineStyle);
+        Assert.Equal(LineStyle.Single, theme.FrameLineStyle);
     }
 }
