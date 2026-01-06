@@ -1,3 +1,4 @@
+#nullable disable
 using Opc.Ua;
 using OpcScope.Tests.Infrastructure;
 
