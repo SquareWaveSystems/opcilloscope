@@ -33,6 +33,8 @@ public class LogView : FrameView
             Text = "Copy",
             X = Pos.AnchorEnd(8),
             Y = 0,
+            Height = 1,
+            ShadowStyle = ShadowStyle.None,
             ColorScheme = theme.ButtonColorScheme
         };
         _copyButton.Accepting += OnCopyClicked;

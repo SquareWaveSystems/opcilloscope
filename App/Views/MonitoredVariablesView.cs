@@ -111,7 +111,7 @@ public class MonitoredVariablesView : FrameView
         _tableView = new TableView
         {
             X = 0,
-            Y = 0,
+            Y = 1,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             Table = new DataTableSource(_dataTable),
@@ -183,6 +183,8 @@ public class MonitoredVariablesView : FrameView
             Text = "● REC",
             X = Pos.AnchorEnd(10),
             Y = 0,
+            Height = 1,
+            ShadowStyle = ShadowStyle.None,
             ColorScheme = theme.ButtonColorScheme
         };
         _recordButton.Accepting += OnRecordButtonClicked;
