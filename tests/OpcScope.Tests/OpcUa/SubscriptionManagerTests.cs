@@ -251,7 +251,7 @@ public class NodeIdExtensionsTests
         var other = new NodeId(100);
 
         // Act
-        var result = nodeId.EqualsNodeId(other);
+        var result = nodeId!.EqualsNodeId(other);
 
         // Assert
         Assert.False(result);
@@ -279,7 +279,7 @@ public class NodeIdExtensionsTests
         NodeId? other = null;
 
         // Act
-        var result = nodeId.EqualsNodeId(other!);
+        var result = nodeId!.EqualsNodeId(other!);
 
         // Assert
         Assert.True(result);

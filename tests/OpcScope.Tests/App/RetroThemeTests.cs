@@ -107,18 +107,9 @@ public class RetroThemeTests
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
 
-        Assert.NotNull(theme.NormalAttr);
-        Assert.NotNull(theme.BrightAttr);
-        Assert.NotNull(theme.DimAttr);
-        Assert.NotNull(theme.AccentAttr);
-        Assert.NotNull(theme.AccentBrightAttr);
-        Assert.NotNull(theme.BorderAttr);
-        Assert.NotNull(theme.GridAttr);
-        Assert.NotNull(theme.StatusActiveAttr);
-        Assert.NotNull(theme.StatusInactiveAttr);
-        Assert.NotNull(theme.ErrorAttr);
-        Assert.NotNull(theme.WarningAttr);
-        Assert.NotNull(theme.GlowAttr);
+        // Attribute is a value type (struct) so these properties can never be null.
+        // We verify the theme is instantiated correctly, which is sufficient.
+        Assert.NotNull(theme);
     }
 
     [Theory]
@@ -229,8 +220,8 @@ public class RetroThemeTests
         var attr1 = theme.NormalAttr;
         var attr2 = theme.NormalAttr;
 
-        // They should be the same cached instance
-        Assert.Same(attr1, attr2);
+        // They should be the same cached instance - Value types are compared by value, not reference
+        Assert.Equal(attr1, attr2);
     }
 
     [Fact]
@@ -283,11 +274,9 @@ public class RetroThemeTests
         var theme = new AmberTheme();
         var scheme = theme.MainColorScheme;
 
-        Assert.NotNull(scheme.Normal);
-        Assert.NotNull(scheme.Focus);
-        Assert.NotNull(scheme.HotNormal);
-        Assert.NotNull(scheme.HotFocus);
-        Assert.NotNull(scheme.Disabled);
+        // ColorScheme properties return Attribute (value type), which can never be null
+        // We just verify the scheme itself is not null
+        Assert.NotNull(scheme);
     }
 
     [Fact]
@@ -296,11 +285,9 @@ public class RetroThemeTests
         var theme = new BlueTheme();
         var scheme = theme.DialogColorScheme;
 
-        Assert.NotNull(scheme.Normal);
-        Assert.NotNull(scheme.Focus);
-        Assert.NotNull(scheme.HotNormal);
-        Assert.NotNull(scheme.HotFocus);
-        Assert.NotNull(scheme.Disabled);
+        // ColorScheme properties return Attribute (value type), which can never be null
+        // We just verify the scheme itself is not null
+        Assert.NotNull(scheme);
     }
 
     [Fact]
@@ -309,10 +296,8 @@ public class RetroThemeTests
         var theme = new GreyTheme();
         var scheme = theme.MenuColorScheme;
 
-        Assert.NotNull(scheme.Normal);
-        Assert.NotNull(scheme.Focus);
-        Assert.NotNull(scheme.HotNormal);
-        Assert.NotNull(scheme.HotFocus);
-        Assert.NotNull(scheme.Disabled);
+        // ColorScheme properties return Attribute (value type), which can never be null
+        // We just verify the scheme itself is not null
+        Assert.NotNull(scheme);
     }
 }
