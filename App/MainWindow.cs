@@ -106,15 +106,14 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
-        // Company branding label (bottom right)
+        // Company branding label (bottom right, separate from status bar shortcuts)
         _companyLabel = new Label
         {
-            X = Pos.AnchorEnd(25),
-            Y = 0,
+            X = Pos.AnchorEnd(26),
+            Y = Pos.AnchorEnd(1),
             Text = "Square Wave Systems 2026",
             ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.DarkGray, Color.Black) }
         };
-        _statusBar.Add(_companyLabel);
 
         // Create activity spinner for async operations
         _activitySpinner = new SpinnerView
@@ -156,6 +155,7 @@ public class MainWindow : Toplevel
         Add(_nodeDetailsView);
         Add(_logView);
         Add(_statusBar);
+        Add(_companyLabel);
 
         // Apply initial theme (after all controls are created)
         ApplyTheme();
