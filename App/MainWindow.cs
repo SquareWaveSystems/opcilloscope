@@ -128,7 +128,7 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
         _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
-        _statusBar.Add(new Shortcut(Key.Space, "Select", null));  // Visual hint only - handled in MonitoredItemsView
+        _statusBar.Add(new Shortcut(Key.Space, "Rec Select", null));  // Visual hint only - handled in MonitoredItemsView
         _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
@@ -639,8 +639,11 @@ public class MainWindow : Toplevel
 
     private void OnValueChanged(MonitoredNode item)
     {
-        // Record to CSV if recording is active
-        _csvRecordingManager.RecordValue(item);
+        // Record to CSV if recording is active AND item is selected for scope/recording
+        if (item.IsSelectedForScope)
+        {
+            _csvRecordingManager.RecordValue(item);
+        }
 
         UiThread.Run(() =>
         {
@@ -819,6 +822,17 @@ public class MainWindow : Toplevel
             return;
         }
 
+        // Check that at least one item is selected for recording
+        var selectedCount = _monitoredItemsView.ScopeSelectionCount;
+        if (selectedCount == 0)
+        {
+            MessageBox.Query("Record",
+                "No items selected for recording.\n\n" +
+                "Use Space to select items in the Rec column (◉).\n" +
+                "Selected items will be recorded and shown in Scope.", "OK");
+            return;
+        }
+
         using var dialog = new SaveDialog
         {
             Title = "Save Recording As",
@@ -837,7 +851,7 @@ public class MainWindow : Toplevel
 
             if (_csvRecordingManager.StartRecording(path))
             {
-                _monitoredItemsView.SetRecordingState(true, "REC");
+                _monitoredItemsView.SetRecordingState(true, $"REC ({selectedCount})");
                 StartRecordingStatusUpdates();
             }
             else
@@ -1002,7 +1016,7 @@ Keyboard Shortcuts:
   F5        - Refresh address space tree
   F10       - Open menu
   Enter     - Subscribe to selected node
-  Space     - Toggle scope selection (in Monitored Items)
+  Space     - Toggle recording selection (◉ = record & show in Scope)
   Delete    - Unsubscribe from selected item
   W         - Write value to selected item
   Ctrl+G    - Open Scope with selected items
@@ -1025,10 +1039,10 @@ Scope Controls (in dialog):
   +/-       - Adjust vertical scale
   R         - Reset to auto-scale
 
-CSV Recording:
-  - Use Record/Stop buttons in Monitored Items panel
-  - Or use File > Start Recording / Stop Recording
-  - Records all value changes to CSV in real-time
+CSV Recording & Scope:
+  - Press Space on items to select for recording (◉ in Rec column)
+  - Same items are shown in Scope view and recorded to CSV
+  - Use Record/Stop buttons or File > Start/Stop Recording
   - CSV format: Timestamp, DisplayName, NodeId, Value, Status
 
 Tips:

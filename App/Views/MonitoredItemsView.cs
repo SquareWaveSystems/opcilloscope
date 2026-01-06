@@ -28,8 +28,8 @@ public class MonitoredItemsView : FrameView
     // Scope selection
     private readonly Label _selectionFeedback;
     private int _cachedScopeSelectionCount;
-    private const string CheckedBox = "[●]";
-    private const string UncheckedBox = "[ ]";
+    private const string CheckedBox = "◉";   // Recording/scope selected
+    private const string UncheckedBox = "○";  // Not selected
     private const int MaxScopeSelections = 4;
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
@@ -127,7 +127,7 @@ public class MonitoredItemsView : FrameView
         };
 
         _dataTable = new DataTable();
-        _dataTable.Columns.Add("Scope", typeof(string));  // Checkbox column for scope selection
+        _dataTable.Columns.Add("Rec", typeof(string));  // Recording selection (◉ = record this item)
         _dataTable.Columns.Add("Name", typeof(string));
         _dataTable.Columns.Add("Access", typeof(string));
         _dataTable.Columns.Add("Value", typeof(string));
@@ -293,7 +293,7 @@ public class MonitoredItemsView : FrameView
             return;
 
         var row = _dataTable.NewRow();
-        row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
+        row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Name"] = item.DisplayName;
         row["Access"] = item.AccessString;
         row["Value"] = item.Value;
@@ -320,7 +320,7 @@ public class MonitoredItemsView : FrameView
             return;
 
         row["Access"] = item.AccessString;
-        row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
+        row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
         row["Status"] = FormatStatusWithIcon(item);
@@ -398,7 +398,7 @@ public class MonitoredItemsView : FrameView
             {
                 // Show feedback that max is reached
                 var theme = AppThemeManager.Current;
-                _selectionFeedback.Text = $"Max {MaxScopeSelections} items for Scope";
+                _selectionFeedback.Text = $"Max {MaxScopeSelections} items for Rec/Scope";
                 _selectionFeedback.ColorScheme = new ColorScheme
                 {
                     Normal = new Attribute(theme.Warning, theme.Background),
@@ -426,7 +426,7 @@ public class MonitoredItemsView : FrameView
         // Update the row display
         if (_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
         {
-            row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
+            row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
             _tableView.Update();
         }
 
@@ -456,6 +456,15 @@ public class MonitoredItemsView : FrameView
             if (selected != null)
             {
                 WriteRequested?.Invoke(selected);
+                e.Handled = true;
+            }
+        }
+        else if (e == Key.T)
+        {
+            var selected = SelectedItem;
+            if (selected != null)
+            {
+                TrendPlotRequested?.Invoke(selected);
                 e.Handled = true;
             }
         }
