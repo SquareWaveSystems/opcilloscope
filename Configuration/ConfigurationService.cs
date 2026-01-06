@@ -105,13 +105,7 @@ public class ConfigurationService
         {
             if (string.IsNullOrWhiteSpace(node.NodeId))
             {
-                throw new InvalidDataException("Monitored node has empty NodeId.");
-            }
-
-            // Basic NodeId format check (should contain at least one character)
-            if (node.NodeId.Length == 0)
-            {
-                throw new InvalidDataException($"Monitored node '{node.DisplayName}' has invalid NodeId format.");
+                throw new InvalidDataException($"Monitored node '{node.DisplayName}' has empty or invalid NodeId.");
             }
         }
     }
