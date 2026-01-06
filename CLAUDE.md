@@ -98,6 +98,39 @@ OpcScope/
 - Use `Attributes.Value`, `Attributes.DataType`, etc. for attribute IDs
 - Certificate validation: Set `AutoAcceptUntrustedCertificates = true` for development
 
+### DiscoveryClient API
+The `DiscoveryClient.Create` method requires `EndpointConfiguration`, not `ApplicationConfiguration`:
+
+```csharp
+// Correct usage - create EndpointConfiguration first
+var endpointConfig = EndpointConfiguration.Create(config);
+using var client = DiscoveryClient.Create(uri, endpointConfig);
+var endpoints = await client.GetEndpointsAsync(null);
+
+// Valid DiscoveryClient.Create overloads:
+// - DiscoveryClient.Create(Uri discoveryUrl)
+// - DiscoveryClient.Create(Uri discoveryUrl, EndpointConfiguration configuration)
+// - DiscoveryClient.Create(ApplicationConfiguration application, Uri discoveryUrl)
+```
+
+### ApplicationInstance API (Server)
+Use the async API variants for OPC UA server setup:
+
+```csharp
+// Configuration validation
+await config.ValidateAsync(ApplicationType.Server);
+
+// ApplicationInstance creation - use constructor with config
+_application = new ApplicationInstance(config, null);
+
+// Certificate check - use async variant
+var hasAppCertificate = await _application.CheckApplicationInstanceCertificatesAsync(silent: true);
+
+// Server start/stop - use async variants
+await _application.StartAsync(_server);
+await _server.StopAsync();
+```
+
 ### Key OPC Foundation Classes
 ```csharp
 // Session creation
@@ -209,3 +242,6 @@ Uses proper OPC UA Publish/Subscribe with `MonitoredItem.Notification` events - 
 5. **Ambiguous NodeBrowser reference**: OPC Foundation has its own `Browser` class - use fully qualified names if needed
 6. **Certificate validation errors**: Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
 7. **Integration tests fail with "Unexpected error starting application"**: The OPC UA test server requires specific environment permissions - unit tests will still pass
+
+## Rules
+Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.

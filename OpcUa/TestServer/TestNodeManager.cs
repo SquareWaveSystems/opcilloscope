@@ -258,7 +258,7 @@ internal class TestNodeManager : CustomNodeManager2
         }
         catch (Exception ex)
         {
-            Utils.Trace("Exception in TestNodeManager.OnSimulationTick: {0}", ex);
+            System.Diagnostics.Debug.WriteLine($"Exception in TestNodeManager.OnSimulationTick: {ex}");
         }
     }
 

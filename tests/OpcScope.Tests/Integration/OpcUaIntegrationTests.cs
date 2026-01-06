@@ -26,17 +26,17 @@ public class OpcUaIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public void CanBrowseRootFolder()
+    public async Task CanBrowseRootFolder()
     {
-        var references = Client!.Browse(ObjectIds.RootFolder);
+        var references = await Client!.BrowseAsync(ObjectIds.RootFolder);
         Assert.NotNull(references);
         Assert.True(references.Count > 0);
     }
 
     [Fact]
-    public void CanBrowseObjectsFolder()
+    public async Task CanBrowseObjectsFolder()
     {
-        var references = Client!.Browse(ObjectIds.ObjectsFolder);
+        var references = await Client!.BrowseAsync(ObjectIds.ObjectsFolder);
         Assert.NotNull(references);
 
         // Should contain our Simulation and StaticData folders
