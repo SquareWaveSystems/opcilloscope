@@ -28,7 +28,6 @@ public class MainWindow : Toplevel
     private readonly NodeDetailsView _nodeDetailsView;
     private readonly LogView _logView;
     private readonly StatusBar _statusBar;
-    private readonly Label _companyLabel;
     private readonly Label _connectionStatusLabel;
     private readonly SpinnerView _activitySpinner;
     private readonly Label _activityLabel;
@@ -144,14 +143,9 @@ public class MainWindow : Toplevel
             Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
 
+        // Minimal status bar: only essential shortcuts
         _statusBar.Add(new Shortcut(Key.F1, "Help", ShowHelp));
         _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
-        _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
-        _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
-        _statusBar.Add(new Shortcut(Key.W, "Write Val", WriteSelected));
-        _statusBar.Add(new Shortcut(Key.Space, "Rec Select", null));  // Visual hint only - handled in MonitoredVariablesView
-        _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
-        _statusBar.Add(new Shortcut(Key.R.WithCtrl, "Rec", ToggleRecording));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
@@ -163,16 +157,7 @@ public class MainWindow : Toplevel
         };
         UpdateConnectionStatusLabelStyle(isConnected: false);
 
-        // Company branding label (width-aware, overlaid on status bar row)
-        // ColorScheme is set in ApplyTheme() to use theme colors
-        _companyLabel = new Label
-        {
-            X = Pos.Left(_connectionStatusLabel) - 28,
-            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
-            Text = "Square Wave Systems 2026 |"
-        };
-
-        // Create activity spinner for async operations (left of company label)
+        // Create activity spinner for async operations
         // ColorScheme is set in ApplyTheme() to use theme colors
         _activitySpinner = new SpinnerView
         {
@@ -193,8 +178,6 @@ public class MainWindow : Toplevel
         _statusBar.Add(_activitySpinner);
         _statusBar.Add(_activityLabel);
 
-        // Initial width-aware update (will also be called from ApplyTheme)
-        Initialized += (_, _) => UpdateCompanyLabelForWidth();
 
         // Wire up view events
         _addressSpaceView.NodeSelected += OnNodeSelected;
@@ -215,7 +198,6 @@ public class MainWindow : Toplevel
         Add(_nodeDetailsView);
         Add(_logView);
         Add(_statusBar);
-        Add(_companyLabel);
         Add(_connectionStatusLabel);
 
         // Apply initial theme (after all controls are created)
@@ -229,24 +211,37 @@ public class MainWindow : Toplevel
     {
         var theme = ThemeManager.Current;
 
-        // Show initializing message in accent color
+        // Step 1: INITIALIZING..
         UiThread.Run(() =>
         {
             Title = "OPC Scope";
-            _connectionStatusLabel.Text = " ■ INITIALIZING... ";
+            _connectionStatusLabel.Text = " INITIALIZING.. ";
             _connectionStatusLabel.ColorScheme = new ColorScheme
             {
-                Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background)
+                Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background)
             };
             SetNeedsLayout();
         });
 
-        await Task.Delay(2000);
+        await Task.Delay(800);
 
-        // Show nominal message in bright/success style
+        // Step 2: Square Wave Systems 2026
         UiThread.Run(() =>
         {
-            _connectionStatusLabel.Text = " ■ All systems nominal. ";
+            _connectionStatusLabel.Text = " Square Wave Systems 2026 ";
+            _connectionStatusLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+            };
+            SetNeedsLayout();
+        });
+
+        await Task.Delay(1000);
+
+        // Step 3: All systems nominal.
+        UiThread.Run(() =>
+        {
+            _connectionStatusLabel.Text = " All systems nominal. ";
             _connectionStatusLabel.ColorScheme = new ColorScheme
             {
                 Normal = new Terminal.Gui.Attribute(theme.StatusGood, theme.Background)
@@ -254,14 +249,14 @@ public class MainWindow : Toplevel
             SetNeedsLayout();
         });
 
-        await Task.Delay(3400);
+        await Task.Delay(600);
 
         // Show normal disconnected state and log startup
         UiThread.Run(() =>
         {
             UpdateConnectionStatus(isConnected: false);
             _logger.Info("OPC Scope started - Square Wave Systems");
-            _logger.Info("Press F10 for menu, or use Connection -> Connect");
+            _logger.Info("Press F1 for help, F10 for menu");
         });
     }
 
@@ -332,12 +327,6 @@ public class MainWindow : Toplevel
             Border.ColorScheme = theme.BorderColorScheme;
         }
 
-        // Apply styling to company label (subtle in status bar)
-        _companyLabel.ColorScheme = new ColorScheme
-        {
-            Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
-
         // Apply styling to menu bar
         ThemeStyler.ApplyToMenuBar(_menuBar, theme);
 
@@ -360,9 +349,6 @@ public class MainWindow : Toplevel
         // Apply theme to activity spinner and label (for async operations)
         _activitySpinner.ColorScheme = cleanStatusBarScheme;
         _activityLabel.ColorScheme = cleanStatusBarScheme;
-
-        // Update width-aware company label
-        UpdateCompanyLabelForWidth();
 
         // Apply to child views with border differentiation
         // MonitoredVariables gets double-line (emphasized)
@@ -732,19 +718,6 @@ public class MainWindow : Toplevel
         }
     }
 
-    private void UpdateCompanyLabelForWidth()
-    {
-        var width = _statusBar.Frame.Width;
-
-        // Width-aware company branding with separator
-        if (width >= 120)
-            _companyLabel.Text = "Square Wave Systems 2026 |";
-        else if (width >= 90)
-            _companyLabel.Text = "SWS 2026 |";
-        else
-            _companyLabel.Text = "SWS |";
-    }
-
     private void StartConnectingAnimation()
     {
         _isConnecting = true;
@@ -926,51 +899,8 @@ public class MainWindow : Toplevel
 
     private void ShowHelp()
     {
-        var help = @"OPC Scope - Terminal OPC UA Client
-by Square Wave Systems
-
-Keyboard Shortcuts:
-  F1        - Show this help
-  F5        - Refresh address space tree
-  F10       - Open menu
-  Enter     - Subscribe to selected node
-  Space     - Toggle recording selection (◉ = record & show in Scope)
-  Delete    - Unsubscribe from selected variable
-  W         - Write value to selected variable
-  Ctrl+G    - Open Scope with selected variables
-  Ctrl+R    - Toggle recording (start/stop)
-  Ctrl+O    - Connect to server
-  Ctrl+Q    - Quit
-
-Navigation:
-  Tab       - Move between panels
-  Arrow Keys - Navigate within panel
-  Space     - Expand/collapse tree node (in tree view)
-
-Scope View:
-  - Select up to 5 variables using Space in Monitored Variables
-  - Press Ctrl+G to launch Scope with selected variables
-  - X-axis shows elapsed time
-  - Each signal displayed with distinct color
-
-Scope Controls (in dialog):
-  Space     - Pause/resume plotting
-  +/-       - Adjust vertical scale
-  R         - Reset to auto-scale
-
-CSV Recording & Scope:
-  - Press Space on variables to select for recording (◉ in Rec column)
-  - Same variables are shown in Scope view and recorded to CSV
-  - Press Ctrl+R to toggle recording on/off
-  - Recording indicator shows in status bar with elapsed time
-  - CSV format: Timestamp, DisplayName, NodeId, Value, Status
-
-Tips:
-  - Only Variable nodes can be subscribed
-  - Double-click a node to subscribe
-  - Values update in real-time via subscription
-";
-        MessageBox.Query("OPC Scope Help", help, "OK");
+        var dialog = new HelpDialog();
+        Application.Run(dialog);
     }
 
     private void ShowAbout()
