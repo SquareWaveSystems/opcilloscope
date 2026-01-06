@@ -130,6 +130,10 @@ public class MonitoredItemsView : FrameView
         _tableView.Style.ShowVerticalHeaderLines = false;
         _tableView.Style.ExpandLastColumn = true;
 
+        // Hide the internal _ItemRef column from display
+        var itemRefColumnStyle = _tableView.Style.GetOrCreateColumnStyle(_dataTable.Columns.IndexOf("_ItemRef"));
+        itemRefColumnStyle.Visible = false;
+
         // Note: Status icons (●/▲/✕) in text provide visual status indication
         // Terminal.Gui v2 TableView doesn't support per-row coloring
 
