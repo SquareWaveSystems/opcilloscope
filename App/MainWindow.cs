@@ -549,6 +549,12 @@ public class MainWindow : Toplevel
         _ = _subscriptionManager?.RemoveNodeAsync(item.ClientHandle);
     }
 
+    private void OnTrendPlotRequested(MonitoredNode item)
+    {
+        var dialog = new TrendPlotDialog(_subscriptionManager, item);
+        Application.Run(dialog);
+    }
+
     private void OnWriteRequested(MonitoredNode item)
     {
         if (!_client.IsConnected)

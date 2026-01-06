@@ -25,6 +25,13 @@ public class MonitoredItemsView : FrameView
     // Empty state
     private readonly Label _emptyStateLabel;
 
+    // Scope selection
+    private readonly Label _selectionFeedback;
+    private int _cachedScopeSelectionCount;
+    private const string CheckedBox = "[●]";
+    private const string UncheckedBox = "[ ]";
+    private const int MaxScopeSelections = 4;
+
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
     public event Action<MonitoredNode>? WriteRequested;
@@ -371,6 +378,59 @@ public class MonitoredItemsView : FrameView
             return $"{theme.StatusBadIcon} Bad";
 
         return item.StatusString;
+    }
+
+    private void ToggleScopeSelection()
+    {
+        var item = SelectedItem;
+        if (item == null) return;
+
+        if (item.IsSelectedForScope)
+        {
+            // Deselect
+            item.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
+        }
+        else
+        {
+            // Check if we've reached the max
+            if (_cachedScopeSelectionCount >= MaxScopeSelections)
+            {
+                // Show feedback that max is reached
+                var theme = AppThemeManager.Current;
+                _selectionFeedback.Text = $"Max {MaxScopeSelections} items for Scope";
+                _selectionFeedback.ColorScheme = new ColorScheme
+                {
+                    Normal = new Attribute(theme.Warning, theme.Background),
+                    Focus = new Attribute(theme.Warning, theme.Background),
+                    HotNormal = new Attribute(theme.Warning, theme.Background),
+                    HotFocus = new Attribute(theme.Warning, theme.Background),
+                    Disabled = new Attribute(theme.Warning, theme.Background)
+                };
+                _selectionFeedback.Visible = true;
+
+                // Hide after a delay
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(2000);
+                    Application.Invoke(() => _selectionFeedback.Visible = false);
+                });
+                return;
+            }
+
+            // Select
+            item.IsSelectedForScope = true;
+            _cachedScopeSelectionCount++;
+        }
+
+        // Update the row display
+        if (_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
+        {
+            row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
+            _tableView.Update();
+        }
+
+        ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
     }
 
     private void HandleKeyDown(object? _, Key e)

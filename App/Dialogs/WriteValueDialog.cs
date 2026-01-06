@@ -114,6 +114,26 @@ public class WriteValueDialog : Dialog
             Text = currentValue ?? ""
         };
 
+        // Validation error label
+        _errorLabel = new Label
+        {
+            X = 1,
+            Y = Pos.Bottom(_valueField),
+            Width = Dim.Fill()! - 1,
+            Text = "",
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.Error, theme.Background),
+                Focus = new Terminal.Gui.Attribute(theme.Error, theme.Background),
+                HotNormal = new Terminal.Gui.Attribute(theme.Error, theme.Background),
+                HotFocus = new Terminal.Gui.Attribute(theme.Error, theme.Background),
+                Disabled = new Terminal.Gui.Attribute(theme.Error, theme.Background)
+            }
+        };
+
+        // Real-time validation
+        _valueField.TextChanged += (_, _) => ValidateInput();
+
         // Default button highlighted with amber
         var defaultButtonScheme = new ColorScheme
         {
