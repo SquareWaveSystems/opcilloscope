@@ -25,6 +25,7 @@ public class MainWindow : Toplevel
     private readonly StatusBar _statusBar;
     private readonly Label _companyLabel;
     private readonly Label _connectionStatusLabel;
+    private readonly Label _recordingStatusLabel;
     private readonly SpinnerView _activitySpinner;
     private readonly Label _activityLabel;
     private readonly CsvRecordingManager _csvRecordingManager;
@@ -127,6 +128,7 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
         _statusBar.Add(new Shortcut(Key.Space, "Select", null));  // Visual hint only - handled in MonitoredItemsView
         _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
+        _statusBar.Add(new Shortcut(Key.R.WithCtrl, "Rec", ToggleRecording));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
         // Company branding label (width-aware, overlaid on status bar row)
@@ -137,6 +139,15 @@ public class MainWindow : Toplevel
             Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
             Text = "Square Wave Systems 2026"
         };
+
+        // Recording status indicator (right side, left of connection status)
+        _recordingStatusLabel = new Label
+        {
+            X = Pos.AnchorEnd(40),
+            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
+            Text = " ○ "  // Stopped indicator (empty circle)
+        };
+        UpdateRecordingStatusLabelStyle(isRecording: false);
 
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
         _connectionStatusLabel = new Label
@@ -176,8 +187,6 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredItemsView.WriteRequested += OnWriteRequested;
-        _monitoredItemsView.RecordRequested += OnRecordRequested;
-        _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -191,6 +200,7 @@ public class MainWindow : Toplevel
         Add(_logView);
         Add(_statusBar);
         Add(_companyLabel);
+        Add(_recordingStatusLabel);
         Add(_connectionStatusLabel);
 
         // Apply initial theme (after all controls are created)
@@ -334,8 +344,9 @@ public class MainWindow : Toplevel
         _statusBar.ColorScheme = cleanStatusBarScheme;
         _statusBar.SetNeedsLayout();
 
-        // Also apply theme to connection status label
+        // Also apply theme to connection status label and recording label
         UpdateConnectionStatusLabelStyle(_isConnected);
+        UpdateRecordingStatusLabelStyle(_csvRecordingManager.IsRecording);
 
         // Apply theme to activity spinner and label (for async operations)
         _activitySpinner.ColorScheme = cleanStatusBarScheme;
@@ -674,6 +685,38 @@ public class MainWindow : Toplevel
         };
     }
 
+    private void UpdateRecordingStatusLabelStyle(bool isRecording)
+    {
+        var theme = ThemeManager.Current;
+        _recordingStatusLabel.ColorScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(
+                isRecording ? theme.Accent : theme.MutedText,
+                theme.Background),
+            Focus = new Terminal.Gui.Attribute(
+                isRecording ? theme.AccentBright : theme.MutedText,
+                theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(
+                isRecording ? theme.Accent : theme.MutedText,
+                theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(
+                isRecording ? theme.AccentBright : theme.MutedText,
+                theme.Background)
+        };
+    }
+
+    private void ToggleRecording()
+    {
+        if (_csvRecordingManager.IsRecording)
+        {
+            OnStopRecordingRequested();
+        }
+        else
+        {
+            OnRecordRequested();
+        }
+    }
+
     private void UpdateCompanyLabelForWidth()
     {
         var width = _statusBar.Frame.Width;
@@ -803,7 +846,8 @@ public class MainWindow : Toplevel
 
             if (_csvRecordingManager.StartRecording(path))
             {
-                _monitoredItemsView.SetRecordingState(true, "REC");
+                _recordingStatusLabel.Text = " ◉ REC ";
+                UpdateRecordingStatusLabelStyle(isRecording: true);
                 StartRecordingStatusUpdates();
             }
             else
@@ -822,7 +866,8 @@ public class MainWindow : Toplevel
 
         StopRecordingStatusUpdates();
         _csvRecordingManager.StopRecording();
-        _monitoredItemsView.SetRecordingState(false, "");
+        _recordingStatusLabel.Text = " ○ ";
+        UpdateRecordingStatusLabelStyle(isRecording: false);
         MessageBox.Query("Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
     }
 
@@ -834,8 +879,7 @@ public class MainWindow : Toplevel
             if (_csvRecordingManager.IsRecording)
             {
                 var duration = _csvRecordingManager.RecordingDuration;
-                var status = $"REC {duration:mm\\:ss} ({_csvRecordingManager.RecordCount} records)";
-                _monitoredItemsView.UpdateRecordingStatus(status);
+                _recordingStatusLabel.Text = $" ◉ {duration:mm\\:ss} ";
                 return true; // Continue timer
             }
             return false; // Stop timer
@@ -973,6 +1017,7 @@ Keyboard Shortcuts:
   Delete    - Unsubscribe from selected item
   W         - Write value to selected item
   Ctrl+G    - Open Scope with selected items
+  Ctrl+R    - Toggle recording (start/stop)
   Ctrl+O    - Connect to server
   Ctrl+Q    - Quit
 
@@ -993,8 +1038,9 @@ Scope Controls (in dialog):
   R         - Reset to auto-scale
 
 CSV Recording:
-  - Use Record/Stop buttons in Monitored Items panel
+  - Press Ctrl+R to toggle recording on/off
   - Or use File > Start Recording / Stop Recording
+  - Recording indicator (◉) shows in status bar with elapsed time
   - Records all value changes to CSV in real-time
   - CSV format: Timestamp, DisplayName, NodeId, Value, Status
 
