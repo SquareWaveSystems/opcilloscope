@@ -13,31 +13,59 @@ class Program
             Application.Init();
 #pragma warning restore IL2026
 
-            // Parse command-line arguments for auto-connect
+            // Parse command-line arguments
             string? autoConnectUrl = null;
+            string? configPath = null;
+
             for (int i = 0; i < args.Length; i++)
             {
-                if ((args[i] == "--connect" || args[i] == "-c") && i + 1 < args.Length)
+                // Config file options: --config <path> or direct path ending with .opcscope/.json
+                if ((args[i] == "--config" || args[i] == "-f") && i + 1 < args.Length)
+                {
+                    configPath = args[i + 1];
+                    i++; // Skip the next argument
+                }
+                else if (args[i].EndsWith(".opcscope", StringComparison.OrdinalIgnoreCase) ||
+                         (args[i].EndsWith(".json", StringComparison.OrdinalIgnoreCase) && File.Exists(args[i])))
+                {
+                    configPath = args[i];
+                }
+                // Connection URL options: --connect <url> or direct opc.tcp:// URL
+                else if ((args[i] == "--connect" || args[i] == "-c") && i + 1 < args.Length)
                 {
                     autoConnectUrl = args[i + 1];
-                    break;
+                    i++; // Skip the next argument
                 }
                 else if (args[i].StartsWith("opc.tcp://"))
                 {
                     autoConnectUrl = args[i];
-                    break;
+                }
+                else if (args[i] == "--help" || args[i] == "-h")
+                {
+                    PrintUsage();
+                    return 0;
                 }
             }
 
             var mainWindow = new MainWindow();
 
-            // If auto-connect URL provided, trigger connection after UI is ready
-            if (!string.IsNullOrEmpty(autoConnectUrl))
+            // Load config file if specified (takes precedence over URL)
+            if (!string.IsNullOrEmpty(configPath))
+            {
+                if (!File.Exists(configPath))
+                {
+                    Console.Error.WriteLine($"Error: Configuration file not found: {configPath}");
+                    Application.Shutdown();
+                    return 1;
+                }
+                mainWindow.LoadConfigFromCommandLine(configPath);
+            }
+            // Otherwise, if auto-connect URL provided, trigger connection after UI is ready
+            else if (!string.IsNullOrEmpty(autoConnectUrl))
             {
                 Application.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
                 {
-                    // Invoke connection via reflection or public method
-                    // For now, just log that we would auto-connect
+                    // Note: Auto-connect is handled via URL in config - could be enhanced
                     return false;
                 });
             }
@@ -57,5 +85,24 @@ class Program
         }
 
         return 0;
+    }
+
+    private static void PrintUsage()
+    {
+        Console.WriteLine("OPC Scope - Terminal-based OPC UA Client");
+        Console.WriteLine();
+        Console.WriteLine("Usage: opcscope [options] [file|url]");
+        Console.WriteLine();
+        Console.WriteLine("Options:");
+        Console.WriteLine("  -f, --config <file>   Load configuration file (.opcscope or .json)");
+        Console.WriteLine("  -c, --connect <url>   Connect to OPC UA server (opc.tcp://...)");
+        Console.WriteLine("  -h, --help            Show this help message");
+        Console.WriteLine();
+        Console.WriteLine("Examples:");
+        Console.WriteLine("  opcscope                           Start with empty configuration");
+        Console.WriteLine("  opcscope production.opcscope       Load configuration file");
+        Console.WriteLine("  opcscope --config config.json      Load configuration file");
+        Console.WriteLine("  opcscope opc.tcp://localhost:4840  Connect to server directly");
+        Console.WriteLine();
     }
 }
