@@ -199,6 +199,12 @@ public class MonitoredItemsView : FrameView
         _dataTable.Rows.Add(row);
         _rowsByHandle[item.ClientHandle] = row;
 
+        // Update cache if item is already selected
+        if (item.IsSelectedForScope)
+        {
+            _cachedScopeSelectionCount++;
+        }
+
         _tableView.Update();
     }
 
@@ -224,6 +230,7 @@ public class MonitoredItemsView : FrameView
         if (row["_Item"] is MonitoredNode node && node.IsSelectedForScope)
         {
             node.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
             ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
         }
 
@@ -244,6 +251,7 @@ public class MonitoredItemsView : FrameView
             }
         }
 
+        _cachedScopeSelectionCount = 0;
         _dataTable.Rows.Clear();
         _rowsByHandle.Clear();
         _tableView.Update();
