@@ -33,10 +33,7 @@ public class LogView : FrameView
             Text = "Copy",
             X = Pos.AnchorEnd(8),
             Y = 0,
-            Width = 6,
-            Height = 1,
-            NoDecorations = true,
-            NoPadding = true
+            ColorScheme = theme.ButtonColorScheme
         };
         _copyButton.Accepting += OnCopyClicked;
 
@@ -94,6 +91,7 @@ public class LogView : FrameView
         Application.Invoke(() =>
         {
             BorderStyle = theme.FrameLineStyle;
+            _copyButton.ColorScheme = theme.ButtonColorScheme;
             SetNeedsLayout();
         });
     }
