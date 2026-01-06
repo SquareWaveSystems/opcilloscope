@@ -7,15 +7,11 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Features
-
-### P0 - Core Features (Implemented)
 - **Connection Management**: Connect to OPC UA servers via endpoint URL with anonymous authentication
 - **Address Space Browser**: TreeView with lazy-loading for efficient navigation of large address spaces
 - **Live Monitoring**: Real-time value updates via OPC UA subscriptions (not polling)
 - **Subscribe/Unsubscribe**: Add variable nodes to monitor with Enter key, remove with Delete key
 - **Event Log**: Color-coded log panel showing connection events, errors, and subscription changes
-
-### P1 - Enhanced Features (Implemented)
 - **Node Details Panel**: View full node attributes (Description, AccessLevel, ValueRank, DataType)
 - **Export to CSV**: Export current monitored values snapshot
 - **Settings Dialog**: Configure publishing interval (100-10000ms)
