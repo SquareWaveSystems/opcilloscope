@@ -141,7 +141,7 @@ public class MainWindow : Toplevel
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
         _connectionStatusLabel = new Label
         {
-            X = Pos.AnchorEnd(20),
+            X = Pos.AnchorEnd(26),  // Wide enough for " ■ All systems nominal. "
             Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
             Text = $" {theme.DisconnectedIndicator} "
         };
@@ -229,7 +229,7 @@ public class MainWindow : Toplevel
             SetNeedsLayout();
         });
 
-        await Task.Delay(1700);
+        await Task.Delay(3400);
 
         // Show normal disconnected state and log startup
         UiThread.Run(() =>
