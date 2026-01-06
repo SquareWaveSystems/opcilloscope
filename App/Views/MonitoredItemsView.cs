@@ -76,7 +76,11 @@ public class MonitoredItemsView : FrameView
             Width = Dim.Fill()! - 12,  // Leave room for the button
             ColorScheme = new ColorScheme
             {
-                Normal = new Attribute(theme.MutedText, theme.Background)
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
             }
         };
 
@@ -94,7 +98,15 @@ public class MonitoredItemsView : FrameView
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             Table = new DataTableSource(_dataTable),
-            FullRowSelect = true
+            FullRowSelect = true,
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.Foreground, theme.Background),
+                Focus = new Attribute(theme.ForegroundBright, theme.Background),
+                HotNormal = new Attribute(theme.Accent, theme.Background),
+                HotFocus = new Attribute(theme.AccentBright, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            }
         };
 
         // Configure table style for cleaner look
@@ -119,7 +131,11 @@ public class MonitoredItemsView : FrameView
             Text = "Select nodes to monitor",
             ColorScheme = new ColorScheme
             {
-                Normal = new Attribute(theme.MutedText, theme.Background)
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
             }
         };
 
@@ -195,13 +211,31 @@ public class MonitoredItemsView : FrameView
             // Update recording status label color
             _recordingStatus.ColorScheme = new ColorScheme
             {
-                Normal = new Attribute(theme.MutedText, theme.Background)
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
             };
 
             // Update empty state label color
             _emptyStateLabel.ColorScheme = new ColorScheme
             {
-                Normal = new Attribute(theme.MutedText, theme.Background)
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            };
+
+            // Update table view colors
+            _tableView.ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.Foreground, theme.Background),
+                Focus = new Attribute(theme.ForegroundBright, theme.Background),
+                HotNormal = new Attribute(theme.Accent, theme.Background),
+                HotFocus = new Attribute(theme.AccentBright, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
             };
 
             SetNeedsLayout();
