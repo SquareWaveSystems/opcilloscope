@@ -9,7 +9,7 @@ namespace OpcScope.App.Views;
 
 /// <summary>
 /// TableView for displaying subscribed/monitored items with real-time updates.
-/// Features theme-aware styling and row coloring based on status.
+/// Features theme-aware styling, row coloring based on status, and CSV recording controls.
 /// </summary>
 public class MonitoredItemsView : FrameView
 {
@@ -17,8 +17,16 @@ public class MonitoredItemsView : FrameView
     private readonly DataTable _dataTable;
     private readonly Dictionary<uint, DataRow> _rowsByHandle = new();
 
+    // Recording controls
+    private readonly Button _recordButton;
+    private readonly Button _stopButton;
+    private readonly Label _recordingStatus;
+    private bool _isRecording;
+
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
+    public event Action? RecordRequested;
+    public event Action? StopRecordingRequested;
 
     public MonitoredNode? SelectedItem
     {
@@ -42,6 +50,32 @@ public class MonitoredItemsView : FrameView
         var theme = AppThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
+        // Create recording control bar
+        _recordButton = new Button
+        {
+            Text = "Record",
+            X = 0,
+            Y = 0
+        };
+        _recordButton.Accepting += (_, _) => RecordRequested?.Invoke();
+
+        _stopButton = new Button
+        {
+            Text = "Stop",
+            X = Pos.Right(_recordButton) + 1,
+            Y = 0,
+            Enabled = false
+        };
+        _stopButton.Accepting += (_, _) => StopRecordingRequested?.Invoke();
+
+        _recordingStatus = new Label
+        {
+            Text = "",
+            X = Pos.Right(_stopButton) + 2,
+            Y = 0,
+            Width = Dim.Fill()
+        };
+
         _dataTable = new DataTable();
         _dataTable.Columns.Add("Name", typeof(string));
         _dataTable.Columns.Add("Value", typeof(string));
@@ -52,7 +86,7 @@ public class MonitoredItemsView : FrameView
         _tableView = new TableView
         {
             X = 0,
-            Y = 0,
+            Y = 1, // Below the button bar
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             Table = new DataTableSource(_dataTable),

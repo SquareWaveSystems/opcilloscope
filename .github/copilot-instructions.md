@@ -200,26 +200,11 @@ monitoredItem.Notification += (item, e) => {
 
 ## NuGet Configuration
 
-The project uses a **dual-source NuGet configuration** that works in both CI and restricted network environments:
+The project uses a **local package source** (`./packages/`) due to network restrictions.
 
-**How it works:**
-- `NuGet.Config` lists **nuget.org first** (primary) and **local packages second** (fallback)
-- GitHub Actions CI uses nuget.org directly (network available)
-- Restricted environments (corporate proxies) fall back to local packages
-
-**If `dotnet restore` fails due to proxy/network issues:**
-```bash
-# Download packages via curl (handles proxies better than .NET HttpClient)
-./scripts/download-packages.sh
-
-# Then restore using local packages
-dotnet restore
-```
-
-**To add new packages:**
-1. Add package reference to `.csproj`
-2. Run `dotnet restore` (uses nuget.org if available)
-3. If proxy blocks nuget.org, download `.nupkg` to `./packages/` directory
+To add new packages:
+1. Download `.nupkg` files to `packages/` directory
+2. Run `dotnet restore`
 
 ### Required Packages
 - `OPCFoundation.NetStandard.Opc.Ua.Client` - Client session and subscription
@@ -230,7 +215,7 @@ dotnet restore
 
 ## Common Pitfalls
 
-1. **NuGet restore fails** - Run `./scripts/download-packages.sh` to download packages via curl, then restore
+1. **NuGet restore fails** - Use local package source at `./packages/`
 2. **Tests fail with Xunit errors in main project** - Ensure `tests/**` is excluded in OpcScope.csproj
 3. **UI thread exceptions** - Always use `Application.Invoke()` for UI updates from background threads
 4. **Ambiguous NodeBrowser reference** - OPC Foundation has its own `Browser` class; use fully qualified names

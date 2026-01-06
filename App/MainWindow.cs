@@ -41,6 +41,7 @@ public class MainWindow : Toplevel
         _logger = new Logger();
         _client = new OpcUaClientWrapper(_logger);
         _nodeBrowser = new NodeBrowser(_client, _logger);
+        _csvRecordingManager = new CsvRecordingManager(_logger);
 
         // Wire up client events
         _client.Connected += OnClientConnected;
@@ -141,6 +142,8 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredItemsView.RecordRequested += OnRecordRequested;
+        _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -181,6 +184,10 @@ public class MainWindow : Toplevel
                 new MenuBarItem("_File", new MenuItem[]
                 {
                     new MenuItem("_Export to CSV...", "", ExportToCsv),
+                    null!, // Separator
+                    new MenuItem("Start _Recording...", "", () => OnRecordRequested()),
+                    new MenuItem("Sto_p Recording", "", () => OnStopRecordingRequested()),
+                    null!, // Separator
                     new MenuItem("E_xit", "", () => RequestStop())
                 }),
                 new MenuBarItem("_Connection", new MenuItem[]
@@ -310,6 +317,12 @@ public class MainWindow : Toplevel
 
     private void Disconnect()
     {
+        // Stop recording if active
+        if (_csvRecordingManager.IsRecording)
+        {
+            OnStopRecordingRequested();
+        }
+
         _subscriptionManager?.Dispose();
         _subscriptionManager = null;
 
@@ -480,6 +493,9 @@ public class MainWindow : Toplevel
 
     private void OnValueChanged(MonitoredNode item)
     {
+        // Record to CSV if recording is active
+        _csvRecordingManager.RecordValue(item);
+
         UiThread.Run(() =>
         {
             _monitoredItemsView.UpdateItem(item);
@@ -696,6 +712,12 @@ Trend Plot (in dialog):
   +/-       - Adjust vertical scale
   R         - Reset to auto-scale
 
+CSV Recording:
+  - Use Record/Stop buttons in Monitored Items panel
+  - Or use File > Start Recording / Stop Recording
+  - Records all value changes to CSV in real-time
+  - CSV format: Timestamp, DisplayName, NodeId, Value, Status
+
 Tips:
   - Only Variable nodes can be subscribed
   - Double-click a node to subscribe
@@ -739,6 +761,8 @@ License: MIT
     {
         if (disposing)
         {
+            StopRecordingStatusUpdates();
+            _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _subscriptionManager?.Dispose();
             _client.Dispose();
