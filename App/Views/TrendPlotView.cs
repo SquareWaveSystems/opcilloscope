@@ -557,7 +557,7 @@ public class TrendPlotView : View
             _graphView.Annotations.Add(noSignalAnnotation);
         }
 
-        _graphView.SetNeedsDisplay();
+        _graphView.SetNeedsLayout();
     }
 
     /// <summary>
