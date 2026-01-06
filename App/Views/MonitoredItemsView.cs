@@ -22,15 +22,24 @@ public class MonitoredItemsView : FrameView
     private readonly Label _recordingStatus;
     private bool _isRecording;
 
-    // Unicode symbols for record/stop
+    // Scope selection
+    private const int MaxScopeSelections = 5;
+    private readonly Label _selectionFeedback;
+    private object? _feedbackTimerToken;
+    private int _cachedScopeSelectionCount;
+
+    // Unicode symbols for record/stop and checkbox
     private const string RecordSymbol = "●";  // Red circle for record
     private const string StopSymbol = "■";    // Square for stop
+    private const string CheckedBox = "[x]";
+    private const string UncheckedBox = "[ ]";
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
     public event Action<MonitoredNode>? WriteRequested;
     public event Action? RecordRequested;
     public event Action? StopRecordingRequested;
+    public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
 
     public MonitoredNode? SelectedItem
     {
@@ -44,6 +53,30 @@ public class MonitoredItemsView : FrameView
             return null;
         }
     }
+
+    /// <summary>
+    /// Gets all monitored nodes currently selected for Scope display.
+    /// </summary>
+    public IReadOnlyList<MonitoredNode> ScopeSelectedNodes
+    {
+        get
+        {
+            var selected = new List<MonitoredNode>();
+            foreach (DataRow row in _dataTable.Rows)
+            {
+                if (row["_Item"] is MonitoredNode node && node.IsSelectedForScope)
+                {
+                    selected.Add(node);
+                }
+            }
+            return selected;
+        }
+    }
+
+    /// <summary>
+    /// Gets the count of items selected for Scope.
+    /// </summary>
+    public int ScopeSelectionCount => _cachedScopeSelectionCount;
 
     public MonitoredItemsView()
     {
@@ -77,7 +110,17 @@ public class MonitoredItemsView : FrameView
             Width = Dim.Fill()! - 6  // Leave room for the button
         };
 
+        // Selection feedback label (shows when max is reached)
+        _selectionFeedback = new Label
+        {
+            Text = "",
+            X = Pos.Center(),
+            Y = 0,
+            Visible = false
+        };
+
         _dataTable = new DataTable();
+        _dataTable.Columns.Add("Scope", typeof(string));  // Checkbox column for scope selection
         _dataTable.Columns.Add("Name", typeof(string));
         _dataTable.Columns.Add("Access", typeof(string));
         _dataTable.Columns.Add("Value", typeof(string));
@@ -110,6 +153,7 @@ public class MonitoredItemsView : FrameView
         AppThemeManager.ThemeChanged += OnThemeChanged;
 
         Add(_recordingStatus);
+        Add(_selectionFeedback);
         Add(_toggleRecordButton);
         Add(_tableView);
     }
@@ -147,6 +191,7 @@ public class MonitoredItemsView : FrameView
             return;
 
         var row = _dataTable.NewRow();
+        row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Name"] = item.DisplayName;
         row["Access"] = item.AccessString;
         row["Value"] = item.Value;
@@ -157,6 +202,12 @@ public class MonitoredItemsView : FrameView
         _dataTable.Rows.Add(row);
         _rowsByHandle[item.ClientHandle] = row;
 
+        // Update cache if item is already selected
+        if (item.IsSelectedForScope)
+        {
+            _cachedScopeSelectionCount++;
+        }
+
         _tableView.Update();
     }
 
@@ -166,6 +217,7 @@ public class MonitoredItemsView : FrameView
             return;
 
         row["Access"] = item.AccessString;
+        row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
         row["Status"] = item.StatusString;
@@ -178,6 +230,14 @@ public class MonitoredItemsView : FrameView
         if (!_rowsByHandle.TryGetValue(clientHandle, out var row))
             return;
 
+        // Clear scope selection before removing
+        if (row["_Item"] is MonitoredNode node && node.IsSelectedForScope)
+        {
+            node.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
+            ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
+        }
+
         _dataTable.Rows.Remove(row);
         _rowsByHandle.Remove(clientHandle);
 
@@ -186,9 +246,100 @@ public class MonitoredItemsView : FrameView
 
     public void Clear()
     {
+        // Clear all scope selections before clearing table
+        foreach (DataRow row in _dataTable.Rows)
+        {
+            if (row["_Item"] is MonitoredNode node)
+            {
+                node.IsSelectedForScope = false;
+            }
+        }
+
+        _cachedScopeSelectionCount = 0;
         _dataTable.Rows.Clear();
         _rowsByHandle.Clear();
         _tableView.Update();
+        ScopeSelectionChanged?.Invoke(0);
+    }
+
+    /// <summary>
+    /// Toggles the scope selection for the currently highlighted item.
+    /// </summary>
+    public void ToggleScopeSelection()
+    {
+        var selected = SelectedItem;
+        if (selected == null)
+            return;
+
+        if (selected.IsSelectedForScope)
+        {
+            // Deselect
+            selected.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
+            UpdateScopeCheckbox(selected);
+            HideSelectionFeedback();
+            ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
+        }
+        else
+        {
+            // Check if we've reached the limit
+            if (ScopeSelectionCount >= MaxScopeSelections)
+            {
+                ShowSelectionFeedback($"Max {MaxScopeSelections} items for Scope");
+                return;
+            }
+
+            // Select
+            selected.IsSelectedForScope = true;
+            _cachedScopeSelectionCount++;
+            UpdateScopeCheckbox(selected);
+            HideSelectionFeedback();
+            ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
+        }
+    }
+
+    private void UpdateScopeCheckbox(MonitoredNode item)
+    {
+        if (_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
+        {
+            row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
+            _tableView.Update();
+        }
+    }
+
+    private void ShowSelectionFeedback(string message)
+    {
+        // Cancel any existing timer
+        if (_feedbackTimerToken != null)
+        {
+            Application.RemoveTimeout(_feedbackTimerToken);
+            _feedbackTimerToken = null;
+        }
+
+        _selectionFeedback.Text = message;
+        _selectionFeedback.Visible = true;
+        SetNeedsLayout();
+
+        // Auto-hide after 2 seconds
+        _feedbackTimerToken = Application.AddTimeout(TimeSpan.FromSeconds(2), () =>
+        {
+            Application.Invoke(HideSelectionFeedback);
+            return false;  // Don't repeat
+        });
+    }
+
+    private void HideSelectionFeedback()
+    {
+        // Clear any existing timer
+        if (_feedbackTimerToken != null)
+        {
+            Application.RemoveTimeout(_feedbackTimerToken);
+            _feedbackTimerToken = null;
+        }
+
+        _selectionFeedback.Visible = false;
+        _selectionFeedback.Text = "";
+        SetNeedsLayout();
     }
 
     private void HandleKeyDown(object? _, Key e)
@@ -204,12 +355,9 @@ public class MonitoredItemsView : FrameView
         }
         else if (e == Key.Space)
         {
-            var selected = SelectedItem;
-            if (selected != null)
-            {
-                TrendPlotRequested?.Invoke(selected);
-                e.Handled = true;
-            }
+            // Toggle scope selection for the highlighted item
+            ToggleScopeSelection();
+            e.Handled = true;
         }
         else if (e == Key.W)
         {

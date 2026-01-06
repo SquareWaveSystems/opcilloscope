@@ -52,6 +52,9 @@ public class MonitoredNode
         IsReadable && IsWritable ? "RW" :
         IsReadable ? "R" :
         IsWritable ? "W" : "-";
+    /// Indicates if this node is selected for display in the Scope view.
+    /// </summary>
+    public bool IsSelectedForScope { get; set; }
 
     public string StatusString
     {
