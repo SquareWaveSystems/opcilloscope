@@ -149,7 +149,7 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
-        _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
+        _statusBar.Add(new Shortcut(Key.W, "Write Val", WriteSelected));
         _statusBar.Add(new Shortcut(Key.Space, "Rec Select", null));  // Visual hint only - handled in MonitoredItemsView
         _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
         _statusBar.Add(new Shortcut(Key.R.WithCtrl, "Rec", ToggleRecording));
