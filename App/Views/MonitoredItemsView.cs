@@ -107,9 +107,6 @@ public class MonitoredItemsView : FrameView
         // Subscribe to theme changes
         AppThemeManager.ThemeChanged += OnThemeChanged;
 
-        Add(_recordButton);
-        Add(_stopButton);
-        Add(_recordingStatus);
         Add(_tableView);
     }
 
@@ -120,27 +117,6 @@ public class MonitoredItemsView : FrameView
             BorderStyle = theme.FrameLineStyle;
             SetNeedsLayout();
         });
-    }
-
-    /// <summary>
-    /// Update the recording state and UI controls.
-    /// </summary>
-    public void SetRecordingState(bool isRecording, string statusText = "")
-    {
-        _isRecording = isRecording;
-        _recordButton.Enabled = !isRecording;
-        _stopButton.Enabled = isRecording;
-        _recordingStatus.Text = statusText;
-        _recordingStatus.Update();
-    }
-
-    /// <summary>
-    /// Update the recording status text (e.g., record count, duration).
-    /// </summary>
-    public void UpdateRecordingStatus(string statusText)
-    {
-        _recordingStatus.Text = statusText;
-        _recordingStatus.Update();
     }
 
     public void AddItem(MonitoredNode item)
