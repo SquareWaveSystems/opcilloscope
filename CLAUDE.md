@@ -19,14 +19,26 @@ export PATH="$HOME/.dotnet:$PATH"
 ```
 
 ### NuGet Package Restore
-The project uses a local package source to avoid network/proxy issues. If `dotnet restore` fails:
+
+The project uses a **dual-source NuGet configuration** that works in both CI and restricted network environments:
+
+**How it works:**
+- `NuGet.Config` lists **nuget.org first** (primary source) and **local packages second** (fallback)
+- In GitHub Actions CI: Uses nuget.org (network is available)
+- In restricted environments: Falls back to local packages if nuget.org fails
+
+**If `dotnet restore` fails due to proxy/network issues:**
 
 1. Run the package download script: `./scripts/download-packages.sh`
-2. The script uses `curl` to download packages from nuget.org (curl handles proxies better than NuGet)
+2. The script uses `curl` to download packages from nuget.org (curl handles proxies better than .NET HttpClient)
 3. Packages are stored in `./packages/` directory
-4. NuGet.Config is configured to use only this local source
+4. Re-run `dotnet restore` - it will use the local packages as fallback
 
-**Note**: In environments with restrictive proxies, .NET's HttpClient may fail to authenticate with the proxy even when `HTTP_PROXY`/`HTTPS_PROXY` are set. The download script works around this by using `curl` which handles proxy authentication correctly.
+**Why this design:**
+- .NET's HttpClient may fail to authenticate with corporate proxies even when `HTTP_PROXY`/`HTTPS_PROXY` are set
+- `curl` handles proxy authentication correctly
+- The dual-source approach ensures CI pipelines work without pre-downloaded packages
+- Local packages remain available for offline/restricted development
 
 ## Build & Run
 
@@ -156,9 +168,14 @@ subscription.ApplyChanges();
 ```
 
 ### NuGet Configuration
-The project uses a local package source (`./packages/`) due to network restrictions. To add new packages:
-1. Download .nupkg files to the packages directory
-2. Run `dotnet restore`
+The project uses a dual-source NuGet configuration:
+- **nuget.org** (primary) - Works in CI and normal network environments
+- **Local packages** (fallback) - Used when nuget.org is inaccessible due to proxy issues
+
+To add new packages:
+1. Add the package reference to the .csproj file
+2. Run `dotnet restore` (uses nuget.org)
+3. If restore fails due to proxy issues, download the .nupkg to `./packages/` and restore again
 
 Required OPC Foundation packages:
 - `OPCFoundation.NetStandard.Opc.Ua.Client` - Client session and subscription
@@ -236,7 +253,7 @@ Uses proper OPC UA Publish/Subscribe with `MonitoredItem.Notification` events - 
 ## Common Issues
 
 1. **`dotnet` command not found**: Install .NET SDK using the install script (see Environment Setup above)
-2. **NuGet restore fails with proxy/401 errors**: Run `./scripts/download-packages.sh` to download packages via curl
+2. **NuGet restore fails with proxy/401 errors**: Run `./scripts/download-packages.sh` to download packages via curl, then re-run `dotnet restore`
 3. **Tests fail with Xunit errors in main project**: Ensure `tests/**` is excluded in OpcScope.csproj
 4. **UI thread exceptions**: Always use `Application.Invoke()` for UI updates from background threads
 5. **Ambiguous NodeBrowser reference**: OPC Foundation has its own `Browser` class - use fully qualified names if needed
