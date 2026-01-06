@@ -135,7 +135,6 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSelected += OnNodeSelected;
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
-        _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
         _monitoredItemsView.WriteRequested += OnWriteRequested;
         _monitoredItemsView.RecordRequested += OnRecordRequested;
         _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;

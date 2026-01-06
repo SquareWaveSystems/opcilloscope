@@ -35,7 +35,6 @@ public class MonitoredItemsView : FrameView
     private const string UncheckedBox = "[ ]";
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
-    public event Action<MonitoredNode>? TrendPlotRequested;
     public event Action<MonitoredNode>? WriteRequested;
     public event Action? RecordRequested;
     public event Action? StopRecordingRequested;
