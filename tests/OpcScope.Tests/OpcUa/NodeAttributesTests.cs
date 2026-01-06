@@ -1,5 +1,6 @@
 using Opc.Ua;
 using OpcScope.OpcUa;
+using OpcScopeNodeAttributes = OpcScope.OpcUa.NodeAttributes;
 
 namespace OpcScope.Tests.OpcUa;
 
@@ -9,7 +10,7 @@ public class NodeAttributesTests
     public void NodeAttributes_DefaultValues()
     {
         // Arrange & Act
-        var attrs = new NodeAttributes();
+        var attrs = new OpcScopeNodeAttributes();
 
         // Assert
         Assert.Equal(ObjectIds.RootFolder, attrs.NodeId);
@@ -27,7 +28,7 @@ public class NodeAttributesTests
     public void AccessLevelString_ReturnsNA_WhenAccessLevelIsNull()
     {
         // Arrange
-        var attrs = new NodeAttributes { AccessLevel = null };
+        var attrs = new OpcScopeNodeAttributes { AccessLevel = null };
 
         // Assert
         Assert.Equal("N/A", attrs.AccessLevelString);
@@ -37,7 +38,7 @@ public class NodeAttributesTests
     public void AccessLevelString_ReturnsNone_WhenAccessLevelIsZero()
     {
         // Arrange
-        var attrs = new NodeAttributes { AccessLevel = 0 };
+        var attrs = new OpcScopeNodeAttributes { AccessLevel = 0 };
 
         // Assert
         Assert.Equal("None", attrs.AccessLevelString);
@@ -47,7 +48,7 @@ public class NodeAttributesTests
     public void AccessLevelString_ReturnsRead_WhenReadBitSet()
     {
         // Arrange
-        var attrs = new NodeAttributes { AccessLevel = 0x01 };
+        var attrs = new OpcScopeNodeAttributes { AccessLevel = 0x01 };
 
         // Assert
         Assert.Equal("Read", attrs.AccessLevelString);
@@ -57,7 +58,7 @@ public class NodeAttributesTests
     public void AccessLevelString_ReturnsWrite_WhenWriteBitSet()
     {
         // Arrange
-        var attrs = new NodeAttributes { AccessLevel = 0x02 };
+        var attrs = new OpcScopeNodeAttributes { AccessLevel = 0x02 };
 
         // Assert
         Assert.Equal("Write", attrs.AccessLevelString);
@@ -67,7 +68,7 @@ public class NodeAttributesTests
     public void AccessLevelString_ReturnsHistoryRead_WhenHistoryReadBitSet()
     {
         // Arrange
-        var attrs = new NodeAttributes { AccessLevel = 0x04 };
+        var attrs = new OpcScopeNodeAttributes { AccessLevel = 0x04 };
 
         // Assert
         Assert.Equal("HistoryRead", attrs.AccessLevelString);
@@ -77,7 +78,7 @@ public class NodeAttributesTests
     public void AccessLevelString_ReturnsHistoryWrite_WhenHistoryWriteBitSet()
     {
         // Arrange
-        var attrs = new NodeAttributes { AccessLevel = 0x08 };
+        var attrs = new OpcScopeNodeAttributes { AccessLevel = 0x08 };
 
         // Assert
         Assert.Equal("HistoryWrite", attrs.AccessLevelString);
@@ -87,7 +88,7 @@ public class NodeAttributesTests
     public void AccessLevelString_ReturnsReadWrite_WhenBothBitsSet()
     {
         // Arrange
-        var attrs = new NodeAttributes { AccessLevel = 0x03 }; // Read + Write
+        var attrs = new OpcScopeNodeAttributes { AccessLevel = 0x03 }; // Read + Write
 
         // Assert
         Assert.Equal("Read, Write", attrs.AccessLevelString);
@@ -97,7 +98,7 @@ public class NodeAttributesTests
     public void AccessLevelString_ReturnsAllAccess_WhenAllBitsSet()
     {
         // Arrange
-        var attrs = new NodeAttributes { AccessLevel = 0x0F }; // All four bits
+        var attrs = new OpcScopeNodeAttributes { AccessLevel = 0x0F }; // All four bits
 
         // Assert
         Assert.Equal("Read, Write, HistoryRead, HistoryWrite", attrs.AccessLevelString);
@@ -122,7 +123,7 @@ public class NodeAttributesTests
     public void AccessLevelString_ReturnsCorrectCombination(byte accessLevel, string expected)
     {
         // Arrange
-        var attrs = new NodeAttributes { AccessLevel = accessLevel };
+        var attrs = new OpcScopeNodeAttributes { AccessLevel = accessLevel };
 
         // Assert
         Assert.Equal(expected, attrs.AccessLevelString);
@@ -135,7 +136,7 @@ public class NodeAttributesTests
         var nodeId = new NodeId(1234);
 
         // Act
-        var attrs = new NodeAttributes
+        var attrs = new OpcScopeNodeAttributes
         {
             NodeId = nodeId,
             NodeClass = NodeClass.Variable,
