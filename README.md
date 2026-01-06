@@ -21,10 +21,10 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ File   View   Connection   Help                                    [Status] │
+│ File  Connection  View  Theme  Help                                         │
 ├───────────────────────────────┬─────────────────────────────────────────────┤
 │ Address Space                 │ Monitored Items                             │
-│ ─────────────────────────────│──────────────────────────────────────────────│
+│                               │                                             │
 │ ▾ Root                        │ Name           │ Value    │ Time   │ Status │
 │   ▾ Objects                   │────────────────┼──────────┼────────┼────────│
 │     ▸ Server                  │ Temperature    │ 47.3     │ 12:34  │ Good   │
@@ -36,14 +36,15 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 │                               │                │          │        │        │
 ├───────────────────────────────┴─────────────────────────────────────────────┤
 │ Node Details                                                                │
-│ NodeId: ns=2;s=Temperature  DataType: Double  AccessLevel: CurrentRead      │
+│ Select a node to view details                                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Log                                                                         │
-│ [12:30:01] Connected to opc.tcp://localhost:4840                            │
-│ [12:30:02] Subscription created (ID: 1, Interval: 1000ms)                   │
-│ [12:30:15] Subscribed to ns=2;s=Temperature                                 │
+│ [12:30:01] INFO  OPC Scope started - Square Wave Systems                    │
+│ [12:30:01] INFO  Press F10 for menu, or use Connection -> Connect           │
+│ [12:30:15] INFO  Connected to opc.tcp://localhost:4840                      │
 └─────────────────────────────────────────────────────────────────────────────┘
- F1 Help │ F5 Refresh │ Enter Subscribe │ Del Unsubscribe │ F10 Menu
+ F1 Help │ F5 Refresh │ Enter Subscribe │ Delete Unsubscribe │ F10 Menu │
+                                       Square Wave Systems  ○ Not Connected
 ```
 
 ## Installation
@@ -75,8 +76,6 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 ### Build from Source
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-
-**Prerequisites:** [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 ```bash
 # Clone the repository

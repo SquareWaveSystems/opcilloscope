@@ -13,7 +13,7 @@ public static class ThemeStyler
     /// Note: Does NOT override BorderStyle - caller should set that explicitly to control
     /// whether a view uses emphasized (double-line) or secondary (single-line) borders.
     /// </summary>
-    public static void ApplyTo(View view, RetroTheme? theme = null)
+    public static void ApplyTo(View view, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
 
@@ -45,7 +45,7 @@ public static class ThemeStyler
     /// <summary>
     /// Applies styling to a FrameView with themed borders.
     /// </summary>
-    public static void ApplyToFrame(FrameView frame, RetroTheme? theme = null)
+    public static void ApplyToFrame(FrameView frame, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
 
@@ -56,7 +56,7 @@ public static class ThemeStyler
     /// <summary>
     /// Applies dialog-specific styling.
     /// </summary>
-    public static void ApplyToDialog(Dialog dialog, RetroTheme? theme = null)
+    public static void ApplyToDialog(Dialog dialog, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
 
@@ -72,7 +72,7 @@ public static class ThemeStyler
     /// <summary>
     /// Applies styling to a button.
     /// </summary>
-    public static void ApplyToButton(Button button, RetroTheme? theme = null)
+    public static void ApplyToButton(Button button, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
         button.ColorScheme = theme.ButtonColorScheme;
@@ -81,7 +81,7 @@ public static class ThemeStyler
     /// <summary>
     /// Applies menu bar styling.
     /// </summary>
-    public static void ApplyToMenuBar(MenuBar menuBar, RetroTheme? theme = null)
+    public static void ApplyToMenuBar(MenuBar menuBar, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
         menuBar.ColorScheme = theme.MenuColorScheme;
@@ -90,7 +90,7 @@ public static class ThemeStyler
     /// <summary>
     /// Applies status bar styling.
     /// </summary>
-    public static void ApplyToStatusBar(StatusBar statusBar, RetroTheme? theme = null)
+    public static void ApplyToStatusBar(StatusBar statusBar, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
         statusBar.ColorScheme = theme.MenuColorScheme;
@@ -99,7 +99,7 @@ public static class ThemeStyler
     /// <summary>
     /// Creates a styled label with theme colors.
     /// </summary>
-    public static Label CreateLabel(string text, RetroTheme? theme = null)
+    public static Label CreateLabel(string text, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
         return new Label
@@ -112,7 +112,7 @@ public static class ThemeStyler
     /// <summary>
     /// Creates a styled TextField with theme colors.
     /// </summary>
-    public static TextField CreateTextField(string text = "", RetroTheme? theme = null)
+    public static TextField CreateTextField(string text = "", AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
         return new TextField
@@ -125,7 +125,7 @@ public static class ThemeStyler
     /// <summary>
     /// Creates a styled button with theme decorations.
     /// </summary>
-    public static Button CreateButton(string text, RetroTheme? theme = null)
+    public static Button CreateButton(string text, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
         return new Button

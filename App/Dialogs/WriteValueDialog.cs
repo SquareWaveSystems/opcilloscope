@@ -2,6 +2,7 @@ using Terminal.Gui;
 using Opc.Ua;
 using OpcScope.App.Themes;
 using OpcScope.Utilities;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Dialogs;
 
@@ -22,7 +23,7 @@ public class WriteValueDialog : Dialog
 
     public WriteValueDialog(NodeId nodeId, string nodeName, BuiltInType dataType, string dataTypeName, string? currentValue)
     {
-        var theme = ThemeManager.Current;
+        var theme = AppThemeManager.Current;
         _dataType = dataType;
 
         Title = " Write Value ";
@@ -113,7 +114,6 @@ public class WriteValueDialog : Dialog
             Text = currentValue ?? ""
         };
 
-        // Error label for validation feedback
         _errorLabel = new Label
         {
             X = 1,
@@ -122,7 +122,7 @@ public class WriteValueDialog : Dialog
             Text = "",
             ColorScheme = new ColorScheme
             {
-                Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background)
+                Normal = new Terminal.Gui.Attribute(theme.StatusBad, theme.Background)
             }
         };
 

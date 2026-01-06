@@ -18,7 +18,7 @@ public class ScopeDialog : Dialog
     private readonly Button _pauseButton;
 
     // Theme-aware accessor
-    private RetroTheme Theme => ThemeManager.Current;
+    private AppTheme Theme => ThemeManager.Current;
 
     public ScopeDialog(
         IReadOnlyList<MonitoredNode> selectedNodes,
@@ -100,7 +100,7 @@ public class ScopeDialog : Dialog
         });
     }
 
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         Application.Invoke(() =>
         {

@@ -11,7 +11,6 @@ namespace OpcScope.App;
 
 /// <summary>
 /// Main application window with layout orchestration.
-/// Supports retro-futuristic themes inspired by cassette futurism.
 /// </summary>
 public class MainWindow : Toplevel
 {
@@ -37,12 +36,20 @@ public class MainWindow : Toplevel
     private bool _isConnecting;
     private bool _isConnected;
 
+    private string? _lastEndpoint;
+
     public MainWindow()
     {
         _logger = new Logger();
         _connectionManager = new ConnectionManager(_logger);
         _csvRecordingManager = new CsvRecordingManager(_logger);
 
+        // Wire up connection manager events
+        _connectionManager.StateChanged += OnConnectionStateChanged;
+        _connectionManager.ConnectionError += OnConnectionError;
+        _connectionManager.ValueChanged += OnValueChanged;
+        _connectionManager.ItemAdded += item => UiThread.Run(() => _monitoredItemsView.AddItem(item));
+        _connectionManager.ItemRemoved += handle => UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
         // Override global "Menu" ColorScheme BEFORE creating any views
         // This prevents StatusBar's blue background flash on first render
         var theme = ThemeManager.Current;
@@ -54,13 +61,6 @@ public class MainWindow : Toplevel
             HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
             Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
-
-        // Wire up connection manager events
-        _connectionManager.StateChanged += OnConnectionStateChanged;
-        _connectionManager.ConnectionError += OnConnectionError;
-        _connectionManager.ValueChanged += OnValueChanged;
-        _connectionManager.ItemAdded += item => UiThread.Run(() => _monitoredItemsView.AddItem(item));
-        _connectionManager.ItemRemoved += handle => UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
 
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
@@ -127,25 +127,26 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
         _statusBar.Add(new Shortcut(Key.Space, "Select", null));  // Visual hint only - handled in MonitoredItemsView
         _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
+        _statusBar.Add(new Shortcut(Key.R.WithCtrl, "Rec", ToggleRecording));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
+
+        // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
+        _connectionStatusLabel = new Label
+        {
+            X = Pos.AnchorEnd(26),  // " ■ All systems nominal. " (longest text)
+            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
+            Text = $" {theme.DisconnectedIndicator} "
+        };
+        UpdateConnectionStatusLabelStyle(isConnected: false);
 
         // Company branding label (width-aware, overlaid on status bar row)
         // ColorScheme is set in ApplyTheme() to use theme colors
         _companyLabel = new Label
         {
-            X = Pos.AnchorEnd(46),
+            X = Pos.Left(_connectionStatusLabel) - 28,
             Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
-            Text = "Square Wave Systems 2026"
+            Text = "Square Wave Systems 2026 |"
         };
-
-        // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
-        _connectionStatusLabel = new Label
-        {
-            X = Pos.AnchorEnd(26),  // Wide enough for " ■ All systems nominal. "
-            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
-            Text = $" {theme.DisconnectedIndicator} "
-        };
-        UpdateConnectionStatusLabelStyle(isConnected: false);
 
         // Create activity spinner for async operations (left of company label)
         // ColorScheme is set in ApplyTheme() to use theme colors
@@ -176,8 +177,6 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredItemsView.WriteRequested += OnWriteRequested;
-        _monitoredItemsView.RecordRequested += OnRecordRequested;
-        _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -358,7 +357,7 @@ public class MainWindow : Toplevel
         ThemeStyler.ApplyToFrame(_logView, theme);
     }
 
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         UiThread.Run(() =>
         {
@@ -388,6 +387,9 @@ public class MainWindow : Toplevel
 
     private async Task ConnectAsync(string endpoint)
     {
+        // Disconnect if already connected
+        Disconnect();
+
         StartConnectingAnimation();
         ShowActivity("Connecting...");
 
@@ -420,10 +422,18 @@ public class MainWindow : Toplevel
         _addressSpaceView.Clear();
         _monitoredItemsView.Clear();
         _nodeDetailsView.Clear();
+
+        UpdateConnectionStatus(isConnected: false);
     }
 
     private async Task ReconnectAsync()
     {
+        if (string.IsNullOrEmpty(_lastEndpoint))
+        {
+            _logger.Warning("No previous connection to reconnect");
+            return;
+        }
+
         StartConnectingAnimation();
         ShowActivity("Reconnecting...");
 
@@ -552,7 +562,7 @@ public class MainWindow : Toplevel
         {
             ShowActivity("Writing...");
 
-            var statusCode = await _connectionManager.Client.WriteValueAsync(item.NodeId, value);
+            var statusCode = await _connectionManager.Client!.WriteValueAsync(item.NodeId, value);
 
             UiThread.Run(() =>
             {
@@ -600,20 +610,21 @@ public class MainWindow : Toplevel
     {
         UiThread.Run(() =>
         {
-            switch (state)
+            var isConnected = state == ConnectionState.Connected;
+            UpdateConnectionStatus(isConnected);
+
+            if (isConnected)
             {
-                case ConnectionState.Connected:
-                    _logger.Info($"Connected to {_connectionManager.CurrentEndpoint}");
-                    UpdateConnectionStatus(isConnected: true);
-                    break;
-                case ConnectionState.Disconnected:
-                    UpdateConnectionStatus(isConnected: false);
-                    break;
-                case ConnectionState.Connecting:
-                case ConnectionState.Reconnecting:
-                    // Animation handles the visual feedback
-                    break;
+                _logger.Info($"Connected to {_connectionManager.CurrentEndpoint}");
             }
+        });
+    }
+
+    private void OnClientDisconnected()
+    {
+        UiThread.Run(() =>
+        {
+            UpdateConnectionStatus(isConnected: false);
         });
     }
 
@@ -662,17 +673,29 @@ public class MainWindow : Toplevel
         };
     }
 
+    private void ToggleRecording()
+    {
+        if (_csvRecordingManager.IsRecording)
+        {
+            OnStopRecordingRequested();
+        }
+        else
+        {
+            OnRecordRequested();
+        }
+    }
+
     private void UpdateCompanyLabelForWidth()
     {
         var width = _statusBar.Frame.Width;
 
-        // Width-aware company branding
+        // Width-aware company branding with separator
         if (width >= 120)
-            _companyLabel.Text = "Square Wave Systems 2026";
+            _companyLabel.Text = "Square Wave Systems 2026 |";
         else if (width >= 90)
-            _companyLabel.Text = "SWS 2026";
+            _companyLabel.Text = "SWS 2026 |";
         else
-            _companyLabel.Text = "SWS";
+            _companyLabel.Text = "SWS |";
     }
 
     private void StartConnectingAnimation()
@@ -740,8 +763,7 @@ public class MainWindow : Toplevel
 
     private void LaunchScope()
     {
-        var subscriptionManager = _connectionManager.SubscriptionManager;
-        if (subscriptionManager == null)
+        if (_connectionManager.SubscriptionManager == null)
         {
             MessageBox.Query("Scope", "Connect to a server first.", "OK");
             return;
@@ -755,7 +777,7 @@ public class MainWindow : Toplevel
             return;
         }
 
-        var dialog = new ScopeDialog(selectedNodes, subscriptionManager);
+        var dialog = new ScopeDialog(selectedNodes, _connectionManager.SubscriptionManager);
         Application.Run(dialog);
     }
 
@@ -792,7 +814,7 @@ public class MainWindow : Toplevel
 
             if (_csvRecordingManager.StartRecording(path))
             {
-                _monitoredItemsView.SetRecordingState(true, "REC");
+                _monitoredItemsView.UpdateRecordingStatus("◉ REC", true);
                 StartRecordingStatusUpdates();
             }
             else
@@ -811,7 +833,7 @@ public class MainWindow : Toplevel
 
         StopRecordingStatusUpdates();
         _csvRecordingManager.StopRecording();
-        _monitoredItemsView.SetRecordingState(false, "");
+        _monitoredItemsView.UpdateRecordingStatus("", false);
         MessageBox.Query("Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
     }
 
@@ -823,8 +845,7 @@ public class MainWindow : Toplevel
             if (_csvRecordingManager.IsRecording)
             {
                 var duration = _csvRecordingManager.RecordingDuration;
-                var status = $"REC {duration:mm\\:ss} ({_csvRecordingManager.RecordCount} records)";
-                _monitoredItemsView.UpdateRecordingStatus(status);
+                _monitoredItemsView.UpdateRecordingStatus($"◉ {duration:mm\\:ss}", true);
                 return true; // Continue timer
             }
             return false; // Stop timer
@@ -962,6 +983,7 @@ Keyboard Shortcuts:
   Delete    - Unsubscribe from selected item
   W         - Write value to selected item
   Ctrl+G    - Open Scope with selected items
+  Ctrl+R    - Toggle recording (start/stop)
   Ctrl+O    - Connect to server
   Ctrl+Q    - Quit
 
@@ -982,8 +1004,9 @@ Scope Controls (in dialog):
   R         - Reset to auto-scale
 
 CSV Recording:
-  - Use Record/Stop buttons in Monitored Items panel
+  - Press Ctrl+R to toggle recording on/off
   - Or use File > Start Recording / Stop Recording
+  - Recording indicator (◉) shows in status bar with elapsed time
   - Records all value changes to CSV in real-time
   - CSV format: Timestamp, DisplayName, NodeId, Value, Status
 
@@ -1019,10 +1042,6 @@ Built with:
   - .NET 10
   - Terminal.Gui v2
   - OPC Foundation UA-.NETStandard
-
-Themes inspired by:
-  - Cassette Futurism (Alien, Blade Runner)
-  - github.com/Imetomi/retro-futuristic-ui-design
 
 © 2026 Square Wave Systems
 License: MIT

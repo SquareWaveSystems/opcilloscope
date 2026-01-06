@@ -1,5 +1,6 @@
 using Terminal.Gui;
 using OpcScope.App.Themes;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Dialogs;
 

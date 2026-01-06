@@ -16,7 +16,7 @@ namespace OpcScope.App.Views;
 public class ScopeView : View
 {
     // === Theme tracking ===
-    private RetroTheme _currentTheme = null!;
+    private AppTheme _currentTheme = null!;
     private readonly object _themeLock = new();
 
     // Sample with timestamp
@@ -155,7 +155,7 @@ public class ScopeView : View
 
     private void ApplyTheme()
     {
-        RetroTheme theme;
+        AppTheme theme;
         lock (_themeLock)
         {
             theme = _currentTheme;
@@ -215,7 +215,7 @@ public class ScopeView : View
         _graphView.BorderStyle = theme.BorderLineStyle;
     }
 
-    private void OnThemeChanged(RetroTheme newTheme)
+    private void OnThemeChanged(AppTheme newTheme)
     {
         lock (_themeLock)
         {
@@ -378,7 +378,7 @@ public class ScopeView : View
     /// </summary>
     private void UpdateGraph()
     {
-        RetroTheme theme;
+        AppTheme theme;
         lock (_themeLock)
         {
             theme = _currentTheme;

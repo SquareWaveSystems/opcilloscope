@@ -3,6 +3,7 @@ using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
 using System.Data;
 using Attribute = Terminal.Gui.Attribute;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -12,14 +13,22 @@ namespace OpcScope.App.Views;
 /// </summary>
 public class MonitoredItemsView : FrameView
 {
+    // Checkbox display constants
+    private const string CheckedBox = "[●]";
+    private const string UncheckedBox = "[ ]";
+    private const int MaxScopeSelections = 5;
+
     private readonly TableView _tableView;
     private readonly DataTable _dataTable;
     private readonly Dictionary<uint, DataRow> _rowsByHandle = new();
 
-    // Recording controls
-    private readonly Button _toggleRecordButton;
-    private readonly Label _recordingStatus;
-    private bool _isRecording;
+
+    // Scope selection
+    private readonly Label _selectionFeedback;
+    private int _cachedScopeSelectionCount;
+
+    // Recording indicator (right-aligned in title bar)
+    private readonly Label _recordingIndicatorLabel;
 
     // Empty state
     private readonly Label _emptyStateLabel;
@@ -33,8 +42,6 @@ public class MonitoredItemsView : FrameView
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? WriteRequested;
-    public event Action? RecordRequested;
-    public event Action? StopRecordingRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
 
     public MonitoredNode? SelectedItem
@@ -79,41 +86,9 @@ public class MonitoredItemsView : FrameView
         Title = " Monitored Items ";
         CanFocus = true;
 
-        // Apply theme styling - emphasized (double-line) for this panel
+        // Apply theme styling
         var theme = ThemeManager.Current;
-        BorderStyle = theme.EmphasizedBorderStyle;
-
-        // Create recording toggle button with text label (right-aligned)
-        _toggleRecordButton = new Button
-        {
-            Text = $" {theme.StoppedLabel} ",
-            X = Pos.AnchorEnd(10),  // Right-aligned, wider for text
-            Y = 0
-        };
-        UpdateRecordingButtonStyle();
-        _toggleRecordButton.Accepting += (_, _) =>
-        {
-            if (_isRecording)
-                StopRecordingRequested?.Invoke();
-            else
-                RecordRequested?.Invoke();
-        };
-
-        _recordingStatus = new Label
-        {
-            Text = "",
-            X = 0,
-            Y = 0,
-            Width = Dim.Fill()! - 12,  // Leave room for the button
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Attribute(theme.MutedText, theme.Background),
-                Focus = new Attribute(theme.MutedText, theme.Background),
-                HotNormal = new Attribute(theme.MutedText, theme.Background),
-                HotFocus = new Attribute(theme.MutedText, theme.Background),
-                Disabled = new Attribute(theme.MutedText, theme.Background)
-            }
-        };
+        BorderStyle = theme.FrameLineStyle;
 
         // Selection feedback label (shows when max is reached)
         _selectionFeedback = new Label
@@ -136,7 +111,7 @@ public class MonitoredItemsView : FrameView
         _tableView = new TableView
         {
             X = 0,
-            Y = 1, // Below the button bar
+            Y = 0,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             Table = new DataTableSource(_dataTable),
@@ -181,14 +156,30 @@ public class MonitoredItemsView : FrameView
             }
         };
 
+        // Recording indicator (right-aligned in title bar area)
+        _recordingIndicatorLabel = new Label
+        {
+            X = Pos.AnchorEnd(12),
+            Y = 0,
+            Text = "",
+            Visible = false,
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            }
+        };
+
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
-        Add(_recordingStatus);
         Add(_selectionFeedback);
-        Add(_toggleRecordButton);
         Add(_tableView);
         Add(_emptyStateLabel);
+        Add(_recordingIndicatorLabel);
 
         // Initial state
         UpdateEmptyState();
@@ -201,65 +192,11 @@ public class MonitoredItemsView : FrameView
         _tableView.Visible = !isEmpty;
     }
 
-    private void UpdateRecordingButtonStyle()
-    {
-        var theme = ThemeManager.Current;
-        _toggleRecordButton.Text = _isRecording
-            ? $" {theme.RecordingLabel} "
-            : $" {theme.StoppedLabel} ";
-
-        _toggleRecordButton.ColorScheme = new ColorScheme
-        {
-            Normal = new Attribute(
-                _isRecording ? theme.Accent : theme.MutedText,
-                theme.Background),
-            Focus = new Attribute(
-                _isRecording ? theme.AccentBright : theme.Foreground,
-                theme.Background),
-            HotNormal = new Attribute(
-                _isRecording ? theme.Accent : theme.MutedText,
-                theme.Background),
-            HotFocus = new Attribute(
-                _isRecording ? theme.AccentBright : theme.Foreground,
-                theme.Background),
-            Disabled = new Attribute(theme.MutedText, theme.Background)
-        };
-    }
-
-    /// <summary>
-    /// Set the recording state and update toggle button appearance.
-    /// </summary>
-    public void SetRecordingState(bool isRecording, string statusText = "")
-    {
-        _isRecording = isRecording;
-        UpdateRecordingButtonStyle();
-        _recordingStatus.Text = statusText;
-    }
-
-    /// <summary>
-    /// Update the recording status text (e.g., record count, duration).
-    /// </summary>
-    public void UpdateRecordingStatus(string statusText)
-    {
-        _recordingStatus.Text = statusText;
-    }
-
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         Application.Invoke(() =>
         {
             BorderStyle = theme.EmphasizedBorderStyle;
-            UpdateRecordingButtonStyle();
-
-            // Update recording status label color
-            _recordingStatus.ColorScheme = new ColorScheme
-            {
-                Normal = new Attribute(theme.MutedText, theme.Background),
-                Focus = new Attribute(theme.MutedText, theme.Background),
-                HotNormal = new Attribute(theme.MutedText, theme.Background),
-                HotFocus = new Attribute(theme.MutedText, theme.Background),
-                Disabled = new Attribute(theme.MutedText, theme.Background)
-            };
 
             // Update empty state label color
             _emptyStateLabel.ColorScheme = new ColorScheme
@@ -404,6 +341,71 @@ public class MonitoredItemsView : FrameView
                 e.Handled = true;
             }
         }
+    }
+
+    /// <summary>
+    /// Toggle scope selection for the currently highlighted item.
+    /// </summary>
+    private void ToggleScopeSelection()
+    {
+        var selected = SelectedItem;
+        if (selected == null) return;
+
+        if (selected.IsSelectedForScope)
+        {
+            // Deselect
+            selected.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
+            _selectionFeedback.Visible = false;
+        }
+        else
+        {
+            // Check if at max selections
+            if (_cachedScopeSelectionCount >= MaxScopeSelections)
+            {
+                _selectionFeedback.Text = $"Max {MaxScopeSelections} items for Scope";
+                _selectionFeedback.Visible = true;
+                return;
+            }
+
+            // Select
+            selected.IsSelectedForScope = true;
+            _cachedScopeSelectionCount++;
+            _selectionFeedback.Visible = false;
+        }
+
+        // Update the row display
+        if (_rowsByHandle.TryGetValue(selected.ClientHandle, out var row))
+        {
+            row["Scope"] = selected.IsSelectedForScope ? CheckedBox : UncheckedBox;
+            _tableView.Update();
+        }
+
+        ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
+    }
+
+    /// <summary>
+    /// Updates the recording status indicator in the title bar area.
+    /// </summary>
+    /// <param name="text">The text to display (e.g., "◉ REC", "◉ 01:23", or empty string).</param>
+    /// <param name="isRecording">Whether recording is active (affects color).</param>
+    public void UpdateRecordingStatus(string text, bool isRecording)
+    {
+        var theme = ThemeManager.Current;
+        var color = isRecording ? theme.Accent : theme.MutedText;
+
+        _recordingIndicatorLabel.Text = text;
+        _recordingIndicatorLabel.Visible = !string.IsNullOrEmpty(text);
+        _recordingIndicatorLabel.ColorScheme = new ColorScheme
+        {
+            Normal = new Attribute(color, theme.Background),
+            Focus = new Attribute(color, theme.Background),
+            HotNormal = new Attribute(color, theme.Background),
+            HotFocus = new Attribute(color, theme.Background),
+            Disabled = new Attribute(color, theme.Background)
+        };
+
+        SetNeedsLayout();
     }
 
     protected override void Dispose(bool disposing)

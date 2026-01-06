@@ -46,7 +46,7 @@ The project uses a **dual-source NuGet configuration** that works in both CI and
 # Build
 dotnet build
 
-# Run
+# Run (from repo root)
 dotnet run
 
 # Run tests
@@ -57,36 +57,41 @@ dotnet test
 
 ```
 OpcScope/
+├── OpcScope.csproj                 # Main application project
+├── Program.cs                      # Application entry point
 ├── App/
-│   ├── MainWindow.cs          # Main UI layout with panels
-│   ├── Views/                  # UI view components
-│   │   ├── AddressSpaceView.cs # TreeView for OPC UA nodes
-│   │   ├── MonitoredItemsView.cs # TableView for subscribed items
-│   │   ├── NodeDetailsView.cs  # Node attribute display
-│   │   └── LogView.cs          # Application log display
-│   └── Dialogs/                # Modal dialogs
+│   ├── MainWindow.cs               # Main UI layout with panels
+│   ├── Views/                      # UI view components
+│   │   ├── AddressSpaceView.cs     # TreeView for OPC UA nodes
+│   │   ├── MonitoredItemsView.cs   # TableView for subscribed items
+│   │   ├── NodeDetailsView.cs      # Node attribute display
+│   │   └── LogView.cs              # Application log display
+│   └── Dialogs/                    # Modal dialogs
 │       ├── ConnectDialog.cs
 │       ├── WriteValueDialog.cs
 │       └── SettingsDialog.cs
 ├── OpcUa/
-│   ├── OpcUaClientWrapper.cs   # OPC Foundation Session wrapper
-│   ├── NodeBrowser.cs          # Address space navigation
-│   ├── SubscriptionManager.cs  # OPC UA Subscription with Publish/Subscribe
+│   ├── OpcUaClientWrapper.cs       # OPC Foundation Session wrapper
+│   ├── NodeBrowser.cs              # Address space navigation
+│   ├── SubscriptionManager.cs      # OPC UA Subscription with Publish/Subscribe
 │   └── Models/
-│       ├── BrowsedNode.cs      # Address space node model
-│       └── MonitoredNode.cs    # Monitored item model
+│       ├── BrowsedNode.cs          # Address space node model
+│       └── MonitoredNode.cs        # Monitored item model
 ├── Utilities/
-│   ├── Logger.cs               # In-app logging
-│   └── UiThread.cs             # Thread marshalling for UI
-├── tests/                      # Unit tests (xunit)
-│   └── OpcScope.Tests/
-│       ├── Infrastructure/     # In-process OPC UA test server
-│       │   ├── TestServer.cs   # Server with ApplicationConfiguration
-│       │   ├── TestNodeManager.cs # Custom NodeManager with test nodes
+│   ├── Logger.cs                   # In-app logging
+│   └── UiThread.cs                 # Thread marshalling for UI
+├── src/
+│   └── OpcScope.TestServer/        # In-process test server library
+├── tests/
+│   └── OpcScope.Tests/             # Unit and integration tests (xunit)
+│       ├── Infrastructure/         # Test server infrastructure
+│       │   ├── TestServer.cs       # Server with ApplicationConfiguration
+│       │   ├── TestNodeManager.cs  # Custom NodeManager with test nodes
 │       │   └── TestServerFixture.cs # xUnit fixture with IAsyncLifetime
-│       └── Integration/        # Integration tests
-├── test-server/                # Node-OPCUA test server (legacy)
-├── packages/                   # Local NuGet packages
+│       └── Integration/            # Integration tests
+├── scripts/                        # Build/utility scripts
+├── packages/                       # Local NuGet packages (fallback)
+└── OpcScope.sln
 ```
 
 ## Key Technical Details

@@ -3,7 +3,7 @@ using Terminal.Gui;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
-using AppThemeManager = OpcScope.App.Themes.ThemeManager;
+using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
@@ -83,7 +83,7 @@ public class AddressSpaceView : FrameView
         _emptyStateLabel.Visible = true;
     }
 
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         Application.Invoke(() =>
         {
@@ -178,8 +178,8 @@ public class AddressSpaceView : FrameView
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
-            // Log silently - don't crash on load errors
             System.Diagnostics.Debug.WriteLine($"Failed to load children for {node.DisplayName}: {ex.Message}");
+            // Ignore load errors
         }
     }
 

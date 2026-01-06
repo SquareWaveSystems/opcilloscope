@@ -4,13 +4,12 @@ using Attribute = Terminal.Gui.Attribute;
 namespace OpcScope.App.Themes;
 
 /// <summary>
-/// Dark theme with retro CRT aesthetic.
-/// Inspired by Severance (Lumon) and Aliens terminal displays.
+/// Dark theme for industrial terminal displays.
 /// </summary>
-public class DarkTheme : RetroTheme
+public class DarkTheme : AppTheme
 {
     public override string Name => "Dark";
-    public override string Description => "Retro CRT dark theme";
+    public override string Description => "Dark terminal theme";
 
     // Main window uses double-line for emphasis, frames use single
     public override LineStyle BorderLineStyle => LineStyle.Double;

@@ -3,7 +3,7 @@ using Terminal.Gui;
 
 namespace OpcScope.Tests.App;
 
-public class RetroThemeTests
+public class AppThemeTests
 {
     [Fact]
     public void DarkTheme_HasCorrectName()
@@ -16,7 +16,7 @@ public class RetroThemeTests
     public void DarkTheme_HasCorrectDescription()
     {
         var theme = new DarkTheme();
-        Assert.Equal("Retro CRT dark theme", theme.Description);
+        Assert.Equal("Dark terminal theme", theme.Description);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class RetroThemeTests
     public void LightTheme_HasCorrectDescription()
     {
         var theme = new LightTheme();
-        Assert.Equal("Retro CRT light theme", theme.Description);
+        Assert.Equal("Light terminal theme", theme.Description);
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public class RetroThemeTests
     [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveNonNullColors(Type themeType)
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
 
         Assert.NotEqual(default, theme.Background);
         Assert.NotEqual(default, theme.Foreground);
@@ -75,7 +75,7 @@ public class RetroThemeTests
     [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveNonNullAttributes(Type themeType)
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
 
         // Attribute is a value type (struct) so these properties can never be null.
         // We verify the theme is instantiated correctly, which is sufficient.
@@ -87,7 +87,7 @@ public class RetroThemeTests
     [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveNonNullColorSchemes(Type themeType)
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
 
         Assert.NotNull(theme.MainColorScheme);
         Assert.NotNull(theme.DialogColorScheme);
@@ -101,7 +101,7 @@ public class RetroThemeTests
     [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveSingleLineBoxDrawingCharacters(Type themeType)
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
 
         // Both themes use single-line box drawing for clean look
         Assert.Equal('┌', theme.BoxTopLeft);
@@ -117,7 +117,7 @@ public class RetroThemeTests
     [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveUIDecorations(Type themeType)
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
 
         Assert.NotNull(theme.ButtonPrefix);
         Assert.NotNull(theme.ButtonSuffix);
@@ -224,7 +224,7 @@ public class RetroThemeTests
     [InlineData(typeof(LightTheme), "Light")]
     public void AllThemes_NameMatchesExpected(Type themeType, string expectedName)
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
         Assert.Equal(expectedName, theme.Name);
     }
 
@@ -266,7 +266,7 @@ public class RetroThemeTests
     [InlineData(typeof(LightTheme))]
     public void AllThemes_UseDoubleBorderAndSingleFrame(Type themeType)
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
 
         // Main window border is double-line for emphasis
         Assert.Equal(LineStyle.Double, theme.BorderLineStyle);
@@ -279,7 +279,7 @@ public class RetroThemeTests
     [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveStatusColors(Type themeType)
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
 
         // New OPC UA status colors
         Assert.NotEqual(default, theme.StatusGood);
@@ -293,7 +293,7 @@ public class RetroThemeTests
     [InlineData(typeof(LightTheme))]
     public void AllThemes_HaveConnectionIndicators(Type themeType)
     {
-        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
 
         Assert.Contains("Connected", theme.ConnectedIndicator);
         Assert.Contains("Not Connected", theme.DisconnectedIndicator);
