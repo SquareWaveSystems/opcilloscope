@@ -30,10 +30,15 @@ public class MonitoredItemsView : FrameView
     // Recording indicator (right-aligned in title bar)
     private readonly Label _recordingIndicatorLabel;
 
+    // Recording toggle button
+    private readonly Button _recordButton;
+    private bool _isRecording;
+
     // Empty state
     private readonly Label _emptyStateLabel;
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
+    public event Action? RecordToggleRequested;
     public event Action<MonitoredNode>? WriteRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
@@ -155,10 +160,10 @@ public class MonitoredItemsView : FrameView
             }
         };
 
-        // Recording indicator (right-aligned in title bar area)
+        // Recording indicator (left of record button in title bar area)
         _recordingIndicatorLabel = new Label
         {
-            X = Pos.AnchorEnd(12),
+            X = Pos.AnchorEnd(19),
             Y = 0,
             Text = "",
             Visible = false,
@@ -172,6 +177,16 @@ public class MonitoredItemsView : FrameView
             }
         };
 
+        // Recording toggle button (right-aligned, matching LogView Copy button)
+        _recordButton = new Button
+        {
+            Text = "● REC",
+            X = Pos.AnchorEnd(10),
+            Y = 0,
+            ColorScheme = theme.ButtonColorScheme
+        };
+        _recordButton.Accepting += OnRecordButtonClicked;
+
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
@@ -179,6 +194,7 @@ public class MonitoredItemsView : FrameView
         Add(_tableView);
         Add(_emptyStateLabel);
         Add(_recordingIndicatorLabel);
+        Add(_recordButton);
 
         // Initial state
         UpdateEmptyState();
@@ -216,6 +232,9 @@ public class MonitoredItemsView : FrameView
                 HotFocus = new Attribute(theme.AccentBright, theme.Background),
                 Disabled = new Attribute(theme.MutedText, theme.Background)
             };
+
+            // Update record button colors
+            _recordButton.ColorScheme = theme.ButtonColorScheme;
 
             SetNeedsLayout();
         });
@@ -368,6 +387,11 @@ public class MonitoredItemsView : FrameView
         ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
     }
 
+    private void OnRecordButtonClicked(object? sender, CommandEventArgs e)
+    {
+        RecordToggleRequested?.Invoke();
+    }
+
     private void HandleKeyDown(object? _, Key e)
     {
         if (e == Key.Delete || e == Key.Backspace)
@@ -415,6 +439,10 @@ public class MonitoredItemsView : FrameView
         var theme = ThemeManager.Current;
         var color = isRecording ? theme.Accent : theme.MutedText;
 
+        // Update button text based on recording state
+        _isRecording = isRecording;
+        _recordButton.Text = isRecording ? "■ STOP" : "● REC";
+
         _recordingIndicatorLabel.Text = text;
         _recordingIndicatorLabel.Visible = !string.IsNullOrEmpty(text);
         _recordingIndicatorLabel.ColorScheme = new ColorScheme
@@ -434,6 +462,7 @@ public class MonitoredItemsView : FrameView
         if (disposing)
         {
             ThemeManager.ThemeChanged -= OnThemeChanged;
+            _recordButton.Accepting -= OnRecordButtonClicked;
         }
         base.Dispose(disposing);
     }

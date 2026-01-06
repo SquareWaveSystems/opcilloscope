@@ -202,6 +202,7 @@ public class MainWindow : Toplevel
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredItemsView.WriteRequested += OnWriteRequested;
         _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredItemsView.RecordToggleRequested += ToggleRecording;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -1259,6 +1260,7 @@ License: MIT
             StopConnectingAnimation();
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
+            _monitoredItemsView.RecordToggleRequested -= ToggleRecording;
             _connectionManager.Dispose();
         }
         base.Dispose(disposing);
