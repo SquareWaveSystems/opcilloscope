@@ -12,7 +12,7 @@ public class ThemeManagerTests
 
         // Assert
         Assert.NotNull(theme);
-        Assert.IsType<AmberTheme>(theme);
+        Assert.IsType<DarkTheme>(theme);
     }
 
     [Fact]
@@ -22,27 +22,25 @@ public class ThemeManagerTests
         var themes = ThemeManager.AvailableThemes;
 
         // Assert
-        Assert.Equal(4, themes.Count);
-        Assert.Contains(themes, t => t is AmberTheme);
-        Assert.Contains(themes, t => t is GreenTheme);
-        Assert.Contains(themes, t => t is BlueTheme);
-        Assert.Contains(themes, t => t is GreyTheme);
+        Assert.Equal(2, themes.Count);
+        Assert.Contains(themes, t => t is DarkTheme);
+        Assert.Contains(themes, t => t is LightTheme);
     }
 
     [Fact]
     public void ThemeManager_SetTheme_ChangesCurrentTheme()
     {
         // Arrange
-        var greenTheme = new GreenTheme();
+        var lightTheme = new LightTheme();
 
         // Act
-        ThemeManager.SetTheme(greenTheme);
+        ThemeManager.SetTheme(lightTheme);
 
         // Assert
-        Assert.IsType<GreenTheme>(ThemeManager.Current);
+        Assert.IsType<LightTheme>(ThemeManager.Current);
 
         // Cleanup - restore default
-        ThemeManager.SetTheme(new AmberTheme());
+        ThemeManager.SetTheme(new DarkTheme());
     }
 
     [Fact]
@@ -52,22 +50,22 @@ public class ThemeManagerTests
         RetroTheme? changedTheme = null;
         Action<RetroTheme> handler = theme => changedTheme = theme;
         ThemeManager.ThemeChanged += handler;
-        var blueTheme = new BlueTheme();
+        var lightTheme = new LightTheme();
 
         try
         {
             // Act
-            ThemeManager.SetTheme(blueTheme);
+            ThemeManager.SetTheme(lightTheme);
 
             // Assert
             Assert.NotNull(changedTheme);
-            Assert.IsType<BlueTheme>(changedTheme);
+            Assert.IsType<LightTheme>(changedTheme);
         }
         finally
         {
             // Cleanup
             ThemeManager.ThemeChanged -= handler;
-            ThemeManager.SetTheme(new AmberTheme());
+            ThemeManager.SetTheme(new DarkTheme());
         }
     }
 
@@ -78,7 +76,7 @@ public class ThemeManagerTests
         var currentTheme = ThemeManager.Current;
 
         // Act
-        ThemeManager.SetTheme((RetroTheme?)null);
+        ThemeManager.SetTheme((RetroTheme)null!);
 
         // Assert
         Assert.Same(currentTheme, ThemeManager.Current);
@@ -88,26 +86,26 @@ public class ThemeManagerTests
     public void ThemeManager_SetThemeByName_ChangesTheme()
     {
         // Act
-        ThemeManager.SetTheme("Green");
+        ThemeManager.SetTheme("Light");
 
         // Assert
-        Assert.IsType<GreenTheme>(ThemeManager.Current);
+        Assert.IsType<LightTheme>(ThemeManager.Current);
 
         // Cleanup
-        ThemeManager.SetTheme(new AmberTheme());
+        ThemeManager.SetTheme(new DarkTheme());
     }
 
     [Fact]
     public void ThemeManager_SetThemeByName_IgnoresCase()
     {
         // Act
-        ThemeManager.SetTheme("green");
+        ThemeManager.SetTheme("light");
 
         // Assert
-        Assert.IsType<GreenTheme>(ThemeManager.Current);
+        Assert.IsType<LightTheme>(ThemeManager.Current);
 
         // Cleanup
-        ThemeManager.SetTheme(new AmberTheme());
+        ThemeManager.SetTheme(new DarkTheme());
     }
 
     [Fact]
@@ -130,37 +128,35 @@ public class ThemeManagerTests
         var names = ThemeManager.GetThemeNames();
 
         // Assert
-        Assert.Equal(4, names.Length);
-        Assert.Contains("Amber", names);
-        Assert.Contains("Green", names);
-        Assert.Contains("Blue", names);
-        Assert.Contains("Grey", names);
+        Assert.Equal(2, names.Length);
+        Assert.Contains("Dark", names);
+        Assert.Contains("Light", names);
     }
 
     [Fact]
     public void ThemeManager_GetCurrentThemeIndex_ReturnsCorrectIndex()
     {
         // Arrange
-        ThemeManager.SetTheme("Blue");
+        ThemeManager.SetTheme("Light");
 
         // Act
         var index = ThemeManager.GetCurrentThemeIndex();
 
         // Assert
-        Assert.Equal(2, index); // Blue is at index 2
+        Assert.Equal(1, index); // Light is at index 1
 
         // Cleanup
-        ThemeManager.SetTheme(new AmberTheme());
+        ThemeManager.SetTheme(new DarkTheme());
     }
 
     [Fact]
     public void ThemeManager_SetThemeByIndex_ChangesTheme()
     {
         // Act
-        ThemeManager.SetThemeByIndex(3); // Grey
+        ThemeManager.SetThemeByIndex(1); // Light
 
         // Assert
-        Assert.IsType<GreyTheme>(ThemeManager.Current);
+        Assert.IsType<LightTheme>(ThemeManager.Current);
 
         // Cleanup
         ThemeManager.SetThemeByIndex(0);
@@ -181,14 +177,13 @@ public class ThemeManagerTests
     }
 
     [Fact]
-    public void ThemeManager_ConcurrentAccess_IsThreadSafe()
+    public async Task ThemeManager_ConcurrentAccess_IsThreadSafe()
     {
         // Arrange
         var themes = new RetroTheme[]
         {
-            new AmberTheme(),
-            new GreenTheme(),
-            new BlueTheme()
+            new DarkTheme(),
+            new LightTheme()
         };
         var exceptions = new List<Exception>();
         var tasks = new List<Task>();
@@ -222,13 +217,13 @@ public class ThemeManagerTests
             }));
         }
 
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
 
         // Assert
         Assert.Empty(exceptions);
 
         // Cleanup
-        ThemeManager.SetTheme(new AmberTheme());
+        ThemeManager.SetTheme(new DarkTheme());
     }
 
     [Fact]
@@ -254,10 +249,8 @@ public class ThemeManagerTests
             // Act - Rapidly change themes
             var themes = new RetroTheme[]
             {
-                new AmberTheme(),
-                new GreenTheme(),
-                new BlueTheme(),
-                new GreyTheme()
+                new DarkTheme(),
+                new LightTheme()
             };
 
             foreach (var theme in themes)
@@ -266,7 +259,7 @@ public class ThemeManagerTests
             }
 
             // Assert - All events should have been received
-            Assert.Equal(4, receivedThemes.Count);
+            Assert.Equal(2, receivedThemes.Count);
             for (int i = 0; i < themes.Length; i++)
             {
                 Assert.Same(themes[i], receivedThemes[i]);
@@ -276,7 +269,7 @@ public class ThemeManagerTests
         {
             // Cleanup
             ThemeManager.ThemeChanged -= handler;
-            ThemeManager.SetTheme(new AmberTheme());
+            ThemeManager.SetTheme(new DarkTheme());
         }
     }
 }

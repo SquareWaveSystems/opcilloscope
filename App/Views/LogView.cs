@@ -1,11 +1,15 @@
 using Terminal.Gui;
 using OpcScope.Utilities;
+using OpcScope.App.Themes;
 using System.Collections.ObjectModel;
+using Attribute = Terminal.Gui.Attribute;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
 /// <summary>
 /// Scrolling event log panel with color-coded severity.
+/// Uses Terminal.Gui v2 ColorGetter for per-row coloring.
 /// </summary>
 public class LogView : FrameView
 {
@@ -16,7 +20,11 @@ public class LogView : FrameView
 
     public LogView()
     {
-        Title = "Log";
+        Title = " Log ";
+
+        // Apply theme styling
+        var theme = AppThemeManager.Current;
+        BorderStyle = theme.FrameLineStyle;
 
         _listView = new ListView
         {

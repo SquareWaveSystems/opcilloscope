@@ -1,9 +1,12 @@
 using Terminal.Gui;
+using OpcScope.App.Themes;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Dialogs;
 
 /// <summary>
 /// Dialog for writing a value to an OPC UA node.
+/// Uses Terminal.Gui v2 styling with theme support.
 /// </summary>
 public class WriteValueDialog : Dialog
 {
@@ -17,10 +20,16 @@ public class WriteValueDialog : Dialog
 
     public WriteValueDialog(string nodeName, string? dataType, string? currentValue)
     {
-        Title = "Write Value";
+        var theme = AppThemeManager.Current;
+
+        Title = " Write Value ";
         Width = 50;
         Height = 12;
         _dataType = dataType ?? "String";
+
+        // Apply theme styling
+        ColorScheme = theme.DialogColorScheme;
+        BorderStyle = theme.BorderLineStyle;
 
         var nodeLabel = new Label
         {
@@ -62,8 +71,9 @@ public class WriteValueDialog : Dialog
         {
             X = Pos.Center() - 10,
             Y = 8,
-            Text = "Write",
-            IsDefault = true
+            Text = $"{theme.ButtonPrefix}Write{theme.ButtonSuffix}",
+            IsDefault = true,
+            ColorScheme = theme.ButtonColorScheme
         };
 
         writeButton.Accepting += (_, _) =>
@@ -86,9 +96,10 @@ public class WriteValueDialog : Dialog
 
         var cancelButton = new Button
         {
-            X = Pos.Center() + 2,
+            X = Pos.Center() + 4,
             Y = 8,
-            Text = "Cancel"
+            Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
+            ColorScheme = theme.ButtonColorScheme
         };
 
         cancelButton.Accepting += (_, _) =>

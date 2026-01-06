@@ -43,9 +43,6 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
-        // Apply initial theme
-        ApplyTheme();
-
         // Create menu bar
         _menuBar = CreateMenuBar();
 
@@ -111,6 +108,9 @@ public class MainWindow : Toplevel
         Add(_logView);
         Add(_statusBar);
 
+        // Apply initial theme (after all controls are created)
+        ApplyTheme();
+
         // Log startup
         _logger.Info("OpcScope started");
         _logger.Info("Press F10 for menu, or use Connection -> Connect");
@@ -161,7 +161,20 @@ public class MainWindow : Toplevel
     private void ApplyTheme()
     {
         var theme = ThemeManager.Current;
+
+        // Apply main window styling
         ColorScheme = theme.MainColorScheme;
+        BorderStyle = theme.BorderLineStyle;
+
+        // Apply styling to menu and status bar
+        ThemeStyler.ApplyToMenuBar(_menuBar, theme);
+        ThemeStyler.ApplyToStatusBar(_statusBar, theme);
+
+        // Apply to all child views
+        ThemeStyler.ApplyToFrame(_addressSpaceView, theme);
+        ThemeStyler.ApplyToFrame(_monitoredItemsView, theme);
+        ThemeStyler.ApplyToFrame(_nodeDetailsView, theme);
+        ThemeStyler.ApplyToFrame(_logView, theme);
     }
 
     private void OnThemeChanged(RetroTheme theme)
@@ -457,7 +470,7 @@ Current Theme: {theme.Name}
   {theme.Description}
 
 Built with:
-  - .NET 8
+  - .NET 10
   - Terminal.Gui v2
   - OPC Foundation UA-.NETStandard
 

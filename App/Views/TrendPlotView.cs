@@ -3,30 +3,20 @@ using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
 using OpcScope.App.Themes;
 using OpcScope.Utilities;
-using System.Text;
+using System.Drawing;
 using Attribute = Terminal.Gui.Attribute;
-using Rune = System.Text.Rune;
 using ThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
 /// <summary>
-/// Real-time 2D scrolling oscilloscope-style plot.
+/// Real-time 2D scrolling oscilloscope-style plot using Terminal.Gui GraphView.
 /// Supports multiple themes via ThemeManager.
 /// </summary>
 public class TrendPlotView : View
 {
-    // === Cached theme and attributes ===
-    private RetroTheme _currentTheme = null!; // Initialized in constructor
-    private Attribute _brightAttr;
-    private Attribute _normalAttr;
-    private Attribute _dimAttr;
-    private Attribute _gridAttr;
-    private Attribute _borderAttr;
-    private Attribute _statusActiveAttr;
-    private Attribute _statusInactiveAttr;
-    private Attribute _glowAttr;
-    private Attribute _backgroundAttr;
+    // === Theme tracking ===
+    private RetroTheme _currentTheme = null!;
     private readonly object _themeLock = new();
 
     // Ring buffer for samples (preallocated)
@@ -50,11 +40,12 @@ public class TrendPlotView : View
     private float _demoPhase;
     private int _frameCount;
 
-    // Layout constants
-    private const int LeftMargin = 10;
-    private const int TopMargin = 3;
-    private const int BottomMargin = 3;
-    private const int RightMargin = 2;
+    // GraphView and series
+    private readonly GraphView _graphView;
+    private PathAnnotation? _waveformPath;
+    private readonly Label _headerLabel;
+    private readonly Label _statusLabel;
+    private readonly Label _infoLabel;
 
     /// <summary>
     /// Event fired when pause state changes.
@@ -80,7 +71,6 @@ public class TrendPlotView : View
         lock (_themeLock)
         {
             _currentTheme = ThemeManager.Current;
-            CacheThemeAttributes();
         }
 
         // Subscribe to theme changes
@@ -88,20 +78,129 @@ public class TrendPlotView : View
 
         CanFocus = true;
         WantMousePositionReports = false;
+
+        // Header label showing signal name and status
+        _headerLabel = new Label
+        {
+            X = 0,
+            Y = 0,
+            Width = Dim.Fill(),
+            Height = 1,
+            TextAlignment = Alignment.Center
+        };
+
+        // Info label showing scale and sample info
+        _infoLabel = new Label
+        {
+            X = 0,
+            Y = 1,
+            Width = Dim.Fill(),
+            Height = 1,
+            TextAlignment = Alignment.Center
+        };
+
+        // Create the GraphView
+        _graphView = new GraphView
+        {
+            X = 0,
+            Y = 2,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(2),
+            BorderStyle = LineStyle.Single,
+            CanFocus = false
+        };
+
+        // Configure axes
+        _graphView.AxisX.Increment = 20;
+        _graphView.AxisX.ShowLabelsEvery = 1;
+        _graphView.AxisX.Text = "Samples";
+        _graphView.AxisX.Minimum = 0;
+
+        _graphView.AxisY.Increment = 10;
+        _graphView.AxisY.ShowLabelsEvery = 1;
+        _graphView.AxisY.Text = "Value";
+
+        // Set margins for axis labels
+        _graphView.MarginLeft = 8;
+        _graphView.MarginBottom = 2;
+
+        // Status bar at bottom
+        _statusLabel = new Label
+        {
+            X = 0,
+            Y = Pos.Bottom(_graphView),
+            Width = Dim.Fill(),
+            Height = 2,
+            TextAlignment = Alignment.Center
+        };
+
+        Add(_headerLabel, _infoLabel, _graphView, _statusLabel);
+
+        // Apply initial theme
+        ApplyTheme();
     }
 
-    private void CacheThemeAttributes()
+    private void ApplyTheme()
     {
-        // Note: Must be called inside _themeLock to ensure atomic updates
-        _brightAttr = _currentTheme.BrightAttr;
-        _normalAttr = _currentTheme.NormalAttr;
-        _dimAttr = _currentTheme.DimAttr;
-        _gridAttr = _currentTheme.GridAttr;
-        _borderAttr = _currentTheme.BorderAttr;
-        _statusActiveAttr = _currentTheme.StatusActiveAttr;
-        _statusInactiveAttr = _currentTheme.StatusInactiveAttr;
-        _glowAttr = _currentTheme.GlowAttr;
-        _backgroundAttr = new(_currentTheme.Background, _currentTheme.Background);
+        RetroTheme theme;
+        lock (_themeLock)
+        {
+            theme = _currentTheme;
+        }
+
+        var bgAttr = new Attribute(theme.Background, theme.Background);
+        var normalAttr = theme.NormalAttr;
+        var brightAttr = theme.BrightAttr;
+        var dimAttr = theme.DimAttr;
+        var accentAttr = theme.AccentAttr;
+
+        ColorScheme = new ColorScheme
+        {
+            Normal = normalAttr,
+            Focus = brightAttr,
+            HotNormal = accentAttr,
+            HotFocus = brightAttr,
+            Disabled = dimAttr
+        };
+
+        _headerLabel.ColorScheme = new ColorScheme
+        {
+            Normal = brightAttr,
+            Focus = brightAttr,
+            HotNormal = brightAttr,
+            HotFocus = brightAttr,
+            Disabled = dimAttr
+        };
+
+        _infoLabel.ColorScheme = new ColorScheme
+        {
+            Normal = dimAttr,
+            Focus = dimAttr,
+            HotNormal = dimAttr,
+            HotFocus = dimAttr,
+            Disabled = dimAttr
+        };
+
+        _statusLabel.ColorScheme = new ColorScheme
+        {
+            Normal = dimAttr,
+            Focus = dimAttr,
+            HotNormal = dimAttr,
+            HotFocus = dimAttr,
+            Disabled = dimAttr
+        };
+
+        // Configure GraphView appearance
+        _graphView.ColorScheme = new ColorScheme
+        {
+            Normal = normalAttr,
+            Focus = brightAttr,
+            HotNormal = accentAttr,
+            HotFocus = brightAttr,
+            Disabled = dimAttr
+        };
+
+        _graphView.BorderStyle = theme.BorderLineStyle;
     }
 
     private void OnThemeChanged(RetroTheme newTheme)
@@ -109,12 +208,15 @@ public class TrendPlotView : View
         lock (_themeLock)
         {
             _currentTheme = newTheme;
-            CacheThemeAttributes();
         }
-        
+
         try
         {
-            Application.Invoke(() => SetNeedsLayout());
+            Application.Invoke(() =>
+            {
+                ApplyTheme();
+                SetNeedsLayout();
+            });
         }
         catch (InvalidOperationException)
         {
@@ -221,6 +323,7 @@ public class TrendPlotView : View
             _visibleMin = float.MaxValue;
             _visibleMax = float.MinValue;
         }
+        UpdateGraph();
         SetNeedsLayout();
     }
 
@@ -278,105 +381,22 @@ public class TrendPlotView : View
             AddSample(value);
         }
 
+        UpdateGraph();
         SetNeedsLayout();
         return true; // Keep timer running
     }
 
     /// <summary>
-    /// Toggles pause state.
+    /// Updates the GraphView with current sample data.
     /// </summary>
-    public void TogglePause()
+    private void UpdateGraph()
     {
-        _isPaused = !_isPaused;
-        PauseStateChanged?.Invoke(_isPaused);
-        SetNeedsLayout();
-    }
-
-    /// <summary>
-    /// Increases vertical scale (zoom in).
-    /// </summary>
-    public void IncreaseScale()
-    {
-        _autoScale = false;
-        _scaleMultiplier *= 1.2f;
-        SetNeedsLayout();
-    }
-
-    /// <summary>
-    /// Decreases vertical scale (zoom out).
-    /// </summary>
-    public void DecreaseScale()
-    {
-        _autoScale = false;
-        _scaleMultiplier /= 1.2f;
-        if (_scaleMultiplier < 0.1f) _scaleMultiplier = 0.1f;
-        SetNeedsLayout();
-    }
-
-    /// <summary>
-    /// Resets to auto-scale mode.
-    /// </summary>
-    public void ResetScale()
-    {
-        _autoScale = true;
-        _scaleMultiplier = 1.0f;
-        SetNeedsLayout();
-    }
-
-    protected override bool OnKeyDown(Key key)
-    {
-        switch (key.KeyCode)
-        {
-            case KeyCode.Space:
-                TogglePause();
-                return true;
-
-            case KeyCode.D0 when key.IsShift: // + key (Shift+0 on some keyboards)
-            case (KeyCode)'=': // + without shift
-            case (KeyCode)'+':
-                IncreaseScale();
-                return true;
-
-            case KeyCode.D9 when key.IsShift: // ( key - sometimes used
-            case (KeyCode)'-':
-                DecreaseScale();
-                return true;
-
-            case (KeyCode)'r':
-            case (KeyCode)'R':
-                ResetScale();
-                return true;
-        }
-
-        return base.OnKeyDown(key);
-    }
-
-    protected override bool OnDrawingContent(DrawContext context)
-    {
-        base.OnDrawingContent(context);
-
-        var viewport = Frame;
-
-        // Calculate plot area
-        int plotWidth = viewport.Width - LeftMargin - RightMargin;
-        int plotHeight = viewport.Height - TopMargin - BottomMargin;
-
-        if (plotWidth < 4 || plotHeight < 2) return true;
-
-        // Clear with theme background
-        Driver.SetAttribute(_backgroundAttr);
-        for (int y = 0; y < viewport.Height; y++)
-        {
-            Move(0, y);
-            AddStr(new string(' ', viewport.Width));
-        }
-
         // Get samples to display
         float[] displaySamples;
         int displayCount;
         lock (_lock)
         {
-            displayCount = Math.Min(_sampleCount, plotWidth);
+            displayCount = _sampleCount;
             displaySamples = new float[displayCount];
 
             if (displayCount > 0)
@@ -435,389 +455,24 @@ public class TrendPlotView : View
         _visibleMin -= padding;
         _visibleMax += padding;
 
-        // Draw in order: header, frame, grid, data, status
-        DrawHeader(viewport.Width);
-        DrawIndustrialFrame(viewport.Width, viewport.Height, plotWidth, plotHeight);
-        DrawGrid(plotWidth, plotHeight);
-        DrawYAxisLabels(plotHeight);
-
-        if (displayCount > 0)
+        // Update header
+        RetroTheme theme;
+        lock (_themeLock)
         {
-            DrawWaveform(displaySamples, displayCount, plotWidth, plotHeight);
-        }
-        else
-        {
-            DrawNoSignal(plotWidth, plotHeight);
+            theme = _currentTheme;
         }
 
-        DrawStatusBar(viewport.Width, viewport.Height);
-
-        return true;
-    }
-
-    private void DrawHeader(int width)
-    {
-        // Industrial header bar
-        Driver.SetAttribute(_borderAttr);
-        Move(0, 0);
-        AddRune((Rune)_currentTheme.BoxTopLeft);
-        for (int x = 1; x < width - 1; x++) AddRune((Rune)_currentTheme.BoxHorizontal);
-        AddRune((Rune)_currentTheme.BoxTopRight);
-
-        // Title with signal name
         string title = _boundNode?.DisplayName?.ToUpperInvariant() ?? "SCOPE";
-        if (title.Length > 20) title = title[..20];
+        string statusIndicator = _isPaused ? theme.StatusHold : theme.StatusLive;
+        string activityIndicator = !_isPaused && (_frameCount % 10) < 5 ? "●" : "○";
 
-        Move(2, 0);
-        Driver.SetAttribute(_brightAttr);
-        AddStr($"{_currentTheme.BoxTitleLeft} {title} {_currentTheme.BoxTitleRight}");
+        _headerLabel.Text = $"{theme.TitleDecoration} {title} {theme.TitleDecoration}  {statusIndicator} {activityIndicator}";
 
-        // Status indicators on right
-        int rightPos = width - 25;
-        if (rightPos > title.Length + 10)
-        {
-            Move(rightPos, 0);
-            Driver.SetAttribute(_borderAttr);
-            AddStr($"{_currentTheme.BoxTitleLeft}");
+        // Update info
+        string scaleInfo = _autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X";
+        _infoLabel.Text = $"CH1  SCALE:{scaleInfo}  SAMPLES:{displayCount,4}  RANGE:[{FormatAxisValue(_visibleMin)},{FormatAxisValue(_visibleMax)}]";
 
-            // LIVE/HOLD indicator
-            if (_isPaused)
-            {
-                Driver.SetAttribute(_statusInactiveAttr);
-                AddStr(" HOLD ");
-            }
-            else
-            {
-                Driver.SetAttribute(_statusActiveAttr);
-                AddStr(" LIVE ");
-            }
-
-            Driver.SetAttribute(_borderAttr);
-            AddStr("│");
-
-            // Blinking activity indicator
-            if (!_isPaused && (_frameCount % 10) < 5)
-            {
-                Driver.SetAttribute(_statusActiveAttr);
-                AddStr("●");
-            }
-            else
-            {
-                Driver.SetAttribute(_statusInactiveAttr);
-                AddStr("○");
-            }
-
-            Driver.SetAttribute(_borderAttr);
-            AddStr($"{_currentTheme.BoxTitleRight}");
-        }
-
-        // Second header line with technical info
-        Move(0, 1);
-        Driver.SetAttribute(_borderAttr);
-        AddRune((Rune)_currentTheme.BoxVertical);
-
-        Driver.SetAttribute(_dimAttr);
-        string techInfo = $" CH1  SCALE:{(_autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X")}  ";
-        lock (_lock)
-        {
-            techInfo += $"SAMPLES:{_sampleCount,4}  ";
-        }
-        techInfo += $"RANGE:[{FormatAxisValue(_visibleMin)},{FormatAxisValue(_visibleMax)}]";
-
-        AddStr(techInfo.PadRight(width - 2));
-
-        Move(width - 1, 1);
-        Driver.SetAttribute(_borderAttr);
-        AddRune((Rune)_currentTheme.BoxVertical);
-    }
-
-    private void DrawIndustrialFrame(int width, int height, int plotWidth, int plotHeight)
-    {
-        int plotTop = TopMargin - 1;
-        int plotBottom = TopMargin + plotHeight;
-        int plotLeft = LeftMargin - 1;
-        int plotRight = LeftMargin + plotWidth;
-
-        Driver.SetAttribute(_borderAttr);
-
-        // Top border of plot area
-        Move(plotLeft, plotTop);
-        AddRune((Rune)_currentTheme.BoxTopLeft);
-        for (int x = plotLeft + 1; x < plotRight; x++)
-        {
-            // Tick marks every 10 columns
-            if ((x - LeftMargin) % 10 == 0 && x < plotRight - 1)
-                AddRune((Rune)_currentTheme.TickHorizontal);
-            else
-                AddRune((Rune)_currentTheme.BoxHorizontal);
-        }
-        AddRune((Rune)_currentTheme.BoxTopRight);
-
-        // Side borders
-        for (int y = plotTop + 1; y < plotBottom; y++)
-        {
-            Move(plotLeft, y);
-            // Tick marks every 4 rows
-            if ((y - TopMargin) % 4 == 0)
-                AddRune((Rune)_currentTheme.TickVertical);
-            else
-                AddRune((Rune)_currentTheme.BoxVertical);
-
-            Move(plotRight, y);
-            if ((y - TopMargin) % 4 == 0)
-                AddRune((Rune)_currentTheme.TickVerticalRight);
-            else
-                AddRune((Rune)_currentTheme.BoxVertical);
-        }
-
-        // Bottom border
-        Move(plotLeft, plotBottom);
-        AddRune((Rune)_currentTheme.BoxBottomLeft);
-        for (int x = plotLeft + 1; x < plotRight; x++)
-        {
-            if ((x - LeftMargin) % 10 == 0 && x < plotRight - 1)
-                AddRune((Rune)_currentTheme.TickHorizontalBottom);
-            else
-                AddRune((Rune)_currentTheme.BoxHorizontal);
-        }
-        AddRune((Rune)_currentTheme.BoxBottomRight);
-
-        // Corner ornaments
-        Driver.SetAttribute(_dimAttr);
-        Move(plotLeft - 1, plotTop);
-        AddStr("▐");
-        Move(plotRight + 1, plotTop);
-        AddStr("▌");
-        Move(plotLeft - 1, plotBottom);
-        AddStr("▐");
-        Move(plotRight + 1, plotBottom);
-        AddStr("▌");
-    }
-
-    private void DrawGrid(int plotWidth, int plotHeight)
-    {
-        Driver.SetAttribute(_gridAttr);
-
-        // Horizontal grid lines
-        for (int y = 0; y < plotHeight; y++)
-        {
-            if (y % 4 == 0 && y > 0)
-            {
-                for (int x = 0; x < plotWidth; x++)
-                {
-                    // Dashed line pattern
-                    if (x % 3 < 2)
-                    {
-                        Move(LeftMargin + x, TopMargin + y);
-                        AddRune((Rune)'·');
-                    }
-                }
-            }
-        }
-
-        // Vertical grid lines (lighter)
-        for (int x = 0; x < plotWidth; x++)
-        {
-            if ((x % 10) == 0 && x > 0)
-            {
-                for (int y = 0; y < plotHeight; y++)
-                {
-                    if (y % 4 != 0) // Don't overwrite horizontal lines
-                    {
-                        Move(LeftMargin + x, TopMargin + y);
-                        if (y % 2 == 0)
-                            AddRune((Rune)'·');
-                    }
-                }
-            }
-        }
-
-        // Center line (zero reference if applicable)
-        float zeroY = 1.0f - (0 - _visibleMin) / (_visibleMax - _visibleMin);
-        if (zeroY > 0 && zeroY < 1)
-        {
-            int centerRow = (int)(zeroY * (plotHeight - 1));
-            Driver.SetAttribute(_dimAttr);
-            for (int x = 0; x < plotWidth; x++)
-            {
-                Move(LeftMargin + x, TopMargin + centerRow);
-                AddRune((Rune)'─');
-            }
-        }
-    }
-
-    private void DrawYAxisLabels(int plotHeight)
-    {
-        Driver.SetAttribute(_normalAttr);
-
-        // Max value
-        string maxStr = FormatAxisValue(_visibleMax);
-        Move(1, TopMargin);
-        AddStr(maxStr.PadLeft(LeftMargin - 2));
-
-        // Min value
-        string minStr = FormatAxisValue(_visibleMin);
-        Move(1, TopMargin + plotHeight - 1);
-        AddStr(minStr.PadLeft(LeftMargin - 2));
-
-        // Mid values
-        if (plotHeight > 8)
-        {
-            float midVal = (_visibleMin + _visibleMax) / 2;
-            string midStr = FormatAxisValue(midVal);
-            Move(1, TopMargin + plotHeight / 2);
-            AddStr(midStr.PadLeft(LeftMargin - 2));
-        }
-
-        if (plotHeight > 12)
-        {
-            float q1 = _visibleMin + (_visibleMax - _visibleMin) * 0.25f;
-            float q3 = _visibleMin + (_visibleMax - _visibleMin) * 0.75f;
-
-            Driver.SetAttribute(_dimAttr);
-            Move(1, TopMargin + plotHeight * 3 / 4);
-            AddStr(FormatAxisValue(q1).PadLeft(LeftMargin - 2));
-            Move(1, TopMargin + plotHeight / 4);
-            AddStr(FormatAxisValue(q3).PadLeft(LeftMargin - 2));
-        }
-    }
-
-    private void DrawWaveform(float[] samples, int sampleCount, int plotWidth, int plotHeight)
-    {
-        float range = _visibleMax - _visibleMin;
-        if (range <= 0) range = 1;
-
-        int subPixelHeight = plotHeight * 2;
-        int startX = LeftMargin + (plotWidth - sampleCount);
-
-        // Draw connected line segments between samples
-        for (int i = 0; i < sampleCount; i++)
-        {
-            int x = startX + i;
-            if (x < LeftMargin || x >= LeftMargin + plotWidth) continue;
-
-            // Calculate sub-pixel Y for current sample
-            float norm = Math.Clamp((samples[i] - _visibleMin) / range, 0, 1);
-            int subY = (int)((1 - norm) * (subPixelHeight - 1));
-
-            // Determine vertical span by interpolating with adjacent samples
-            int minSubY = subY, maxSubY = subY;
-
-            if (i > 0)
-            {
-                float prevNorm = Math.Clamp((samples[i - 1] - _visibleMin) / range, 0, 1);
-                int prevSubY = (int)((1 - prevNorm) * (subPixelHeight - 1));
-                int midY = (subY + prevSubY + 1) / 2; // Midpoint, biased up
-                minSubY = Math.Min(minSubY, midY);
-                maxSubY = Math.Max(maxSubY, midY);
-            }
-            if (i < sampleCount - 1)
-            {
-                float nextNorm = Math.Clamp((samples[i + 1] - _visibleMin) / range, 0, 1);
-                int nextSubY = (int)((1 - nextNorm) * (subPixelHeight - 1));
-                int midY = (subY + nextSubY + 1) / 2;
-                minSubY = Math.Min(minSubY, midY);
-                maxSubY = Math.Max(maxSubY, midY);
-            }
-
-            // Select color based on distance from leading edge
-            Attribute attr = i >= sampleCount - 3 && !_isPaused && _currentTheme.EnableGlow ? _glowAttr
-                           : i >= sampleCount - 8 ? _brightAttr
-                           : _normalAttr;
-            Driver.SetAttribute(attr);
-
-            // Render each cell that contains part of the line
-            int minCell = minSubY / 2;
-            int maxCell = maxSubY / 2;
-
-            for (int cellY = minCell; cellY <= maxCell; cellY++)
-            {
-                int screenY = TopMargin + cellY;
-                if (screenY < TopMargin || screenY >= TopMargin + plotHeight) continue;
-
-                // Determine which half-blocks are lit in this cell
-                int cellTop = cellY * 2;
-                int cellBottom = cellTop + 1;
-                bool fillTop = maxSubY >= cellTop && minSubY <= cellTop;
-                bool fillBottom = maxSubY >= cellBottom && minSubY <= cellBottom;
-
-                // Choose color based on position (brighter near the leading edge)
-                if (sampleIdx >= sampleCount - 3 && !_isPaused)
-                    Driver.SetAttribute(_glowAttr);
-                else if (sampleIdx >= sampleCount - 8)
-                    Driver.SetAttribute(_brightAttr);
-                else
-                    Driver.SetAttribute(_normalAttr);
-
-                // Select the right block character
-                var (fillTop, fillBottom) = cell.Value;
-                if (fillTop && fillBottom)
-                    AddRune((Rune)'█');
-                else if (fillTop)
-                    AddRune((Rune)'▀');
-                else if (fillBottom)
-                    AddRune((Rune)'▄');
-            }
-        }
-    }
-
-    private void DrawNoSignal(int plotWidth, int plotHeight)
-    {
-        // Animated "NO SIGNAL" message
-        Driver.SetAttribute((_frameCount % 20) < 10 ? _brightAttr : _dimAttr);
-
-        string msg = _currentTheme.NoSignalMessage;
-        int x = LeftMargin + (plotWidth - msg.Length) / 2;
-        int y = TopMargin + plotHeight / 2;
-
-        Move(x, y);
-        AddStr(msg);
-
-        Driver.SetAttribute(_dimAttr);
-        string hint = "Select a node to begin plotting";
-        x = LeftMargin + (plotWidth - hint.Length) / 2;
-        Move(x, y + 2);
-        AddStr(hint);
-    }
-
-    private void DrawStatusBar(int width, int height)
-    {
-        int y = height - 2;
-
-        // Status bar background
-        Driver.SetAttribute(_borderAttr);
-        Move(0, y);
-        AddRune((Rune)_currentTheme.BoxLeftT);
-        for (int x = 1; x < width - 1; x++) AddRune((Rune)_currentTheme.BoxHorizontal);
-        AddRune((Rune)_currentTheme.BoxRightT);
-
-        // Status text
-        Move(0, y + 1);
-        AddRune((Rune)_currentTheme.BoxVertical);
-
-        Driver.SetAttribute(_dimAttr);
-
-        // Key hints
-        string keys = " [SPACE]";
-        AddStr(keys);
-        Driver.SetAttribute(_isPaused ? _statusActiveAttr : _dimAttr);
-        AddStr("Pause");
-
-        Driver.SetAttribute(_dimAttr);
-        AddStr("  [+/-]");
-        Driver.SetAttribute(!_autoScale ? _statusActiveAttr : _dimAttr);
-        AddStr("Scale");
-
-        Driver.SetAttribute(_dimAttr);
-        AddStr("  [R]");
-        Driver.SetAttribute(_autoScale ? _statusActiveAttr : _dimAttr);
-        AddStr("Auto");
-
-        // Fill rest with spaces and close border
-        int currentPos = 1 + keys.Length + 5 + 7 + 5 + 5 + 4;
-        Driver.SetAttribute(_dimAttr);
-
-        // Current value on the right
+        // Update status bar
         float currentValue = 0;
         lock (_lock)
         {
@@ -828,29 +483,154 @@ public class TrendPlotView : View
             }
         }
 
-        string valueStr = $"VALUE: {currentValue:F2}";
-        int valuePos = width - valueStr.Length - 3;
+        _statusLabel.Text = $"[SPACE] Pause  [+/-] Scale  [R] Auto    VALUE: {currentValue:F2}";
 
-        // Fill gap
-        for (int x = currentPos; x < valuePos; x++)
+        // Clear previous annotations
+        _graphView.Annotations.Clear();
+        _graphView.Series.Clear();
+
+        if (displayCount > 0)
         {
-            Move(x, y + 1);
-            AddStr(" ");
+            // Create points for the waveform
+            var points = new List<PointF>();
+            for (int i = 0; i < displayCount; i++)
+            {
+                points.Add(new PointF(i, displaySamples[i]));
+            }
+
+            // Get line color from theme
+            var lineColor = theme.Accent;
+
+            // Create path annotation for connected line
+            _waveformPath = new PathAnnotation
+            {
+                Points = points,
+                LineColor = new Attribute(lineColor, theme.Background),
+                BeforeSeries = false
+            };
+            _graphView.Annotations.Add(_waveformPath);
+
+            // Configure graph scaling
+            float valueRange = _visibleMax - _visibleMin;
+            if (valueRange < 1) valueRange = 1;
+
+            // Calculate cell size based on available graph area and data range
+            int graphWidth = Math.Max(1, _graphView.Frame.Width - (int)_graphView.MarginLeft - 2);
+            int graphHeight = Math.Max(1, _graphView.Frame.Height - (int)_graphView.MarginBottom - 2);
+
+            // CellSize determines how many graph units per cell
+            float cellSizeX = (float)displayCount / Math.Max(1, graphWidth);
+            float cellSizeY = valueRange / Math.Max(1, graphHeight);
+
+            _graphView.CellSize = new PointF(
+                Math.Max(0.1f, cellSizeX),
+                Math.Max(0.1f, cellSizeY)
+            );
+
+            // Set scroll offset to show data from bottom-left
+            _graphView.ScrollOffset = new PointF(0, _visibleMin);
+
+            // Configure axis increments based on range
+            _graphView.AxisX.Increment = Math.Max(1, displayCount / 5);
+            _graphView.AxisX.ShowLabelsEvery = 1;
+            _graphView.AxisX.Minimum = 0;
+
+            float yIncrement = valueRange / 4;
+            _graphView.AxisY.Increment = yIncrement > 0 ? yIncrement : 10;
+            _graphView.AxisY.ShowLabelsEvery = 1;
+            _graphView.AxisY.LabelGetter = v => FormatAxisValue((float)v.Value);
+        }
+        else
+        {
+            // No data - show default range
+            _graphView.CellSize = new PointF(1, 1);
+            _graphView.ScrollOffset = new PointF(0, 0);
+            _graphView.AxisX.Increment = 20;
+            _graphView.AxisY.Increment = 10;
+
+            // Add "No Signal" annotation
+            var noSignalAnnotation = new TextAnnotation
+            {
+                Text = theme.NoSignalMessage,
+                GraphPosition = new PointF(10, 50)
+            };
+            _graphView.Annotations.Add(noSignalAnnotation);
         }
 
-        Move(valuePos, y + 1);
-        Driver.SetAttribute(_brightAttr);
-        AddStr(valueStr);
+        _graphView.SetNeedsLayout();
+    }
 
-        Move(width - 1, y + 1);
-        Driver.SetAttribute(_borderAttr);
-        AddRune((Rune)_currentTheme.BoxVertical);
+    /// <summary>
+    /// Toggles pause state.
+    /// </summary>
+    public void TogglePause()
+    {
+        _isPaused = !_isPaused;
+        PauseStateChanged?.Invoke(_isPaused);
+        UpdateGraph();
+        SetNeedsLayout();
+    }
 
-        // Bottom border
-        Move(0, height - 1);
-        AddRune((Rune)_currentTheme.BoxBottomLeft);
-        for (int x = 1; x < width - 1; x++) AddRune((Rune)_currentTheme.BoxHorizontal);
-        AddRune((Rune)_currentTheme.BoxBottomRight);
+    /// <summary>
+    /// Increases vertical scale (zoom in).
+    /// </summary>
+    public void IncreaseScale()
+    {
+        _autoScale = false;
+        _scaleMultiplier *= 1.2f;
+        UpdateGraph();
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Decreases vertical scale (zoom out).
+    /// </summary>
+    public void DecreaseScale()
+    {
+        _autoScale = false;
+        _scaleMultiplier /= 1.2f;
+        if (_scaleMultiplier < 0.1f) _scaleMultiplier = 0.1f;
+        UpdateGraph();
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Resets to auto-scale mode.
+    /// </summary>
+    public void ResetScale()
+    {
+        _autoScale = true;
+        _scaleMultiplier = 1.0f;
+        UpdateGraph();
+        SetNeedsLayout();
+    }
+
+    protected override bool OnKeyDown(Key key)
+    {
+        switch (key.KeyCode)
+        {
+            case KeyCode.Space:
+                TogglePause();
+                return true;
+
+            case KeyCode.D0 when key.IsShift: // + key (Shift+0 on some keyboards)
+            case (KeyCode)'=': // + without shift
+            case (KeyCode)'+':
+                IncreaseScale();
+                return true;
+
+            case KeyCode.D9 when key.IsShift: // ( key - sometimes used
+            case (KeyCode)'-':
+                DecreaseScale();
+                return true;
+
+            case (KeyCode)'r':
+            case (KeyCode)'R':
+                ResetScale();
+                return true;
+        }
+
+        return base.OnKeyDown(key);
     }
 
     private static string FormatAxisValue(float value)

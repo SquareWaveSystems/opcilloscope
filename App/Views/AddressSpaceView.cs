@@ -1,11 +1,15 @@
+using System.Text;
 using Terminal.Gui;
 using OpcScope.OpcUa;
 using OpcScope.OpcUa.Models;
+using OpcScope.App.Themes;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
 /// <summary>
 /// TreeView for browsing the OPC UA address space with lazy loading.
+/// Supports theme-aware styling with Terminal.Gui v2 features.
 /// </summary>
 public class AddressSpaceView : FrameView
 {
@@ -20,8 +24,12 @@ public class AddressSpaceView : FrameView
 
     public AddressSpaceView()
     {
-        Title = "Address Space";
+        Title = " Address Space ";
         CanFocus = true;
+
+        // Apply initial theme styling
+        var theme = AppThemeManager.Current;
+        BorderStyle = theme.FrameLineStyle;
 
         _treeView = new TreeView<BrowsedNode>
         {
@@ -34,6 +42,11 @@ public class AddressSpaceView : FrameView
                 HasChildrenForNode
             )
         };
+
+        // Configure tree style for cleaner look
+        _treeView.Style.CollapseableSymbol = new Rune('▼');
+        _treeView.Style.ExpandableSymbol = new Rune('▶');
+        _treeView.Style.LeaveLastRow = false;
 
         _treeView.SelectionChanged += (_, args) =>
         {

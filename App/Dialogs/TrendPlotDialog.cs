@@ -32,8 +32,9 @@ public class TrendPlotDialog : Dialog
         Width = Dim.Percent(85);
         Height = Dim.Percent(85);
 
-        // Apply theme-based styling
+        // Apply theme-based styling using Terminal.Gui v2 features
         ColorScheme = Theme.DialogColorScheme;
+        BorderStyle = Theme.BorderLineStyle;
 
         // Create the trend plot view - takes up most of the dialog
         _trendPlotView = new TrendPlotView
@@ -126,7 +127,8 @@ public class TrendPlotDialog : Dialog
             Title = $"{Theme.TitleDecoration}[ SELECT SIGNAL ]{Theme.TitleDecoration}",
             Width = 50,
             Height = Math.Min(nodeList.Count + 7, 20),
-            ColorScheme = Theme.DialogColorScheme
+            ColorScheme = Theme.DialogColorScheme,
+            BorderStyle = Theme.BorderLineStyle
         };
 
         var headerLabel = new Label
@@ -229,6 +231,7 @@ public class TrendPlotDialog : Dialog
         {
             Title = $"{theme.TitleDecoration}[ OSCILLOSCOPE ]{theme.TitleDecoration}";
             ColorScheme = theme.DialogColorScheme;
+            BorderStyle = theme.BorderLineStyle;
 
             _selectNodeButton.Text = $"{theme.ButtonPrefix}NODE{theme.ButtonSuffix}";
             _selectNodeButton.ColorScheme = theme.ButtonColorScheme;

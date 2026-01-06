@@ -6,6 +6,7 @@ namespace OpcScope.App.Themes;
 /// <summary>
 /// Base theme class for terminal display aesthetics.
 /// Inspired by classic computing displays and industrial control systems.
+/// Leverages Terminal.Gui v2 features: LineStyle, Border/Margin/Padding, ColorSchemes.
 /// </summary>
 public abstract class RetroTheme
 {
@@ -26,6 +27,32 @@ public abstract class RetroTheme
     public abstract Color StatusInactive { get; }
     public abstract Color Error { get; }
     public abstract Color Warning { get; }
+
+    // === Terminal.Gui v2 LineStyle for borders ===
+    /// <summary>
+    /// The LineStyle used for view borders (Single, Double, Rounded, etc.)
+    /// </summary>
+    public virtual LineStyle BorderLineStyle => LineStyle.Double;
+
+    /// <summary>
+    /// The LineStyle used for frames/panels (can differ from main borders)
+    /// </summary>
+    public virtual LineStyle FrameLineStyle => LineStyle.Double;
+
+    /// <summary>
+    /// Whether to use the SuperView's LineCanvas for auto-joining borders
+    /// </summary>
+    public virtual bool UseLineCanvas => true;
+
+    /// <summary>
+    /// Margin thickness around views (outside border)
+    /// </summary>
+    public virtual Thickness MarginThickness => new(0);
+
+    /// <summary>
+    /// Padding thickness inside views (inside border)
+    /// </summary>
+    public virtual Thickness PaddingThickness => new(0);
 
     // === Cached Attribute objects to avoid allocations ===
     private Attribute? _normalAttr;
@@ -56,6 +83,9 @@ public abstract class RetroTheme
 
     // Highlight effect for active elements
     public Attribute GlowAttr => _glowAttr ??= new(Color.White, Background);
+
+    // Whether to enable the glow effect on the leading edge of the plot
+    public virtual bool EnableGlow => true;
 
     // === Cached Color Schemes for Terminal.Gui Widgets ===
     private ColorScheme? _mainColorScheme;

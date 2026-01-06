@@ -1,21 +1,18 @@
 # OpcScope
 
-A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data. Built with .NET 8, Terminal.Gui, and OPC Foundation UA-.NETStandard.
+A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data. Built with .NET 10, Terminal.Gui, and OPC Foundation UA-.NETStandard.
 
 ![Terminal UI](https://img.shields.io/badge/UI-Terminal.Gui-blue)
-![.NET 8](https://img.shields.io/badge/.NET-8.0-purple)
+![.NET 10](https://img.shields.io/badge/.NET-10.0-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Features
 
-### P0 - Core Features (Implemented)
 - **Connection Management**: Connect to OPC UA servers via endpoint URL with anonymous authentication
 - **Address Space Browser**: TreeView with lazy-loading for efficient navigation of large address spaces
 - **Live Monitoring**: Real-time value updates via OPC UA subscriptions (not polling)
 - **Subscribe/Unsubscribe**: Add variable nodes to monitor with Enter key, remove with Delete key
 - **Event Log**: Color-coded log panel showing connection events, errors, and subscription changes
-
-### P1 - Enhanced Features (Implemented)
 - **Node Details Panel**: View full node attributes (Description, AccessLevel, ValueRank, DataType)
 - **Export to CSV**: Export current monitored values snapshot
 - **Settings Dialog**: Configure publishing interval (100-10000ms)
@@ -77,6 +74,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | macOS ARM64 (Apple Silicon) | `opcscope-osx-arm64.tar.gz` |
 
 ### Build from Source
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 **Prerequisites:** [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 

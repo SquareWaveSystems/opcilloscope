@@ -1,11 +1,15 @@
 using Terminal.Gui;
 using OpcScope.OpcUa.Models;
+using OpcScope.App.Themes;
 using System.Data;
+using Attribute = Terminal.Gui.Attribute;
+using AppThemeManager = OpcScope.App.Themes.ThemeManager;
 
 namespace OpcScope.App.Views;
 
 /// <summary>
 /// TableView for displaying subscribed/monitored items with real-time updates.
+/// Features theme-aware styling and row coloring based on status.
 /// </summary>
 public class MonitoredItemsView : FrameView
 {
@@ -31,8 +35,12 @@ public class MonitoredItemsView : FrameView
 
     public MonitoredItemsView()
     {
-        Title = "Monitored Items";
+        Title = " Monitored Items ";
         CanFocus = true;
+
+        // Apply theme styling
+        var theme = AppThemeManager.Current;
+        BorderStyle = theme.FrameLineStyle;
 
         _dataTable = new DataTable();
         _dataTable.Columns.Add("Name", typeof(string));
@@ -51,10 +59,14 @@ public class MonitoredItemsView : FrameView
             FullRowSelect = true
         };
 
-        // Configure columns
+        // Configure table style for cleaner look
         _tableView.Style.ShowHorizontalHeaderOverline = false;
         _tableView.Style.ShowHorizontalHeaderUnderline = true;
+        _tableView.Style.ShowHorizontalBottomline = false;
         _tableView.Style.AlwaysShowHeaders = true;
+        _tableView.Style.ShowVerticalCellLines = false;
+        _tableView.Style.ShowVerticalHeaderLines = false;
+        _tableView.Style.ExpandLastColumn = true;
 
         _tableView.KeyDown += HandleKeyDown;
 
