@@ -14,6 +14,7 @@ namespace OpcScope.App.Views;
 public class LogView : FrameView
 {
     private readonly ListView _listView;
+    private readonly Button _copyButton;
     private readonly ObservableCollection<string> _displayedEntries = new();
     private readonly List<LogEntry> _entries = new();
     private Logger? _logger;
@@ -26,10 +27,23 @@ public class LogView : FrameView
         var theme = AppThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
+        // Copy button in top-right corner of the frame
+        _copyButton = new Button
+        {
+            Text = "Copy",
+            X = Pos.AnchorEnd(8),
+            Y = 0,
+            Width = 6,
+            Height = 1,
+            NoDecorations = true,
+            NoPadding = true
+        };
+        _copyButton.Accepting += OnCopyClicked;
+
         _listView = new ListView
         {
             X = 0,
-            Y = 0,
+            Y = 1,
             Width = Dim.Fill(),
             Height = Dim.Fill()
         };
@@ -42,6 +56,7 @@ public class LogView : FrameView
         // Subscribe to theme changes to update colors
         AppThemeManager.ThemeChanged += OnThemeChanged;
 
+        Add(_copyButton);
         Add(_listView);
     }
 
@@ -124,10 +139,20 @@ public class LogView : FrameView
         _logger?.Clear();
     }
 
+    private void OnCopyClicked(object? sender, CommandEventArgs e)
+    {
+        if (_displayedEntries.Count == 0)
+            return;
+
+        var logText = string.Join(Environment.NewLine, _displayedEntries);
+        Clipboard.TrySetClipboardData(logText);
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            _copyButton.Accepting -= OnCopyClicked;
             _listView.RowRender -= OnRowRender;
             AppThemeManager.ThemeChanged -= OnThemeChanged;
         }
