@@ -85,7 +85,7 @@ OpcScope/
 │   ├── MainWindow.cs               # Main UI layout, menu bar, status bar, event orchestration
 │   ├── Views/
 │   │   ├── AddressSpaceView.cs     # TreeView for OPC UA address space navigation
-│   │   ├── MonitoredItemsView.cs   # TableView for subscribed items with selection
+│   │   ├── MonitoredVariablesView.cs # TableView for subscribed variables with selection
 │   │   ├── NodeDetailsView.cs      # Node attribute display panel
 │   │   ├── LogView.cs              # Application log display
 │   │   ├── ScopeView.cs            # Real-time multi-signal oscilloscope view
@@ -113,10 +113,10 @@ OpcScope/
 │   ├── OpcUaClientWrapper.cs       # OPC Foundation Session wrapper with connection management
 │   ├── ConnectionManager.cs        # Connection lifecycle orchestration (connect/disconnect/reconnect)
 │   ├── NodeBrowser.cs              # Address space navigation and browsing
-│   ├── SubscriptionManager.cs      # OPC UA Subscription with MonitoredItems
+│   ├── SubscriptionManager.cs      # OPC UA Subscription with MonitoredVariables
 │   └── Models/
 │       ├── BrowsedNode.cs          # Address space node model for tree view
-│       └── MonitoredNode.cs        # Monitored item model with value tracking
+│       └── MonitoredNode.cs        # Monitored variable model with value tracking
 │
 ├── Utilities/
 │   ├── Logger.cs                   # In-app logging service
@@ -216,7 +216,7 @@ Real-time visualization of up to 5 signals simultaneously:
 - Distinct colors per signal (Green, Cyan, Yellow, Magenta, White)
 
 ### CSV Recording
-Record monitored item values to CSV files:
+Record monitored variable values to CSV files:
 - Background queue-based writing (non-blocking)
 - ISO 8601 timestamps with millisecond precision
 - CSV format: `Timestamp,DisplayName,NodeId,Value,Status`
@@ -309,8 +309,8 @@ var connectionManager = new ConnectionManager(logger);
 // Events
 connectionManager.StateChanged += state => { /* Connecting, Connected, Disconnected, Reconnecting */ };
 connectionManager.ValueChanged += node => { /* Handle value updates */ };
-connectionManager.ItemAdded += node => { /* Handle new subscription */ };
-connectionManager.ItemRemoved += handle => { /* Handle unsubscription */ };
+connectionManager.VariableAdded += node => { /* Handle new subscription */ };
+connectionManager.VariableRemoved += handle => { /* Handle unsubscription */ };
 
 // Operations
 await connectionManager.ConnectAsync("opc.tcp://localhost:4840");
@@ -394,7 +394,7 @@ OPC Foundation callbacks arrive on background threads. All UI updates are marsha
 
 ```csharp
 // Using UiThread helper
-UiThread.Run(() => _monitoredItemsView.UpdateItem(item));
+UiThread.Run(() => _monitoredVariablesView.UpdateVariable(variable));
 
 // Using Application.Invoke directly
 Application.Invoke(() => SetNeedsLayout());
@@ -448,10 +448,10 @@ Automates release builds and publishing.
 | F5 | Refresh address space tree |
 | F10 | Open menu |
 | Enter | Subscribe to selected node |
-| Delete | Unsubscribe from selected item |
-| Space | Toggle recording selection (in monitored items) |
-| W | Write value to selected item |
-| Ctrl+G | Open Scope with selected items |
+| Delete | Unsubscribe from selected variable |
+| Space | Toggle recording selection (in monitored variables) |
+| W | Write value to selected variable |
+| Ctrl+G | Open Scope with selected variables |
 | Ctrl+R | Toggle recording (start/stop) |
 | Ctrl+N | New configuration |
 | Ctrl+O | Open configuration |

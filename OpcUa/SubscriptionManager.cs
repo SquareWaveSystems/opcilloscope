@@ -6,14 +6,14 @@ using OpcScope.Utilities;
 namespace OpcScope.OpcUa;
 
 /// <summary>
-/// Manages OPC UA subscriptions and monitored items using proper Publish/Subscribe.
+/// Manages OPC UA subscriptions and monitored variables using proper Publish/Subscribe.
 /// </summary>
 public class SubscriptionManager : IDisposable
 {
     private readonly OpcUaClientWrapper _clientWrapper;
     private readonly Logger _logger;
     private Subscription? _subscription;
-    private readonly Dictionary<uint, MonitoredNode> _monitoredItems = new();
+    private readonly Dictionary<uint, MonitoredNode> _monitoredVariables = new();
     private readonly Dictionary<uint, MonitoredItem> _opcMonitoredItems = new();
     private uint _nextClientHandle = 1;
     private int _publishingInterval = 1000;
@@ -21,8 +21,8 @@ public class SubscriptionManager : IDisposable
     private readonly object _lock = new();
 
     public event Action<MonitoredNode>? ValueChanged;
-    public event Action<MonitoredNode>? ItemAdded;
-    public event Action<uint>? ItemRemoved;
+    public event Action<MonitoredNode>? VariableAdded;
+    public event Action<uint>? VariableRemoved;
 
     public int PublishingInterval
     {
@@ -30,13 +30,13 @@ public class SubscriptionManager : IDisposable
         set => _publishingInterval = Math.Max(100, Math.Min(10000, value));
     }
 
-    public IReadOnlyCollection<MonitoredNode> MonitoredItems
+    public IReadOnlyCollection<MonitoredNode> MonitoredVariables
     {
         get
         {
             lock (_lock)
             {
-                return _monitoredItems.Values.ToList();
+                return _monitoredVariables.Values.ToList();
             }
         }
     }
@@ -95,7 +95,7 @@ public class SubscriptionManager : IDisposable
         lock (_lock)
         {
             // Check if already monitoring this node
-            if (_monitoredItems.Values.Any(m => m.NodeId.EqualsNodeId(nodeId)))
+            if (_monitoredVariables.Values.Any(m => m.NodeId.EqualsNodeId(nodeId)))
             {
                 _logger.Warning($"Node {displayName} is already being monitored");
                 return null;
@@ -130,8 +130,8 @@ public class SubscriptionManager : IDisposable
                 return null;
             }
 
-            // Create our model item
-            var item = new MonitoredNode
+            // Create our model variable
+            var variable = new MonitoredNode
             {
                 ClientHandle = clientHandle,
                 MonitoredItemId = monitoredItem.ClientHandle,
@@ -143,22 +143,22 @@ public class SubscriptionManager : IDisposable
 
             lock (_lock)
             {
-                _monitoredItems[clientHandle] = item;
+                _monitoredVariables[clientHandle] = variable;
                 _opcMonitoredItems[clientHandle] = monitoredItem;
             }
 
             _logger.Info($"Subscribed to {displayName}");
-            ItemAdded?.Invoke(item);
+            VariableAdded?.Invoke(variable);
 
             // Read initial value and node attributes (AccessLevel, DataType)
-            await ReadInitialValueAsync(item);
-            await ReadNodeAttributesAsync(item);
+            await ReadInitialValueAsync(variable);
+            await ReadNodeAttributesAsync(variable);
 
-            return item;
+            return variable;
         }
         catch (Exception ex)
         {
-            _logger.Error($"Failed to add monitored item: {ex.Message}");
+            _logger.Error($"Failed to add monitored variable: {ex.Message}");
             return null;
         }
     }
@@ -169,20 +169,20 @@ public class SubscriptionManager : IDisposable
         {
             if (e.NotificationValue is MonitoredItemNotification notification)
             {
-                // Find our item by the OPC monitored item's client handle
-                MonitoredNode? item = null;
+                // Find our variable by the OPC monitored item's client handle
+                MonitoredNode? variable = null;
                 lock (_lock)
                 {
                     var matchingKvp = _opcMonitoredItems.Where(kvp => kvp.Value.ClientHandle == monitoredItem.ClientHandle).FirstOrDefault();
                     if (!matchingKvp.Equals(default(KeyValuePair<uint, MonitoredItem>)))
                     {
-                        _monitoredItems.TryGetValue(matchingKvp.Key, out item);
+                        _monitoredVariables.TryGetValue(matchingKvp.Key, out variable);
                     }
                 }
 
-                if (item != null)
+                if (variable != null)
                 {
-                    ProcessValueChange(item, notification.Value);
+                    ProcessValueChange(variable, notification.Value);
                 }
             }
         }
@@ -292,16 +292,16 @@ public class SubscriptionManager : IDisposable
 
     public async Task<bool> RemoveNodeAsync(uint clientHandle)
     {
-        MonitoredNode? item;
+        MonitoredNode? variable;
         MonitoredItem? opcItem;
 
         lock (_lock)
         {
-            if (!_monitoredItems.TryGetValue(clientHandle, out item))
+            if (!_monitoredVariables.TryGetValue(clientHandle, out variable))
                 return false;
 
             _opcMonitoredItems.TryGetValue(clientHandle, out opcItem);
-            _monitoredItems.Remove(clientHandle);
+            _monitoredVariables.Remove(clientHandle);
             _opcMonitoredItems.Remove(clientHandle);
         }
 
@@ -315,46 +315,46 @@ public class SubscriptionManager : IDisposable
             }
             catch (Exception ex)
             {
-                _logger.Warning($"Error removing monitored item: {ex.Message}");
+                _logger.Warning($"Error removing monitored variable: {ex.Message}");
             }
         }
 
-        _logger.Info($"Unsubscribed from {item.DisplayName}");
-        ItemRemoved?.Invoke(clientHandle);
+        _logger.Info($"Unsubscribed from {variable.DisplayName}");
+        VariableRemoved?.Invoke(clientHandle);
         return true;
     }
 
     public async Task<bool> RemoveNodeByNodeIdAsync(NodeId nodeId)
     {
-        MonitoredNode? item;
+        MonitoredNode? variable;
         lock (_lock)
         {
-            item = _monitoredItems.Values.FirstOrDefault(m => m.NodeId.EqualsNodeId(nodeId));
+            variable = _monitoredVariables.Values.FirstOrDefault(m => m.NodeId.EqualsNodeId(nodeId));
         }
 
-        if (item != null)
+        if (variable != null)
         {
-            return await RemoveNodeAsync(item.ClientHandle);
+            return await RemoveNodeAsync(variable.ClientHandle);
         }
         return false;
     }
 
-    private void ProcessValueChange(MonitoredNode item, DataValue dataValue)
+    private void ProcessValueChange(MonitoredNode variable, DataValue dataValue)
     {
-        var oldValue = item.Value;
+        var oldValue = variable.Value;
         var newValue = FormatValue(dataValue.Value);
 
-        item.Value = newValue;
-        item.Timestamp = dataValue.SourceTimestamp;
-        item.StatusCode = (uint)dataValue.StatusCode.Code;
+        variable.Value = newValue;
+        variable.Timestamp = dataValue.SourceTimestamp;
+        variable.StatusCode = (uint)dataValue.StatusCode.Code;
 
         if (oldValue != newValue)
         {
-            item.LastChangeTime = DateTime.Now;
+            variable.LastChangeTime = DateTime.Now;
         }
 
         // Always notify on subscription updates
-        ValueChanged?.Invoke(item);
+        ValueChanged?.Invoke(variable);
     }
 
     internal static string FormatValue(object? value)
@@ -372,7 +372,7 @@ public class SubscriptionManager : IDisposable
         List<uint> handles;
         lock (_lock)
         {
-            handles = _monitoredItems.Keys.ToList();
+            handles = _monitoredVariables.Keys.ToList();
         }
         foreach (var handle in handles)
         {
@@ -397,7 +397,7 @@ public class SubscriptionManager : IDisposable
 
         _subscription = null;
         _isInitialized = false;
-        _monitoredItems.Clear();
+        _monitoredVariables.Clear();
         _opcMonitoredItems.Clear();
     }
 }
