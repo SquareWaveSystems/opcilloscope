@@ -20,7 +20,6 @@ public class MainWindow : Toplevel
     private readonly NodeBrowser _nodeBrowser;
     private SubscriptionManager? _subscriptionManager;
 
-    private readonly Label _titleBanner;
     private readonly MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
     private readonly MonitoredItemsView _monitoredItemsView;
@@ -50,16 +49,10 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
-        // Create title banner (inline with menu)
-        _titleBanner = new Label
-        {
-            X = 0,
-            Y = 0,
-            Text = " OpcScope ",
-            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.BrightCyan, Color.Black) }
-        };
+        // Set initial window title
+        Title = "OPC Scope - Not Connected";
 
-        // Create menu bar (same line as title)
+        // Create menu bar
         _menuBar = CreateMenuBar();
 
         // Create main views
@@ -149,7 +142,6 @@ public class MainWindow : Toplevel
         _nodeDetailsView.Initialize(_nodeBrowser);
 
         // Add all views
-        Add(_titleBanner);
         Add(_menuBar);
         Add(_addressSpaceView);
         Add(_monitoredItemsView);
@@ -177,7 +169,7 @@ public class MainWindow : Toplevel
 
         return new MenuBar
         {
-            X = Pos.Right(_titleBanner),
+            X = 0,
             Y = 0,
             Menus = new MenuBarItem[]
             {
@@ -220,12 +212,6 @@ public class MainWindow : Toplevel
         // Apply main window styling
         ColorScheme = theme.MainColorScheme;
         BorderStyle = theme.BorderLineStyle;
-
-        // Apply styling to title banner (use accent color for branding)
-        _titleBanner.ColorScheme = new ColorScheme
-        {
-            Normal = theme.AccentBrightAttr
-        };
 
         // Apply styling to company label (subtle in status bar)
         _companyLabel.ColorScheme = new ColorScheme
