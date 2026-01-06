@@ -169,15 +169,15 @@ public abstract class RetroTheme
     };
 
     /// <summary>
-    /// Color scheme for structural borders - uses grey for all states to avoid
-    /// terminal color inconsistencies with amber/yellow colors.
+    /// Color scheme for structural borders - uses grey for border lines,
+    /// but accent color for titles (HotNormal is used for title text).
     /// </summary>
     public virtual ColorScheme BorderColorScheme => _borderColorScheme ??= new()
     {
         Normal = BorderAttr,
         Focus = BorderAttr,
-        HotNormal = BorderAttr,
-        HotFocus = BorderAttr,
+        HotNormal = AccentAttr,  // Title text uses accent color
+        HotFocus = AccentAttr,
         Disabled = BorderAttr
     };
 
