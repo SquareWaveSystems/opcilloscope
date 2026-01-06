@@ -32,19 +32,14 @@ public class TestServer : IAsyncDisposable, IDisposable
         EndpointUrl = $"opc.tcp://localhost:{port}/UA/OpcScopeTest";
 
         var config = CreateApplicationConfiguration(port);
-        await config.Validate(ApplicationType.Server);
+        await config.ValidateAsync(ApplicationType.Server);
 
-        _application = new ApplicationInstance
-        {
-            ApplicationName = ApplicationName,
-            ApplicationType = ApplicationType.Server,
-            ApplicationConfiguration = config
-        };
+        // Pass null for certificate validator to use default validation
+        _application = new ApplicationInstance(config, null);
 
         // Check certificate (create if needed)
-        var hasAppCertificate = await _application.CheckApplicationInstanceCertificate(
-            silent: true,
-            minimumKeySize: 0);
+        var hasAppCertificate = await _application.CheckApplicationInstanceCertificatesAsync(
+            silent: true);
 
         if (!hasAppCertificate)
         {
@@ -55,7 +50,7 @@ public class TestServer : IAsyncDisposable, IDisposable
 
         // Create and start the server
         _server = new TestOpcUaServer();
-        await _application.Start(_server);
+        await _application.StartAsync(_server);
     }
 
     /// <summary>
@@ -65,7 +60,7 @@ public class TestServer : IAsyncDisposable, IDisposable
     {
         if (_server != null)
         {
-            await Task.Run(() => _server.Stop());
+            await _server.StopAsync();
             _server.Dispose();
             _server = null;
         }
@@ -109,6 +104,8 @@ public class TestServer : IAsyncDisposable, IDisposable
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(pkiPath, "rejected")
                 },
+                // WARNING: Auto-accepting untrusted certificates is appropriate for test/development
+                // environments only. NEVER use this setting in production.
                 AutoAcceptUntrustedCertificates = true,
                 RejectSHA1SignedCertificates = false,
                 MinimumCertificateKeySize = 2048
@@ -190,13 +187,22 @@ public class TestServer : IAsyncDisposable, IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Synchronous disposal. Note: This blocks on async cleanup.
+    /// Prefer using DisposeAsync() when possible.
+    /// WARNING: This method uses GetAwaiter().GetResult() which can cause deadlocks
+    /// in certain synchronization contexts (e.g., ASP.NET request contexts).
+    /// This is acceptable for a test server typically run from a console application.
+    /// </summary>
     public void Dispose()
     {
         if (!_disposed)
         {
             if (_server != null)
             {
-                _server.Stop();
+                // Use async method even in sync Dispose to ensure proper cleanup
+                // Note: This can potentially cause deadlocks in some synchronization contexts
+                _server.StopAsync().GetAwaiter().GetResult();
                 _server.Dispose();
                 _server = null;
             }
