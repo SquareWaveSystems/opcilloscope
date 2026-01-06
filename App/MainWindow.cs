@@ -133,7 +133,7 @@ public class MainWindow : Toplevel
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
         _connectionStatusLabel = new Label
         {
-            X = Pos.AnchorEnd(17),  // " ○ Not Connected "
+            X = Pos.AnchorEnd(26),  // " ■ All systems nominal. " (longest text)
             Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
             Text = $" {theme.DisconnectedIndicator} "
         };
