@@ -85,7 +85,7 @@ public class SubscriptionSettings
     public int PublishingIntervalMs { get; set; } = 1000;
 
     /// <summary>
-    /// Default sampling interval (in milliseconds) for monitored items.
+    /// Default sampling interval (in milliseconds) for monitored variables.
     /// <para>
     /// Note: As of version 1.0, this setting is defined in the configuration model but is not yet
     /// applied by the configuration loading logic. It is reserved for future use.
@@ -94,7 +94,7 @@ public class SubscriptionSettings
     public int SamplingIntervalMs { get; set; } = 500;
 
     /// <summary>
-    /// Default queue size for monitored items.
+    /// Default queue size for monitored variables.
     /// <para>
     /// Note: As of version 1.0, this setting is defined in the configuration model but is not yet
     /// applied by the configuration loading logic. It is reserved for future use.

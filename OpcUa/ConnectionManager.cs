@@ -41,7 +41,7 @@ public sealed class ConnectionManager : IDisposable
     public NodeBrowser NodeBrowser => _nodeBrowser;
 
     /// <summary>
-    /// Gets the subscription manager for monitored items.
+    /// Gets the subscription manager for monitored variables.
     /// </summary>
     public SubscriptionManager? SubscriptionManager => _subscriptionManager;
 
@@ -56,19 +56,19 @@ public sealed class ConnectionManager : IDisposable
     public event Action<string>? ConnectionError;
 
     /// <summary>
-    /// Raised when a value changes on a monitored item.
+    /// Raised when a value changes on a monitored variable.
     /// </summary>
     public event Action<Models.MonitoredNode>? ValueChanged;
 
     /// <summary>
-    /// Raised when a monitored item is added.
+    /// Raised when a monitored variable is added.
     /// </summary>
-    public event Action<Models.MonitoredNode>? ItemAdded;
+    public event Action<Models.MonitoredNode>? VariableAdded;
 
     /// <summary>
-    /// Raised when a monitored item is removed.
+    /// Raised when a monitored variable is removed.
     /// </summary>
-    public event Action<uint>? ItemRemoved;
+    public event Action<uint>? VariableRemoved;
 
     public ConnectionManager(Logger logger)
     {
@@ -180,7 +180,7 @@ public sealed class ConnectionManager : IDisposable
     }
 
     /// <summary>
-    /// Unsubscribes from a monitored item.
+    /// Unsubscribes from a monitored variable.
     /// </summary>
     public Task<bool> UnsubscribeAsync(uint clientHandle)
     {
@@ -193,8 +193,8 @@ public sealed class ConnectionManager : IDisposable
         await _subscriptionManager.InitializeAsync();
 
         _subscriptionManager.ValueChanged += node => ValueChanged?.Invoke(node);
-        _subscriptionManager.ItemAdded += node => ItemAdded?.Invoke(node);
-        _subscriptionManager.ItemRemoved += handle => ItemRemoved?.Invoke(handle);
+        _subscriptionManager.VariableAdded += node => VariableAdded?.Invoke(node);
+        _subscriptionManager.VariableRemoved += handle => VariableRemoved?.Invoke(handle);
     }
 
     private void DisposeSubscription()
@@ -202,8 +202,8 @@ public sealed class ConnectionManager : IDisposable
         if (_subscriptionManager != null)
         {
             _subscriptionManager.ValueChanged -= node => ValueChanged?.Invoke(node);
-            _subscriptionManager.ItemAdded -= node => ItemAdded?.Invoke(node);
-            _subscriptionManager.ItemRemoved -= handle => ItemRemoved?.Invoke(handle);
+            _subscriptionManager.VariableAdded -= node => VariableAdded?.Invoke(node);
+            _subscriptionManager.VariableRemoved -= handle => VariableRemoved?.Invoke(handle);
             _subscriptionManager.Dispose();
             _subscriptionManager = null;
         }

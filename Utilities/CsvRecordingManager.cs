@@ -4,7 +4,7 @@ using OpcScope.OpcUa.Models;
 namespace OpcScope.Utilities;
 
 /// <summary>
-/// Manages CSV recording of monitored item value changes.
+/// Manages CSV recording of monitored variable value changes.
 /// Writes data to file in real-time as values change using a background queue.
 /// </summary>
 public class CsvRecordingManager : IDisposable
