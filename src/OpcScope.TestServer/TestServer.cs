@@ -34,6 +34,7 @@ public class TestServer : IAsyncDisposable, IDisposable
         var config = CreateApplicationConfiguration(port);
         await config.ValidateAsync(ApplicationType.Server);
 
+        // Pass null for certificate validator to use default validation
         _application = new ApplicationInstance(config, null);
 
         // Check certificate (create if needed)
@@ -189,6 +190,9 @@ public class TestServer : IAsyncDisposable, IDisposable
     /// <summary>
     /// Synchronous disposal. Note: This blocks on async cleanup.
     /// Prefer using DisposeAsync() when possible.
+    /// WARNING: This method uses GetAwaiter().GetResult() which can cause deadlocks
+    /// in certain synchronization contexts (e.g., ASP.NET request contexts).
+    /// This is acceptable for a test server typically run from a console application.
     /// </summary>
     public void Dispose()
     {
