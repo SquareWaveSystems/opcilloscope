@@ -30,9 +30,10 @@ public class LightTheme : RetroTheme
     public override Color Accent => new(196, 105, 43);
     public override Color AccentBright => new(220, 120, 50);
 
-    // Border per spec: #c0c0c0
-    public override Color Border => new(192, 192, 192);
-    public override Color Grid => new(220, 220, 215);
+    // Border: darker grey for better cross-terminal consistency
+    // (lighter greys like #c0c0c0 get mapped to yellow in some terminals)
+    public override Color Border => new(128, 128, 128);
+    public override Color Grid => new(200, 200, 195);
 
     // Status colors - adjusted for light background contrast
     public override Color StatusActive => new(74, 122, 74);      // #4a7a4a darker green

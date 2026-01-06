@@ -27,6 +27,7 @@ public class MainWindow : Toplevel
     private readonly LogView _logView;
     private readonly StatusBar _statusBar;
     private readonly Label _companyLabel;
+    private readonly Label _connectionStatusLabel;
     private readonly SpinnerView _activitySpinner;
     private readonly Label _activityLabel;
     private readonly CsvRecordingManager _csvRecordingManager;
@@ -55,8 +56,8 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
-        // Set initial window title
-        Title = "OPC Scope - Not Connected";
+        // Set initial window title (status shown in status bar)
+        Title = "OPC Scope";
 
         // Create menu bar
         _menuBar = CreateMenuBar();
@@ -105,16 +106,28 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
+        // Connection status indicator (colored)
+        var theme = ThemeManager.Current;
+        _connectionStatusLabel = new Label
+        {
+            X = Pos.AnchorEnd(40),
+            Y = 0,
+            Text = $" {theme.DisconnectedIndicator} "
+        };
+        UpdateConnectionStatusLabelStyle(isConnected: false);
+        _statusBar.Add(_connectionStatusLabel);
+
         // Company branding label (bottom right, separate from status bar shortcuts)
+        // ColorScheme is set in ApplyTheme() to use theme colors
         _companyLabel = new Label
         {
             X = Pos.AnchorEnd(26),
             Y = Pos.AnchorEnd(1),
-            Text = "Square Wave Systems 2026",
-            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.DarkGray, Color.Black) }
+            Text = "Square Wave Systems 2026"
         };
 
         // Create activity spinner for async operations
+        // ColorScheme is set in ApplyTheme() to use theme colors
         _activitySpinner = new SpinnerView
         {
             X = Pos.AnchorEnd(20),
@@ -167,7 +180,8 @@ public class MainWindow : Toplevel
         // Show initializing message
         UiThread.Run(() =>
         {
-            Title = "OPC Scope - INITIALIZING..";
+            Title = "OPC Scope";
+            _connectionStatusLabel.Text = " INITIALIZING.. ";
             SetNeedsLayout();
         });
 
@@ -176,7 +190,7 @@ public class MainWindow : Toplevel
         // Show nominal message
         UiThread.Run(() =>
         {
-            Title = "OPC Scope - All systems nominal.";
+            _connectionStatusLabel.Text = " All systems nominal. ";
             SetNeedsLayout();
         });
 
@@ -263,6 +277,7 @@ public class MainWindow : Toplevel
         ThemeStyler.ApplyToMenuBar(_menuBar, theme);
 
         // Apply clean status bar styling (no blue background)
+        // Must set ColorScheme AND call SetNeedsDisplay to override Terminal.Gui defaults
         var cleanStatusBarScheme = new ColorScheme
         {
             Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
@@ -272,6 +287,14 @@ public class MainWindow : Toplevel
             Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
         _statusBar.ColorScheme = cleanStatusBarScheme;
+        _statusBar.SetNeedsLayout();
+
+        // Also apply theme to connection status label
+        UpdateConnectionStatusLabelStyle(_isConnected);
+
+        // Apply theme to activity spinner and label (for async operations)
+        _activitySpinner.ColorScheme = cleanStatusBarScheme;
+        _activityLabel.ColorScheme = cleanStatusBarScheme;
 
         // Apply to child views with border differentiation
         // MonitoredItems gets double-line (emphasized)
@@ -292,6 +315,13 @@ public class MainWindow : Toplevel
         Application.Invoke(() =>
         {
             ApplyTheme();
+
+            // Update connection status label with new theme colors
+            _connectionStatusLabel.Text = _isConnected
+                ? $" {theme.ConnectedIndicator} "
+                : $" {theme.DisconnectedIndicator} ";
+            UpdateConnectionStatusLabelStyle(_isConnected);
+
             _logger.Info($"Theme changed to: {theme.Name}");
             SetNeedsLayout();
         });
@@ -497,10 +527,37 @@ public class MainWindow : Toplevel
     {
         _isConnected = isConnected;
         var theme = ThemeManager.Current;
-        Title = isConnected
-            ? $"OPC Scope - {theme.ConnectedIndicator}"
-            : $"OPC Scope - {theme.DisconnectedIndicator}";
+
+        // Update title (plain text)
+        Title = "OPC Scope";
+
+        // Update colored status label in status bar
+        _connectionStatusLabel.Text = isConnected
+            ? $" {theme.ConnectedIndicator} "
+            : $" {theme.DisconnectedIndicator} ";
+        UpdateConnectionStatusLabelStyle(isConnected);
+
         SetNeedsLayout();
+    }
+
+    private void UpdateConnectionStatusLabelStyle(bool isConnected)
+    {
+        var theme = ThemeManager.Current;
+        _connectionStatusLabel.ColorScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background),
+            Focus = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background)
+        };
     }
 
     private void StartConnectingAnimation()
@@ -514,7 +571,7 @@ public class MainWindow : Toplevel
 
             _connectingDotCount = (_connectingDotCount % 3) + 1;
             var dots = new string('.', _connectingDotCount);
-            Title = $"OPC Scope - Connecting{dots}";
+            _connectionStatusLabel.Text = $" Connecting{dots} ";
             SetNeedsLayout();
             return true; // Continue animation
         });
