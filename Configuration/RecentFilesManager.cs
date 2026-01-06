@@ -127,8 +127,11 @@ public class RecentFilesManager
     {
         try
         {
-            var directory = Path.GetDirectoryName(_settingsPath)!;
-            Directory.CreateDirectory(directory);
+            var directory = Path.GetDirectoryName(_settingsPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
             File.WriteAllText(_settingsPath, JsonSerializer.Serialize(_recentFiles));
         }
         catch

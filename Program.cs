@@ -14,6 +14,8 @@ class Program
 #pragma warning restore IL2026
 
             // Parse command-line arguments
+            // Note: If multiple arguments of the same type are provided (e.g., two config files),
+            // the last one specified will be used.
             string? autoConnectUrl = null;
             string? configPath = null;
 
@@ -31,6 +33,7 @@ class Program
                     configPath = args[i];
                 }
                 // Connection URL options: --connect <url> or direct opc.tcp:// URL
+                // Note: Direct URL connection is not currently implemented; use config files instead.
                 else if ((args[i] == "--connect" || args[i] == "-c") && i + 1 < args.Length)
                 {
                     autoConnectUrl = args[i + 1];
@@ -60,14 +63,12 @@ class Program
                 }
                 mainWindow.LoadConfigFromCommandLine(configPath);
             }
-            // Otherwise, if auto-connect URL provided, trigger connection after UI is ready
+            // Otherwise, if auto-connect URL provided, show warning (not yet implemented)
             else if (!string.IsNullOrEmpty(autoConnectUrl))
             {
-                Application.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
-                {
-                    // Note: Auto-connect is handled via URL in config - could be enhanced
-                    return false;
-                });
+                Console.Error.WriteLine(
+                    $"Warning: Auto-connect via command-line URL ('{autoConnectUrl}') is not currently implemented. " +
+                    "Please use a configuration file with an endpoint URL instead.");
             }
 
             Application.Run(mainWindow);
@@ -91,18 +92,19 @@ class Program
     {
         Console.WriteLine("OPC Scope - Terminal-based OPC UA Client");
         Console.WriteLine();
-        Console.WriteLine("Usage: opcscope [options] [file|url]");
+        Console.WriteLine("Usage: opcscope [options] [file]");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  -f, --config <file>   Load configuration file (.opcscope or .json)");
-        Console.WriteLine("  -c, --connect <url>   Connect to OPC UA server (opc.tcp://...)");
         Console.WriteLine("  -h, --help            Show this help message");
+        Console.WriteLine();
+        Console.WriteLine("Note: Direct server connection via --connect or opc.tcp:// URLs is not yet");
+        Console.WriteLine("      implemented. Please create a configuration file with the server URL.");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  opcscope                           Start with empty configuration");
         Console.WriteLine("  opcscope production.opcscope       Load configuration file");
         Console.WriteLine("  opcscope --config config.json      Load configuration file");
-        Console.WriteLine("  opcscope opc.tcp://localhost:4840  Connect to server directly");
         Console.WriteLine();
     }
 }
