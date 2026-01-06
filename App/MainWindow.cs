@@ -29,6 +29,7 @@ public class MainWindow : Toplevel
     private readonly Label _activityLabel;
     private readonly CsvRecordingManager _csvRecordingManager;
     private object? _recordingStatusTimer;
+    private readonly MenuItem _themeToggleItem;
 
     // Connecting animation state
     private object? _connectingAnimationTimer;
@@ -61,6 +62,9 @@ public class MainWindow : Toplevel
             HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
             Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
+
+        // Create theme toggle menu item
+        _themeToggleItem = new MenuItem(GetThemeToggleTitle(), "", ToggleTheme);
 
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
@@ -242,14 +246,6 @@ public class MainWindow : Toplevel
 
     private MenuBar CreateMenuBar()
     {
-        // Build theme menu items dynamically
-        var themeMenuItems = ThemeManager.AvailableThemes
-            .Select((theme, index) => new MenuItem(
-                $"_{theme.Name}",
-                "",
-                () => ThemeManager.SetThemeByIndex(index)))
-            .ToArray();
-
         return new MenuBar
         {
             X = 0,
@@ -276,9 +272,9 @@ public class MainWindow : Toplevel
                     new MenuItem("_Scope...", "Ctrl+G", LaunchScope),
                     new MenuItem("_Refresh Tree", "", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
+                    _themeToggleItem,
                     new MenuItem("_Settings...", "", ShowSettings)
                 }),
-                new MenuBarItem("_Theme", themeMenuItems),
                 new MenuBarItem("_Help", new MenuItem[]
                 {
                     new MenuItem("_Help", "", ShowHelp),
@@ -364,6 +360,9 @@ public class MainWindow : Toplevel
         {
             ApplyTheme();
 
+            // Update theme toggle menu item title
+            _themeToggleItem.Title = GetThemeToggleTitle();
+
             // Update connection status label with new theme colors
             _connectionStatusLabel.Text = _isConnected
                 ? $" {theme.ConnectedIndicator} "
@@ -373,6 +372,20 @@ public class MainWindow : Toplevel
             _logger.Info($"Theme changed to: {theme.Name}");
             SetNeedsLayout();
         });
+    }
+
+    private string GetThemeToggleTitle()
+    {
+        // Show what clicking will do: "Switch to Light" when in Dark, "Switch to Dark" when in Light
+        var currentIndex = ThemeManager.GetCurrentThemeIndex();
+        return currentIndex == 0 ? "Switch to _Light" : "Switch to _Dark";
+    }
+
+    private void ToggleTheme()
+    {
+        var currentIndex = ThemeManager.GetCurrentThemeIndex();
+        var newIndex = (currentIndex + 1) % 2;
+        ThemeManager.SetThemeByIndex(newIndex);
     }
 
     private void ShowConnectDialog()
