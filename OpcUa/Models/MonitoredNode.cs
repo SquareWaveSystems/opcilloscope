@@ -20,6 +20,42 @@ public class MonitoredNode
     public DateTime LastChangeTime { get; set; } = DateTime.MinValue;
     public bool RecentlyChanged => (DateTime.Now - LastChangeTime).TotalMilliseconds < 500;
 
+    /// <summary>
+    /// OPC UA AccessLevel attribute - bit flags for read/write permissions.
+    /// </summary>
+    public byte AccessLevel { get; set; } = AccessLevels.CurrentRead;
+
+    /// <summary>
+    /// The built-in data type of the node value.
+    /// </summary>
+    public BuiltInType DataType { get; set; } = BuiltInType.String;
+
+    /// <summary>
+    /// Human-readable data type name for display.
+    /// </summary>
+    public string DataTypeName { get; set; } = "String";
+
+    /// <summary>
+    /// Whether the node supports reading (has CurrentRead in AccessLevel).
+    /// </summary>
+    public bool IsReadable => (AccessLevel & AccessLevels.CurrentRead) != 0;
+
+    /// <summary>
+    /// Whether the node supports writing (has CurrentWrite in AccessLevel).
+    /// </summary>
+    public bool IsWritable => (AccessLevel & AccessLevels.CurrentWrite) != 0;
+
+    /// <summary>
+    /// Access string for display: "R", "W", "RW", or "-".
+    /// </summary>
+    public string AccessString =>
+        IsReadable && IsWritable ? "RW" :
+        IsReadable ? "R" :
+        IsWritable ? "W" : "-";
+    /// Indicates if this node is selected for display in the Scope view.
+    /// </summary>
+    public bool IsSelectedForScope { get; set; }
+
     public string StatusString
     {
         get

@@ -127,6 +127,9 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
+        _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
+        _statusBar.Add(new Shortcut(Key.Space, "Select", null));  // Visual hint only - handled in MonitoredItemsView
+        _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
         // Company branding label (width-aware, overlaid on status bar row)
@@ -176,6 +179,7 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredItemsView.WriteRequested += OnWriteRequested;
         _monitoredItemsView.RecordRequested += OnRecordRequested;
         _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
@@ -273,7 +277,7 @@ public class MainWindow : Toplevel
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
-                    new MenuItem("_Trend Plot...", "", ShowTrendPlot),
+                    new MenuItem("_Scope...", "Ctrl+G", LaunchScope),
                     new MenuItem("_Refresh Tree", "", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     new MenuItem("_Settings...", "", ShowSettings)
@@ -509,6 +513,15 @@ public class MainWindow : Toplevel
         }
     }
 
+    private void WriteSelected()
+    {
+        var item = _monitoredItemsView.SelectedItem;
+        if (item != null)
+        {
+            OnWriteRequested(item);
+        }
+    }
+
     private void OnNodeSelected(BrowsedNode node)
     {
         _ = _nodeDetailsView.ShowNodeAsync(node);
@@ -534,6 +547,88 @@ public class MainWindow : Toplevel
     private void OnUnsubscribeRequested(MonitoredNode item)
     {
         _ = _subscriptionManager?.RemoveNodeAsync(item.ClientHandle);
+    }
+
+    private void OnWriteRequested(MonitoredNode item)
+    {
+        if (!_client.IsConnected)
+        {
+            _logger.Warning("Cannot write: not connected");
+            return;
+        }
+
+        // Check if node is writable
+        if (!item.IsWritable)
+        {
+            _logger.Warning($"Cannot write to {item.DisplayName}: node is read-only");
+            MessageBox.Query("Write", $"Node '{item.DisplayName}' is read-only", "OK");
+            return;
+        }
+
+        // Check if data type is supported for writing
+        if (!Utilities.OpcValueConverter.IsWriteSupported(item.DataType))
+        {
+            _logger.Warning($"Write not supported for data type: {item.DataTypeName}");
+            MessageBox.Query("Write", $"Write not supported for data type: {item.DataTypeName}", "OK");
+            return;
+        }
+
+        // Show write dialog
+        var dialog = new WriteValueDialog(
+            item.NodeId,
+            item.DisplayName,
+            item.DataType,
+            item.DataTypeName,
+            item.Value);
+
+        Application.Run(dialog);
+
+        if (dialog.Confirmed && dialog.ParsedValue != null)
+        {
+            _ = WriteValueAsync(item, dialog.ParsedValue);
+        }
+    }
+
+    private async Task WriteValueAsync(MonitoredNode item, object value)
+    {
+        try
+        {
+            ShowActivity("Writing...");
+
+            var statusCode = await _client.WriteValueAsync(item.NodeId, value);
+
+            UiThread.Run(() =>
+            {
+                HideActivity();
+
+                if (Opc.Ua.StatusCode.IsGood(statusCode))
+                {
+                    _logger.Info($"Wrote {FormatValueForLog(value)} to {item.NodeId}");
+                }
+                else
+                {
+                    var statusName = $"0x{statusCode.Code:X8}";
+                    _logger.Error($"Write failed ({statusName}): {item.NodeId}");
+                    MessageBox.ErrorQuery("Write Failed", $"Write failed: {statusName}", "OK");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            UiThread.Run(() =>
+            {
+                HideActivity();
+                _logger.Error($"Write error: {ex.Message}");
+                MessageBox.ErrorQuery("Write Error", ex.Message, "OK");
+            });
+        }
+    }
+
+    private static string FormatValueForLog(object value)
+    {
+        if (value is string s)
+            return $"\"{s}\"";
+        return value.ToString() ?? "null";
     }
 
     private void OnValueChanged(MonitoredNode item)
@@ -684,15 +779,23 @@ public class MainWindow : Toplevel
         }
     }
 
-    private void ShowTrendPlot()
+    private void LaunchScope()
     {
-        var dialog = new TrendPlotDialog(_subscriptionManager);
-        Application.Run(dialog);
-    }
+        if (_subscriptionManager == null)
+        {
+            MessageBox.Query("Scope", "Connect to a server first.", "OK");
+            return;
+        }
 
-    private void OnTrendPlotRequested(MonitoredNode node)
-    {
-        var dialog = new TrendPlotDialog(_subscriptionManager, node);
+        var selectedNodes = _monitoredItemsView.ScopeSelectedNodes;
+
+        if (selectedNodes.Count == 0)
+        {
+            MessageBox.Query("Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored items.", "OK");
+            return;
+        }
+
+        var dialog = new ScopeDialog(selectedNodes, _subscriptionManager);
         Application.Run(dialog);
     }
 
@@ -893,8 +996,10 @@ Keyboard Shortcuts:
   F5        - Refresh address space tree
   F10       - Open menu
   Enter     - Subscribe to selected node
-  Space     - Show trend plot for selected item
+  Space     - Toggle scope selection (in Monitored Items)
   Delete    - Unsubscribe from selected item
+  W         - Write value to selected item
+  Ctrl+G    - Open Scope with selected items
   Ctrl+O    - Connect to server
   Ctrl+Q    - Quit
 
@@ -903,7 +1008,13 @@ Navigation:
   Arrow Keys - Navigate within panel
   Space     - Expand/collapse tree node (in tree view)
 
-Trend Plot (in dialog):
+Scope View:
+  - Select up to 5 items using Space in Monitored Items
+  - Press Ctrl+G to launch Scope with selected items
+  - X-axis shows elapsed time
+  - Each signal displayed with distinct color
+
+Scope Controls (in dialog):
   Space     - Pause/resume plotting
   +/-       - Adjust vertical scale
   R         - Reset to auto-scale
@@ -918,7 +1029,6 @@ Tips:
   - Only Variable nodes can be subscribed
   - Double-click a node to subscribe
   - Values update in real-time via subscription
-  - Use View > Trend Plot to visualize values
 ";
         MessageBox.Query("OPC Scope Help", help, "OK");
     }
@@ -932,8 +1042,13 @@ Tips:
 ╚══════════════════════════════════════╝
 
 A lightweight terminal-based OPC UA client
-for browsing, monitoring, and subscribing
-to industrial automation data.
+for browsing, monitoring, and visualizing
+industrial automation data in real-time.
+
+Features:
+  - Multi-signal Scope view (up to 5 signals)
+  - Time-based plotting with auto-scale
+  - CSV recording of monitored values
 
 Current Theme: {theme.Name}
   {theme.Description}

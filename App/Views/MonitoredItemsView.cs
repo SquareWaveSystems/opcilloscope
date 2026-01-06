@@ -27,8 +27,10 @@ public class MonitoredItemsView : FrameView
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
+    public event Action<MonitoredNode>? WriteRequested;
     public event Action? RecordRequested;
     public event Action? StopRecordingRequested;
+    public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
 
     public MonitoredNode? SelectedItem
     {
@@ -42,6 +44,30 @@ public class MonitoredItemsView : FrameView
             return null;
         }
     }
+
+    /// <summary>
+    /// Gets all monitored nodes currently selected for Scope display.
+    /// </summary>
+    public IReadOnlyList<MonitoredNode> ScopeSelectedNodes
+    {
+        get
+        {
+            var selected = new List<MonitoredNode>();
+            foreach (DataRow row in _dataTable.Rows)
+            {
+                if (row["_Item"] is MonitoredNode node && node.IsSelectedForScope)
+                {
+                    selected.Add(node);
+                }
+            }
+            return selected;
+        }
+    }
+
+    /// <summary>
+    /// Gets the count of items selected for Scope.
+    /// </summary>
+    public int ScopeSelectionCount => _cachedScopeSelectionCount;
 
     public MonitoredItemsView()
     {
@@ -84,8 +110,19 @@ public class MonitoredItemsView : FrameView
             }
         };
 
+        // Selection feedback label (shows when max is reached)
+        _selectionFeedback = new Label
+        {
+            Text = "",
+            X = Pos.Center(),
+            Y = 0,
+            Visible = false
+        };
+
         _dataTable = new DataTable();
+        _dataTable.Columns.Add("Scope", typeof(string));  // Checkbox column for scope selection
         _dataTable.Columns.Add("Name", typeof(string));
+        _dataTable.Columns.Add("Access", typeof(string));
         _dataTable.Columns.Add("Value", typeof(string));
         _dataTable.Columns.Add("Time", typeof(string));
         _dataTable.Columns.Add("Status", typeof(string));
@@ -143,6 +180,7 @@ public class MonitoredItemsView : FrameView
         AppThemeManager.ThemeChanged += OnThemeChanged;
 
         Add(_recordingStatus);
+        Add(_selectionFeedback);
         Add(_toggleRecordButton);
         Add(_tableView);
         Add(_emptyStateLabel);
@@ -248,7 +286,9 @@ public class MonitoredItemsView : FrameView
             return;
 
         var row = _dataTable.NewRow();
+        row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Name"] = item.DisplayName;
+        row["Access"] = item.AccessString;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
         row["Status"] = FormatStatusWithIcon(item);
@@ -256,6 +296,12 @@ public class MonitoredItemsView : FrameView
 
         _dataTable.Rows.Add(row);
         _rowsByHandle[item.ClientHandle] = row;
+
+        // Update cache if item is already selected
+        if (item.IsSelectedForScope)
+        {
+            _cachedScopeSelectionCount++;
+        }
 
         _tableView.Update();
         UpdateEmptyState();
@@ -266,6 +312,8 @@ public class MonitoredItemsView : FrameView
         if (!_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
             return;
 
+        row["Access"] = item.AccessString;
+        row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
         row["Status"] = FormatStatusWithIcon(item);
@@ -278,6 +326,14 @@ public class MonitoredItemsView : FrameView
         if (!_rowsByHandle.TryGetValue(clientHandle, out var row))
             return;
 
+        // Clear scope selection before removing
+        if (row["_Item"] is MonitoredNode node && node.IsSelectedForScope)
+        {
+            node.IsSelectedForScope = false;
+            _cachedScopeSelectionCount--;
+            ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
+        }
+
         _dataTable.Rows.Remove(row);
         _rowsByHandle.Remove(clientHandle);
 
@@ -287,6 +343,16 @@ public class MonitoredItemsView : FrameView
 
     public void Clear()
     {
+        // Clear all scope selections before clearing table
+        foreach (DataRow row in _dataTable.Rows)
+        {
+            if (row["_Item"] is MonitoredNode node)
+            {
+                node.IsSelectedForScope = false;
+            }
+        }
+
+        _cachedScopeSelectionCount = 0;
         _dataTable.Rows.Clear();
         _rowsByHandle.Clear();
         _tableView.Update();
@@ -320,10 +386,16 @@ public class MonitoredItemsView : FrameView
         }
         else if (e == Key.Space)
         {
+            // Toggle scope selection for the highlighted item
+            ToggleScopeSelection();
+            e.Handled = true;
+        }
+        else if (e == Key.W)
+        {
             var selected = SelectedItem;
             if (selected != null)
             {
-                TrendPlotRequested?.Invoke(selected);
+                WriteRequested?.Invoke(selected);
                 e.Handled = true;
             }
         }
