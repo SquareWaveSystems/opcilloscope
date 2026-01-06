@@ -18,10 +18,13 @@ public class MonitoredItemsView : FrameView
     private readonly Dictionary<uint, DataRow> _rowsByHandle = new();
 
     // Recording controls
-    private readonly Button _recordButton;
-    private readonly Button _stopButton;
+    private readonly Button _toggleRecordButton;
     private readonly Label _recordingStatus;
     private bool _isRecording;
+
+    // Unicode symbols for record/stop
+    private const string RecordSymbol = "●";  // Red circle for record
+    private const string StopSymbol = "■";    // Square for stop
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
@@ -50,30 +53,27 @@ public class MonitoredItemsView : FrameView
         var theme = AppThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
-        // Create recording control bar
-        _recordButton = new Button
+        // Create recording toggle button (right-aligned)
+        _toggleRecordButton = new Button
         {
-            Text = "Record",
-            X = 0,
+            Text = $" {RecordSymbol} ",
+            X = Pos.AnchorEnd(5),  // Right-aligned
             Y = 0
         };
-        _recordButton.Accepting += (_, _) => RecordRequested?.Invoke();
-
-        _stopButton = new Button
+        _toggleRecordButton.Accepting += (_, _) =>
         {
-            Text = "Stop",
-            X = Pos.Right(_recordButton) + 1,
-            Y = 0,
-            Enabled = false
+            if (_isRecording)
+                StopRecordingRequested?.Invoke();
+            else
+                RecordRequested?.Invoke();
         };
-        _stopButton.Accepting += (_, _) => StopRecordingRequested?.Invoke();
 
         _recordingStatus = new Label
         {
             Text = "",
-            X = Pos.Right(_stopButton) + 2,
+            X = 0,
             Y = 0,
-            Width = Dim.Fill()
+            Width = Dim.Fill()! - 6  // Leave room for the button
         };
 
         _dataTable = new DataTable();
@@ -107,20 +107,18 @@ public class MonitoredItemsView : FrameView
         // Subscribe to theme changes
         AppThemeManager.ThemeChanged += OnThemeChanged;
 
-        Add(_recordButton);
-        Add(_stopButton);
         Add(_recordingStatus);
+        Add(_toggleRecordButton);
         Add(_tableView);
     }
 
     /// <summary>
-    /// Set the recording state and update button enabled states.
+    /// Set the recording state and update toggle button appearance.
     /// </summary>
     public void SetRecordingState(bool isRecording, string statusText = "")
     {
         _isRecording = isRecording;
-        _recordButton.Enabled = !isRecording;
-        _stopButton.Enabled = isRecording;
+        _toggleRecordButton.Text = isRecording ? $" {StopSymbol} " : $" {RecordSymbol} ";
         _recordingStatus.Text = statusText;
     }
 
