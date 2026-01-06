@@ -131,32 +131,32 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.R.WithCtrl, "Rec", ToggleRecording));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
-        // Company branding label (width-aware, overlaid on status bar row)
-        // ColorScheme is set in ApplyTheme() to use theme colors
-        _companyLabel = new Label
+        // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
+        _connectionStatusLabel = new Label
         {
-            X = Pos.AnchorEnd(46),
+            X = Pos.AnchorEnd(17),  // " ○ Not Connected "
             Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
-            Text = "Square Wave Systems 2026"
+            Text = $" {theme.DisconnectedIndicator} "
         };
+        UpdateConnectionStatusLabelStyle(isConnected: false);
 
         // Recording status indicator (right side, left of connection status)
         _recordingStatusLabel = new Label
         {
-            X = Pos.AnchorEnd(40),
+            X = Pos.Left(_connectionStatusLabel) - 4,
             Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
             Text = " ○ "  // Stopped indicator (empty circle)
         };
         UpdateRecordingStatusLabelStyle(isRecording: false);
 
-        // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
-        _connectionStatusLabel = new Label
+        // Company branding label (width-aware, overlaid on status bar row)
+        // ColorScheme is set in ApplyTheme() to use theme colors
+        _companyLabel = new Label
         {
-            X = Pos.AnchorEnd(26),  // Wide enough for " ■ All systems nominal. "
+            X = Pos.Left(_recordingStatusLabel) - 28,
             Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
-            Text = $" {theme.DisconnectedIndicator} "
+            Text = "Square Wave Systems 2026 |"
         };
-        UpdateConnectionStatusLabelStyle(isConnected: false);
 
         // Create activity spinner for async operations (left of company label)
         // ColorScheme is set in ApplyTheme() to use theme colors
@@ -721,13 +721,13 @@ public class MainWindow : Toplevel
     {
         var width = _statusBar.Frame.Width;
 
-        // Width-aware company branding
+        // Width-aware company branding with separator
         if (width >= 120)
-            _companyLabel.Text = "Square Wave Systems 2026";
+            _companyLabel.Text = "Square Wave Systems 2026 |";
         else if (width >= 90)
-            _companyLabel.Text = "SWS 2026";
+            _companyLabel.Text = "SWS 2026 |";
         else
-            _companyLabel.Text = "SWS";
+            _companyLabel.Text = "SWS |";
     }
 
     private void StartConnectingAnimation()
