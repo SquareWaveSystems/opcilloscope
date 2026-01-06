@@ -23,7 +23,7 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ File  Connection  View  Theme  Help                                         │
 ├───────────────────────────────┬─────────────────────────────────────────────┤
-│ Address Space                 │ Monitored Items                             │
+│ Address Space                 │ Monitored Variables                         │
 │                               │                                             │
 │ ▾ Root                        │ Name           │ Value    │ Time   │ Status │
 │   ▾ Objects                   │────────────────┼──────────┼────────┼────────│
@@ -145,7 +145,7 @@ OpcScope/
 │   ├── MainWindow.cs           # Main window layout and orchestration
 │   ├── Views/
 │   │   ├── AddressSpaceView.cs # TreeView for browsing
-│   │   ├── MonitoredItemsView.cs # TableView for subscriptions
+│   │   ├── MonitoredVariablesView.cs # TableView for subscriptions
 │   │   ├── NodeDetailsView.cs  # Attribute display panel
 │   │   └── LogView.cs          # Event log ListView
 │   └── Dialogs/
@@ -157,7 +157,7 @@ OpcScope/
 │   ├── NodeBrowser.cs          # Address space navigation logic
 │   ├── SubscriptionManager.cs  # OPC UA Subscription with server-pushed notifications
 │   └── Models/
-│       ├── MonitoredNode.cs    # ViewModel for monitored items
+│       ├── MonitoredNode.cs    # ViewModel for monitored variables
 │       └── BrowsedNode.cs      # ViewModel for tree nodes
 └── Utilities/
     ├── UiThread.cs             # Thread marshalling helpers

@@ -23,19 +23,19 @@ download_package() {
 
 # Main project packages
 download_package "Terminal.Gui" "2.0.0"
-download_package "OPCFoundation.NetStandard.Opc.Ua.Client" "1.5.374.126"
+download_package "OPCFoundation.NetStandard.Opc.Ua.Client" "1.5.378.65"
 
 # OPC Foundation dependencies
-download_package "OPCFoundation.NetStandard.Opc.Ua.Core" "1.5.374.126"
-download_package "OPCFoundation.NetStandard.Opc.Ua.Configuration" "1.5.374.126"
-download_package "OPCFoundation.NetStandard.Opc.Ua.Security.Certificates" "1.5.374.126"
-download_package "OPCFoundation.NetStandard.Opc.Ua.Bindings.Https" "1.5.374.126"
+download_package "OPCFoundation.NetStandard.Opc.Ua.Core" "1.5.378.65"
+download_package "OPCFoundation.NetStandard.Opc.Ua.Configuration" "1.5.378.65"
+download_package "OPCFoundation.NetStandard.Opc.Ua.Security.Certificates" "1.5.378.65"
+download_package "OPCFoundation.NetStandard.Opc.Ua.Bindings.Https" "1.5.378.65"
 
 # Test project packages
 download_package "coverlet.collector" "6.0.2"
 download_package "Microsoft.NET.Test.Sdk" "17.11.0"
 download_package "Moq" "4.20.72"
-download_package "OPCFoundation.NetStandard.Opc.Ua.Server" "1.5.374.126"
+download_package "OPCFoundation.NetStandard.Opc.Ua.Server" "1.5.378.65"
 download_package "xunit" "2.9.0"
 download_package "xunit.runner.visualstudio" "2.8.0"
 
