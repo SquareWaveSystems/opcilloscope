@@ -24,9 +24,13 @@ public class ConnectDialog : Dialog
         Width = 60;
         Height = 9;
 
-        // Apply theme styling
+        // Apply theme styling - double-line border for emphasis with grey border color
         ColorScheme = theme.DialogColorScheme;
-        BorderStyle = theme.BorderLineStyle;
+        BorderStyle = LineStyle.Double;
+        if (Border != null)
+        {
+            Border.ColorScheme = theme.BorderColorScheme;
+        }
 
         var endpointLabel = new Label
         {
@@ -53,13 +57,23 @@ public class ConnectDialog : Dialog
             ColorScheme = theme.MainColorScheme
         };
 
+        // Default button highlighted with amber
+        var defaultButtonScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+
         var connectButton = new Button
         {
             X = Pos.Center() - 10,
             Y = 5,
             Text = $"{theme.ButtonPrefix}Connect{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = theme.ButtonColorScheme
+            ColorScheme = defaultButtonScheme
         };
 
         connectButton.Accepting += (_, _) =>

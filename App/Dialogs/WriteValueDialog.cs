@@ -30,9 +30,13 @@ public class WriteValueDialog : Dialog
         Width = 60;
         Height = 14;
 
-        // Apply theme styling
+        // Apply theme styling - double-line border for emphasis with grey border color
         ColorScheme = theme.DialogColorScheme;
-        BorderStyle = theme.BorderLineStyle;
+        BorderStyle = LineStyle.Double;
+        if (Border != null)
+        {
+            Border.ColorScheme = theme.BorderColorScheme;
+        }
 
         // Node information section (read-only)
         var nodeIdLabel = new Label
@@ -110,28 +114,21 @@ public class WriteValueDialog : Dialog
             Text = currentValue ?? ""
         };
 
-        // Error display label
-        _errorLabel = new Label
+        // Default button highlighted with amber
+        var defaultButtonScheme = new ColorScheme
         {
-            X = 1,
-            Y = Pos.Bottom(_valueField),
-            Width = Dim.Fill()! - 1,
-            Text = "",
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Terminal.Gui.Attribute(Color.Red, theme.Background)
-            }
+            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
 
-        // Real-time validation on text change
-        _valueField.TextChanged += (_, _) => ValidateInput();
-
-        // Buttons using Dialog's AddButton pattern
         var writeButton = new Button
         {
             Text = $"{theme.ButtonPrefix}Write{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = theme.ButtonColorScheme
+            ColorScheme = defaultButtonScheme
         };
 
         var cancelButton = new Button

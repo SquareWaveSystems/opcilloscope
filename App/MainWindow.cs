@@ -27,10 +27,17 @@ public class MainWindow : Toplevel
     private readonly LogView _logView;
     private readonly StatusBar _statusBar;
     private readonly Label _companyLabel;
+    private readonly Label _connectionStatusLabel;
     private readonly SpinnerView _activitySpinner;
     private readonly Label _activityLabel;
     private readonly CsvRecordingManager _csvRecordingManager;
     private object? _recordingStatusTimer;
+
+    // Connecting animation state
+    private object? _connectingAnimationTimer;
+    private int _connectingDotCount = 1;
+    private bool _isConnecting;
+    private bool _isConnected;
 
     private string? _lastEndpoint;
 
@@ -41,6 +48,18 @@ public class MainWindow : Toplevel
         _nodeBrowser = new NodeBrowser(_client, _logger);
         _csvRecordingManager = new CsvRecordingManager(_logger);
 
+        // Override global "Menu" ColorScheme BEFORE creating any views
+        // This prevents StatusBar's blue background flash on first render
+        var theme = ThemeManager.Current;
+        Colors.ColorSchemes["Menu"] = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+
         // Wire up client events
         _client.Connected += OnClientConnected;
         _client.Disconnected += OnClientDisconnected;
@@ -49,8 +68,8 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
-        // Set initial window title
-        Title = "OPC Scope - Not Connected";
+        // Set initial window title (status shown in status bar)
+        Title = "OPC Scope";
 
         // Create menu bar
         _menuBar = CreateMenuBar();
@@ -93,6 +112,17 @@ public class MainWindow : Toplevel
         {
             Visible = true
         };
+
+        // Also set ColorScheme directly on the StatusBar instance
+        _statusBar.ColorScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+
         _statusBar.Add(new Shortcut(Key.F1, "Help", ShowHelp));
         _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
@@ -102,19 +132,29 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
-        // Company branding label (bottom right, separate from status bar shortcuts)
+        // Company branding label (width-aware, overlaid on status bar row)
+        // ColorScheme is set in ApplyTheme() to use theme colors
         _companyLabel = new Label
         {
-            X = Pos.AnchorEnd(26),
-            Y = Pos.AnchorEnd(1),
-            Text = "Square Wave Systems 2026",
-            ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.DarkGray, Color.Black) }
+            X = Pos.AnchorEnd(46),
+            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
+            Text = "Square Wave Systems 2026"
         };
 
-        // Create activity spinner for async operations
+        // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
+        _connectionStatusLabel = new Label
+        {
+            X = Pos.AnchorEnd(26),  // Wide enough for " ■ All systems nominal. "
+            Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
+            Text = $" {theme.DisconnectedIndicator} "
+        };
+        UpdateConnectionStatusLabelStyle(isConnected: false);
+
+        // Create activity spinner for async operations (left of company label)
+        // ColorScheme is set in ApplyTheme() to use theme colors
         _activitySpinner = new SpinnerView
         {
-            X = Pos.AnchorEnd(20),
+            X = Pos.AnchorEnd(62),
             Y = 0,
             Visible = false,
             AutoSpin = true
@@ -130,6 +170,9 @@ public class MainWindow : Toplevel
 
         _statusBar.Add(_activitySpinner);
         _statusBar.Add(_activityLabel);
+
+        // Initial width-aware update (will also be called from ApplyTheme)
+        Initialized += (_, _) => UpdateCompanyLabelForWidth();
 
         // Wire up view events
         _addressSpaceView.NodeSelected += OnNodeSelected;
@@ -152,13 +195,53 @@ public class MainWindow : Toplevel
         Add(_logView);
         Add(_statusBar);
         Add(_companyLabel);
+        Add(_connectionStatusLabel);
 
         // Apply initial theme (after all controls are created)
         ApplyTheme();
 
-        // Log startup
-        _logger.Info("OPC Scope started - Square Wave Systems");
-        _logger.Info("Press F10 for menu, or use Connection -> Connect");
+        // Run startup sequence
+        _ = RunStartupSequenceAsync();
+    }
+
+    private async Task RunStartupSequenceAsync()
+    {
+        var theme = ThemeManager.Current;
+
+        // Show initializing message in accent color
+        UiThread.Run(() =>
+        {
+            Title = "OPC Scope";
+            _connectionStatusLabel.Text = " ■ INITIALIZING... ";
+            _connectionStatusLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background)
+            };
+            SetNeedsLayout();
+        });
+
+        await Task.Delay(2000);
+
+        // Show nominal message in bright/success style
+        UiThread.Run(() =>
+        {
+            _connectionStatusLabel.Text = " ■ All systems nominal. ";
+            _connectionStatusLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Terminal.Gui.Attribute(theme.StatusGood, theme.Background)
+            };
+            SetNeedsLayout();
+        });
+
+        await Task.Delay(3400);
+
+        // Show normal disconnected state and log startup
+        UiThread.Run(() =>
+        {
+            UpdateConnectionStatus(isConnected: false);
+            _logger.Info("OPC Scope started - Square Wave Systems");
+            _logger.Info("Press F10 for menu, or use Connection -> Connect");
+        });
     }
 
     private MenuBar CreateMenuBar()
@@ -213,23 +296,68 @@ public class MainWindow : Toplevel
     {
         var theme = ThemeManager.Current;
 
-        // Apply main window styling
+        // Update global "Menu" ColorScheme (used by StatusBar)
+        Colors.ColorSchemes["Menu"] = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+
+        // Apply main window styling - double-line for emphasis
         ColorScheme = theme.MainColorScheme;
-        BorderStyle = theme.BorderLineStyle;
+        BorderStyle = theme.EmphasizedBorderStyle;
+
+        // Apply grey border color to main window border (consistent across terminals)
+        if (Border != null)
+        {
+            Border.ColorScheme = theme.BorderColorScheme;
+        }
 
         // Apply styling to company label (subtle in status bar)
         _companyLabel.ColorScheme = new ColorScheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.ForegroundDim, theme.Background)
+            Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
 
-        // Apply styling to menu and status bar
+        // Apply styling to menu bar
         ThemeStyler.ApplyToMenuBar(_menuBar, theme);
-        ThemeStyler.ApplyToStatusBar(_statusBar, theme);
 
-        // Apply to all child views
-        ThemeStyler.ApplyToFrame(_addressSpaceView, theme);
+        // Apply clean status bar styling (no blue background)
+        // Must set ColorScheme AND call SetNeedsDisplay to override Terminal.Gui defaults
+        var cleanStatusBarScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+        _statusBar.ColorScheme = cleanStatusBarScheme;
+        _statusBar.SetNeedsLayout();
+
+        // Also apply theme to connection status label
+        UpdateConnectionStatusLabelStyle(_isConnected);
+
+        // Apply theme to activity spinner and label (for async operations)
+        _activitySpinner.ColorScheme = cleanStatusBarScheme;
+        _activityLabel.ColorScheme = cleanStatusBarScheme;
+
+        // Update width-aware company label
+        UpdateCompanyLabelForWidth();
+
+        // Apply to child views with border differentiation
+        // MonitoredItems gets double-line (emphasized)
+        _monitoredItemsView.BorderStyle = theme.EmphasizedBorderStyle;
         ThemeStyler.ApplyToFrame(_monitoredItemsView, theme);
+
+        // Other panels get single-line (secondary)
+        _addressSpaceView.BorderStyle = theme.SecondaryBorderStyle;
+        _nodeDetailsView.BorderStyle = theme.SecondaryBorderStyle;
+        _logView.BorderStyle = theme.SecondaryBorderStyle;
+        ThemeStyler.ApplyToFrame(_addressSpaceView, theme);
         ThemeStyler.ApplyToFrame(_nodeDetailsView, theme);
         ThemeStyler.ApplyToFrame(_logView, theme);
     }
@@ -239,6 +367,13 @@ public class MainWindow : Toplevel
         Application.Invoke(() =>
         {
             ApplyTheme();
+
+            // Update connection status label with new theme colors
+            _connectionStatusLabel.Text = _isConnected
+                ? $" {theme.ConnectedIndicator} "
+                : $" {theme.DisconnectedIndicator} ";
+            UpdateConnectionStatusLabelStyle(_isConnected);
+
             _logger.Info($"Theme changed to: {theme.Name}");
             SetNeedsLayout();
         });
@@ -261,7 +396,7 @@ public class MainWindow : Toplevel
         // Disconnect if already connected
         Disconnect();
 
-        UpdateConnectionStatus("Connecting...");
+        StartConnectingAnimation();
         ShowActivity("Connecting...");
 
         try
@@ -275,6 +410,7 @@ public class MainWindow : Toplevel
         }
         finally
         {
+            StopConnectingAnimation();
             UiThread.Run(HideActivity);
         }
     }
@@ -300,7 +436,7 @@ public class MainWindow : Toplevel
         _addressSpaceView.Initialize(_nodeBrowser);
 
         // Update status on UI thread
-        UiThread.Run(() => UpdateConnectionStatus($"Connected to {_client.CurrentEndpoint}"));
+        UiThread.Run(() => UpdateConnectionStatus(isConnected: true));
     }
 
     private void Disconnect()
@@ -320,7 +456,7 @@ public class MainWindow : Toplevel
         _monitoredItemsView.Clear();
         _nodeDetailsView.Clear();
 
-        UpdateConnectionStatus("Disconnected");
+        UpdateConnectionStatus(isConnected: false);
     }
 
     private async Task ReconnectAsync()
@@ -331,7 +467,7 @@ public class MainWindow : Toplevel
             return;
         }
 
-        UpdateConnectionStatus("Reconnecting...");
+        StartConnectingAnimation();
         ShowActivity("Reconnecting...");
 
         try
@@ -345,6 +481,7 @@ public class MainWindow : Toplevel
         }
         finally
         {
+            StopConnectingAnimation();
             UiThread.Run(HideActivity);
         }
     }
@@ -517,7 +654,7 @@ public class MainWindow : Toplevel
     {
         UiThread.Run(() =>
         {
-            UpdateConnectionStatus("Disconnected");
+            UpdateConnectionStatus(isConnected: false);
         });
     }
 
@@ -529,10 +666,81 @@ public class MainWindow : Toplevel
         });
     }
 
-    private void UpdateConnectionStatus(string status)
+    private void UpdateConnectionStatus(bool isConnected)
     {
-        Title = $"OPC Scope - {status}";
+        _isConnected = isConnected;
+        var theme = ThemeManager.Current;
+
+        // Update title (plain text)
+        Title = "OPC Scope";
+
+        // Update colored status label in status bar
+        _connectionStatusLabel.Text = isConnected
+            ? $" {theme.ConnectedIndicator} "
+            : $" {theme.DisconnectedIndicator} ";
+        UpdateConnectionStatusLabelStyle(isConnected);
+
         SetNeedsLayout();
+    }
+
+    private void UpdateConnectionStatusLabelStyle(bool isConnected)
+    {
+        var theme = ThemeManager.Current;
+        _connectionStatusLabel.ColorScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background),
+            Focus = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(
+                isConnected ? theme.StatusGood : theme.Accent,
+                theme.Background)
+        };
+    }
+
+    private void UpdateCompanyLabelForWidth()
+    {
+        var width = _statusBar.Frame.Width;
+
+        // Width-aware company branding
+        if (width >= 120)
+            _companyLabel.Text = "Square Wave Systems 2026";
+        else if (width >= 90)
+            _companyLabel.Text = "SWS 2026";
+        else
+            _companyLabel.Text = "SWS";
+    }
+
+    private void StartConnectingAnimation()
+    {
+        _isConnecting = true;
+        _connectingDotCount = 1;
+        _connectingAnimationTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(400), () =>
+        {
+            if (!_isConnecting)
+                return false; // Stop animation
+
+            _connectingDotCount = (_connectingDotCount % 3) + 1;
+            var dots = new string('.', _connectingDotCount);
+            _connectionStatusLabel.Text = $" Connecting{dots} ";
+            SetNeedsLayout();
+            return true; // Continue animation
+        });
+    }
+
+    private void StopConnectingAnimation()
+    {
+        _isConnecting = false;
+        if (_connectingAnimationTimer != null)
+        {
+            Application.RemoveTimeout(_connectingAnimationTimer);
+            _connectingAnimationTimer = null;
+        }
     }
 
     /// <summary>
@@ -865,6 +1073,7 @@ License: MIT
         if (disposing)
         {
             StopRecordingStatusUpdates();
+            StopConnectingAnimation();
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _subscriptionManager?.Dispose();
