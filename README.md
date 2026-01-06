@@ -77,8 +77,6 @@ Download the latest release for your platform from [GitHub Releases](https://git
 ### Build from Source
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
-**Prerequisites:** [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-
 ```bash
 # Clone the repository
 git clone https://github.com/BrettKinny/OpcScope.git
