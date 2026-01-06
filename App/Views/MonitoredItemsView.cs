@@ -67,7 +67,6 @@ public class MonitoredItemsView : FrameView
                     selected.Add(node);
                 }
             }
-            _cachedScopeSelectionCount = selected.Count;
             return selected;
         }
     }
@@ -326,6 +325,13 @@ public class MonitoredItemsView : FrameView
 
     private void HideSelectionFeedback()
     {
+        // Clear any existing timer
+        if (_feedbackTimerToken != null)
+        {
+            Application.RemoveTimeout(_feedbackTimerToken);
+            _feedbackTimerToken = null;
+        }
+
         _selectionFeedback.Visible = false;
         _selectionFeedback.Text = "";
         SetNeedsLayout();
