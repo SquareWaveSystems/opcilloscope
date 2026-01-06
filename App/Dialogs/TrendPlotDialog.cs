@@ -32,9 +32,13 @@ public class TrendPlotDialog : Dialog
         Width = Dim.Percent(85);
         Height = Dim.Percent(85);
 
-        // Apply theme-based styling using Terminal.Gui v2 features
+        // Apply theme-based styling - double-line border for emphasis with grey border color
         ColorScheme = Theme.DialogColorScheme;
-        BorderStyle = Theme.BorderLineStyle;
+        BorderStyle = LineStyle.Double;
+        if (Border != null)
+        {
+            Border.ColorScheme = Theme.BorderColorScheme;
+        }
 
         // Create the trend plot view - takes up most of the dialog
         _trendPlotView = new TrendPlotView
@@ -130,6 +134,10 @@ public class TrendPlotDialog : Dialog
             ColorScheme = Theme.DialogColorScheme,
             BorderStyle = Theme.BorderLineStyle
         };
+        if (dialog.Border != null)
+        {
+            dialog.Border.ColorScheme = Theme.BorderColorScheme;
+        }
 
         var headerLabel = new Label
         {

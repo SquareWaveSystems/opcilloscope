@@ -22,17 +22,8 @@ public class MonitoredItemsView : FrameView
     private readonly Label _recordingStatus;
     private bool _isRecording;
 
-    // Scope selection
-    private const int MaxScopeSelections = 5;
-    private readonly Label _selectionFeedback;
-    private object? _feedbackTimerToken;
-    private int _cachedScopeSelectionCount;
-
-    // Unicode symbols for record/stop and checkbox
-    private const string RecordSymbol = "●";  // Red circle for record
-    private const string StopSymbol = "■";    // Square for stop
-    private const string CheckedBox = "[x]";
-    private const string UncheckedBox = "[ ]";
+    // Empty state
+    private readonly Label _emptyStateLabel;
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action<MonitoredNode>? WriteRequested;
@@ -82,17 +73,18 @@ public class MonitoredItemsView : FrameView
         Title = " Monitored Items ";
         CanFocus = true;
 
-        // Apply theme styling
+        // Apply theme styling - emphasized (double-line) for this panel
         var theme = AppThemeManager.Current;
-        BorderStyle = theme.FrameLineStyle;
+        BorderStyle = theme.EmphasizedBorderStyle;
 
-        // Create recording toggle button (right-aligned)
+        // Create recording toggle button with text label (right-aligned)
         _toggleRecordButton = new Button
         {
-            Text = $" {RecordSymbol} ",
-            X = Pos.AnchorEnd(5),  // Right-aligned
+            Text = $" {theme.StoppedLabel} ",
+            X = Pos.AnchorEnd(10),  // Right-aligned, wider for text
             Y = 0
         };
+        UpdateRecordingButtonStyle();
         _toggleRecordButton.Accepting += (_, _) =>
         {
             if (_isRecording)
@@ -106,7 +98,15 @@ public class MonitoredItemsView : FrameView
             Text = "",
             X = 0,
             Y = 0,
-            Width = Dim.Fill()! - 6  // Leave room for the button
+            Width = Dim.Fill()! - 12,  // Leave room for the button
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            }
         };
 
         // Selection feedback label (shows when max is reached)
@@ -134,7 +134,15 @@ public class MonitoredItemsView : FrameView
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             Table = new DataTableSource(_dataTable),
-            FullRowSelect = true
+            FullRowSelect = true,
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.Foreground, theme.Background),
+                Focus = new Attribute(theme.ForegroundBright, theme.Background),
+                HotNormal = new Attribute(theme.Accent, theme.Background),
+                HotFocus = new Attribute(theme.AccentBright, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            }
         };
 
         // Configure table style for cleaner look
@@ -146,7 +154,26 @@ public class MonitoredItemsView : FrameView
         _tableView.Style.ShowVerticalHeaderLines = false;
         _tableView.Style.ExpandLastColumn = true;
 
+        // Note: Status icons (●/▲/✕) in text provide visual status indication
+        // Terminal.Gui v2 TableView doesn't support per-row coloring
+
         _tableView.KeyDown += HandleKeyDown;
+
+        // Create empty state label
+        _emptyStateLabel = new Label
+        {
+            X = Pos.Center(),
+            Y = Pos.Center(),
+            Text = "Select nodes to monitor",
+            ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            }
+        };
 
         // Subscribe to theme changes
         AppThemeManager.ThemeChanged += OnThemeChanged;
@@ -155,6 +182,42 @@ public class MonitoredItemsView : FrameView
         Add(_selectionFeedback);
         Add(_toggleRecordButton);
         Add(_tableView);
+        Add(_emptyStateLabel);
+
+        // Initial state
+        UpdateEmptyState();
+    }
+
+    private void UpdateEmptyState()
+    {
+        var isEmpty = _dataTable.Rows.Count == 0;
+        _emptyStateLabel.Visible = isEmpty;
+        _tableView.Visible = !isEmpty;
+    }
+
+    private void UpdateRecordingButtonStyle()
+    {
+        var theme = AppThemeManager.Current;
+        _toggleRecordButton.Text = _isRecording
+            ? $" {theme.RecordingLabel} "
+            : $" {theme.StoppedLabel} ";
+
+        _toggleRecordButton.ColorScheme = new ColorScheme
+        {
+            Normal = new Attribute(
+                _isRecording ? theme.Accent : theme.MutedText,
+                theme.Background),
+            Focus = new Attribute(
+                _isRecording ? theme.AccentBright : theme.Foreground,
+                theme.Background),
+            HotNormal = new Attribute(
+                _isRecording ? theme.Accent : theme.MutedText,
+                theme.Background),
+            HotFocus = new Attribute(
+                _isRecording ? theme.AccentBright : theme.Foreground,
+                theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        };
     }
 
     /// <summary>
@@ -163,7 +226,7 @@ public class MonitoredItemsView : FrameView
     public void SetRecordingState(bool isRecording, string statusText = "")
     {
         _isRecording = isRecording;
-        _toggleRecordButton.Text = isRecording ? $" {StopSymbol} " : $" {RecordSymbol} ";
+        UpdateRecordingButtonStyle();
         _recordingStatus.Text = statusText;
     }
 
@@ -179,7 +242,39 @@ public class MonitoredItemsView : FrameView
     {
         Application.Invoke(() =>
         {
-            BorderStyle = theme.FrameLineStyle;
+            BorderStyle = theme.EmphasizedBorderStyle;
+            UpdateRecordingButtonStyle();
+
+            // Update recording status label color
+            _recordingStatus.ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            };
+
+            // Update empty state label color
+            _emptyStateLabel.ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.MutedText, theme.Background),
+                Focus = new Attribute(theme.MutedText, theme.Background),
+                HotNormal = new Attribute(theme.MutedText, theme.Background),
+                HotFocus = new Attribute(theme.MutedText, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            };
+
+            // Update table view colors
+            _tableView.ColorScheme = new ColorScheme
+            {
+                Normal = new Attribute(theme.Foreground, theme.Background),
+                Focus = new Attribute(theme.ForegroundBright, theme.Background),
+                HotNormal = new Attribute(theme.Accent, theme.Background),
+                HotFocus = new Attribute(theme.AccentBright, theme.Background),
+                Disabled = new Attribute(theme.MutedText, theme.Background)
+            };
+
             SetNeedsLayout();
         });
     }
@@ -195,7 +290,7 @@ public class MonitoredItemsView : FrameView
         row["Access"] = item.AccessString;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
-        row["Status"] = item.StatusString;
+        row["Status"] = FormatStatusWithIcon(item);
         row["_Item"] = item;
 
         _dataTable.Rows.Add(row);
@@ -208,6 +303,7 @@ public class MonitoredItemsView : FrameView
         }
 
         _tableView.Update();
+        UpdateEmptyState();
     }
 
     public void UpdateItem(MonitoredNode item)
@@ -219,7 +315,7 @@ public class MonitoredItemsView : FrameView
         row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
-        row["Status"] = item.StatusString;
+        row["Status"] = FormatStatusWithIcon(item);
 
         _tableView.Update();
     }
@@ -241,6 +337,7 @@ public class MonitoredItemsView : FrameView
         _rowsByHandle.Remove(clientHandle);
 
         _tableView.Update();
+        UpdateEmptyState();
     }
 
     public void Clear()
@@ -258,87 +355,21 @@ public class MonitoredItemsView : FrameView
         _dataTable.Rows.Clear();
         _rowsByHandle.Clear();
         _tableView.Update();
-        ScopeSelectionChanged?.Invoke(0);
+        UpdateEmptyState();
     }
 
-    /// <summary>
-    /// Toggles the scope selection for the currently highlighted item.
-    /// </summary>
-    public void ToggleScopeSelection()
+    private string FormatStatusWithIcon(MonitoredNode item)
     {
-        var selected = SelectedItem;
-        if (selected == null)
-            return;
+        var theme = AppThemeManager.Current;
 
-        if (selected.IsSelectedForScope)
-        {
-            // Deselect
-            selected.IsSelectedForScope = false;
-            _cachedScopeSelectionCount--;
-            UpdateScopeCheckbox(selected);
-            HideSelectionFeedback();
-            ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
-        }
-        else
-        {
-            // Check if we've reached the limit
-            if (ScopeSelectionCount >= MaxScopeSelections)
-            {
-                ShowSelectionFeedback($"Max {MaxScopeSelections} items for Scope");
-                return;
-            }
+        if (item.IsGood)
+            return $"{theme.StatusGoodIcon} Good";
+        else if (item.IsUncertain)
+            return $"{theme.StatusUncertainIcon} Uncertain";
+        else if (item.IsBad)
+            return $"{theme.StatusBadIcon} Bad";
 
-            // Select
-            selected.IsSelectedForScope = true;
-            _cachedScopeSelectionCount++;
-            UpdateScopeCheckbox(selected);
-            HideSelectionFeedback();
-            ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
-        }
-    }
-
-    private void UpdateScopeCheckbox(MonitoredNode item)
-    {
-        if (_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
-        {
-            row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
-            _tableView.Update();
-        }
-    }
-
-    private void ShowSelectionFeedback(string message)
-    {
-        // Cancel any existing timer
-        if (_feedbackTimerToken != null)
-        {
-            Application.RemoveTimeout(_feedbackTimerToken);
-            _feedbackTimerToken = null;
-        }
-
-        _selectionFeedback.Text = message;
-        _selectionFeedback.Visible = true;
-        SetNeedsLayout();
-
-        // Auto-hide after 2 seconds
-        _feedbackTimerToken = Application.AddTimeout(TimeSpan.FromSeconds(2), () =>
-        {
-            Application.Invoke(HideSelectionFeedback);
-            return false;  // Don't repeat
-        });
-    }
-
-    private void HideSelectionFeedback()
-    {
-        // Clear any existing timer
-        if (_feedbackTimerToken != null)
-        {
-            Application.RemoveTimeout(_feedbackTimerToken);
-            _feedbackTimerToken = null;
-        }
-
-        _selectionFeedback.Visible = false;
-        _selectionFeedback.Text = "";
-        SetNeedsLayout();
+        return item.StatusString;
     }
 
     private void HandleKeyDown(object? _, Key e)
