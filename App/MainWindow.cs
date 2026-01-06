@@ -48,6 +48,18 @@ public class MainWindow : Toplevel
         _nodeBrowser = new NodeBrowser(_client, _logger);
         _csvRecordingManager = new CsvRecordingManager(_logger);
 
+        // Override global "Menu" ColorScheme BEFORE creating any views
+        // This prevents StatusBar's blue background flash on first render
+        var theme = ThemeManager.Current;
+        Colors.ColorSchemes["Menu"] = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+
         // Wire up client events
         _client.Connected += OnClientConnected;
         _client.Disconnected += OnClientDisconnected;
@@ -100,6 +112,17 @@ public class MainWindow : Toplevel
         {
             Visible = true
         };
+
+        // Also set ColorScheme directly on the StatusBar instance
+        _statusBar.ColorScheme = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
+
         _statusBar.Add(new Shortcut(Key.F1, "Help", ShowHelp));
         _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
@@ -107,7 +130,6 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
         // Connection status indicator (colored)
-        var theme = ThemeManager.Current;
         _connectionStatusLabel = new Label
         {
             X = Pos.AnchorEnd(40),
@@ -256,6 +278,16 @@ public class MainWindow : Toplevel
     private void ApplyTheme()
     {
         var theme = ThemeManager.Current;
+
+        // Update global "Menu" ColorScheme (used by StatusBar)
+        Colors.ColorSchemes["Menu"] = new ColorScheme
+        {
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+        };
 
         // Apply main window styling - double-line for emphasis
         ColorScheme = theme.MainColorScheme;
