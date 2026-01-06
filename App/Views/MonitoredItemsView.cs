@@ -35,6 +35,8 @@ public class MonitoredItemsView : FrameView
     private const string UncheckedBox = "[ ]";
 
     public event Action<MonitoredNode>? UnsubscribeRequested;
+    public event Action<MonitoredNode>? TrendPlotRequested;
+    public event Action<MonitoredNode>? WriteRequested;
     public event Action? RecordRequested;
     public event Action? StopRecordingRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
@@ -120,6 +122,7 @@ public class MonitoredItemsView : FrameView
         _dataTable = new DataTable();
         _dataTable.Columns.Add("Scope", typeof(string));  // Checkbox column for scope selection
         _dataTable.Columns.Add("Name", typeof(string));
+        _dataTable.Columns.Add("Access", typeof(string));
         _dataTable.Columns.Add("Value", typeof(string));
         _dataTable.Columns.Add("Time", typeof(string));
         _dataTable.Columns.Add("Status", typeof(string));
@@ -190,6 +193,7 @@ public class MonitoredItemsView : FrameView
         var row = _dataTable.NewRow();
         row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Name"] = item.DisplayName;
+        row["Access"] = item.AccessString;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
         row["Status"] = item.StatusString;
@@ -212,6 +216,7 @@ public class MonitoredItemsView : FrameView
         if (!_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
             return;
 
+        row["Access"] = item.AccessString;
         row["Scope"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Value"] = item.Value;
         row["Time"] = item.TimestampString;
@@ -353,6 +358,15 @@ public class MonitoredItemsView : FrameView
             // Toggle scope selection for the highlighted item
             ToggleScopeSelection();
             e.Handled = true;
+        }
+        else if (e == Key.W)
+        {
+            var selected = SelectedItem;
+            if (selected != null)
+            {
+                WriteRequested?.Invoke(selected);
+                e.Handled = true;
+            }
         }
     }
 

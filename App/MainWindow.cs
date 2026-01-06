@@ -97,6 +97,7 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
+        _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
         _statusBar.Add(new Shortcut(Key.Space, "Select", null));  // Visual hint only - handled in MonitoredItemsView
         _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
@@ -134,6 +135,8 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSelected += OnNodeSelected;
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
+        _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredItemsView.WriteRequested += OnWriteRequested;
         _monitoredItemsView.RecordRequested += OnRecordRequested;
         _monitoredItemsView.StopRecordingRequested += OnStopRecordingRequested;
 
@@ -373,6 +376,15 @@ public class MainWindow : Toplevel
         }
     }
 
+    private void WriteSelected()
+    {
+        var item = _monitoredItemsView.SelectedItem;
+        if (item != null)
+        {
+            OnWriteRequested(item);
+        }
+    }
+
     private void OnNodeSelected(BrowsedNode node)
     {
         _ = _nodeDetailsView.ShowNodeAsync(node);
@@ -398,6 +410,88 @@ public class MainWindow : Toplevel
     private void OnUnsubscribeRequested(MonitoredNode item)
     {
         _ = _subscriptionManager?.RemoveNodeAsync(item.ClientHandle);
+    }
+
+    private void OnWriteRequested(MonitoredNode item)
+    {
+        if (!_client.IsConnected)
+        {
+            _logger.Warning("Cannot write: not connected");
+            return;
+        }
+
+        // Check if node is writable
+        if (!item.IsWritable)
+        {
+            _logger.Warning($"Cannot write to {item.DisplayName}: node is read-only");
+            MessageBox.Query("Write", $"Node '{item.DisplayName}' is read-only", "OK");
+            return;
+        }
+
+        // Check if data type is supported for writing
+        if (!Utilities.OpcValueConverter.IsWriteSupported(item.DataType))
+        {
+            _logger.Warning($"Write not supported for data type: {item.DataTypeName}");
+            MessageBox.Query("Write", $"Write not supported for data type: {item.DataTypeName}", "OK");
+            return;
+        }
+
+        // Show write dialog
+        var dialog = new WriteValueDialog(
+            item.NodeId,
+            item.DisplayName,
+            item.DataType,
+            item.DataTypeName,
+            item.Value);
+
+        Application.Run(dialog);
+
+        if (dialog.Confirmed && dialog.ParsedValue != null)
+        {
+            _ = WriteValueAsync(item, dialog.ParsedValue);
+        }
+    }
+
+    private async Task WriteValueAsync(MonitoredNode item, object value)
+    {
+        try
+        {
+            ShowActivity("Writing...");
+
+            var statusCode = await _client.WriteValueAsync(item.NodeId, value);
+
+            UiThread.Run(() =>
+            {
+                HideActivity();
+
+                if (Opc.Ua.StatusCode.IsGood(statusCode))
+                {
+                    _logger.Info($"Wrote {FormatValueForLog(value)} to {item.NodeId}");
+                }
+                else
+                {
+                    var statusName = $"0x{statusCode.Code:X8}";
+                    _logger.Error($"Write failed ({statusName}): {item.NodeId}");
+                    MessageBox.ErrorQuery("Write Failed", $"Write failed: {statusName}", "OK");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            UiThread.Run(() =>
+            {
+                HideActivity();
+                _logger.Error($"Write error: {ex.Message}");
+                MessageBox.ErrorQuery("Write Error", ex.Message, "OK");
+            });
+        }
+    }
+
+    private static string FormatValueForLog(object value)
+    {
+        if (value is string s)
+            return $"\"{s}\"";
+        return value.ToString() ?? "null";
     }
 
     private void OnValueChanged(MonitoredNode item)
@@ -696,6 +790,7 @@ Keyboard Shortcuts:
   Enter     - Subscribe to selected node
   Space     - Toggle scope selection (in Monitored Items)
   Delete    - Unsubscribe from selected item
+  W         - Write value to selected item
   Ctrl+G    - Open Scope with selected items
   Ctrl+O    - Connect to server
   Ctrl+Q    - Quit

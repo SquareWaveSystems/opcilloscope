@@ -150,8 +150,9 @@ public class SubscriptionManager : IDisposable
             _logger.Info($"Subscribed to {displayName}");
             ItemAdded?.Invoke(item);
 
-            // Read initial value
+            // Read initial value and node attributes (AccessLevel, DataType)
             await ReadInitialValueAsync(item);
+            await ReadNodeAttributesAsync(item);
 
             return item;
         }
@@ -208,6 +209,85 @@ public class SubscriptionManager : IDisposable
         {
             _logger.Warning($"Failed to read initial value for {item.DisplayName}: {ex.Message}");
         }
+    }
+
+    private async Task ReadNodeAttributesAsync(MonitoredNode item)
+    {
+        try
+        {
+            // Read AccessLevel and DataType attributes
+            var results = await _clientWrapper.ReadAttributesAsync(
+                item.NodeId,
+                Attributes.AccessLevel,
+                Attributes.DataType);
+
+            if (results.Count >= 2)
+            {
+                // AccessLevel
+                if (StatusCode.IsGood(results[0].StatusCode) && results[0].Value is byte accessLevel)
+                {
+                    item.AccessLevel = accessLevel;
+                }
+
+                // DataType - this is a NodeId that we need to resolve
+                if (StatusCode.IsGood(results[1].StatusCode) && results[1].Value is NodeId dataTypeNodeId)
+                {
+                    var (builtInType, typeName) = ResolveDataType(dataTypeNodeId);
+                    item.DataType = builtInType;
+                    item.DataTypeName = typeName;
+                }
+            }
+
+            // Notify UI about updated attributes
+            ValueChanged?.Invoke(item);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Failed to read attributes for {item.DisplayName}: {ex.Message}");
+        }
+    }
+
+    private (BuiltInType, string) ResolveDataType(NodeId dataTypeNodeId)
+    {
+        // Compare against standard OPC UA DataType NodeIds explicitly for clarity and maintainability
+        if (dataTypeNodeId.NamespaceIndex == 0 && dataTypeNodeId.IdType == IdType.Numeric)
+        {
+            if (dataTypeNodeId.Equals(DataTypeIds.Boolean))
+                return (BuiltInType.Boolean, "Boolean");
+            if (dataTypeNodeId.Equals(DataTypeIds.SByte))
+                return (BuiltInType.SByte, "SByte");
+            if (dataTypeNodeId.Equals(DataTypeIds.Byte))
+                return (BuiltInType.Byte, "Byte");
+            if (dataTypeNodeId.Equals(DataTypeIds.Int16))
+                return (BuiltInType.Int16, "Int16");
+            if (dataTypeNodeId.Equals(DataTypeIds.UInt16))
+                return (BuiltInType.UInt16, "UInt16");
+            if (dataTypeNodeId.Equals(DataTypeIds.Int32))
+                return (BuiltInType.Int32, "Int32");
+            if (dataTypeNodeId.Equals(DataTypeIds.UInt32))
+                return (BuiltInType.UInt32, "UInt32");
+            if (dataTypeNodeId.Equals(DataTypeIds.Int64))
+                return (BuiltInType.Int64, "Int64");
+            if (dataTypeNodeId.Equals(DataTypeIds.UInt64))
+                return (BuiltInType.UInt64, "UInt64");
+            if (dataTypeNodeId.Equals(DataTypeIds.Float))
+                return (BuiltInType.Float, "Float");
+            if (dataTypeNodeId.Equals(DataTypeIds.Double))
+                return (BuiltInType.Double, "Double");
+            if (dataTypeNodeId.Equals(DataTypeIds.String))
+                return (BuiltInType.String, "String");
+            if (dataTypeNodeId.Equals(DataTypeIds.DateTime))
+                return (BuiltInType.DateTime, "DateTime");
+            if (dataTypeNodeId.Equals(DataTypeIds.Guid))
+                return (BuiltInType.Guid, "Guid");
+            if (dataTypeNodeId.Equals(DataTypeIds.ByteString))
+                return (BuiltInType.ByteString, "ByteString");
+
+            // Fallback for other namespace 0 numeric types
+            return (BuiltInType.Variant, dataTypeNodeId.ToString());
+        }
+
+        return (BuiltInType.Variant, dataTypeNodeId.ToString());
     }
 
     public async Task<bool> RemoveNodeAsync(uint clientHandle)
