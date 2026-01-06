@@ -50,23 +50,23 @@ public class MainWindow : Toplevel
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
-        // Create title banner
+        // Create title banner (inline with menu)
         _titleBanner = new Label
         {
-            X = Pos.Center(),
+            X = 0,
             Y = 0,
-            Text = "═══╡ OPC Scope ╞═══",
+            Text = " OpcScope ",
             ColorScheme = new ColorScheme { Normal = new Terminal.Gui.Attribute(Color.BrightCyan, Color.Black) }
         };
 
-        // Create menu bar
+        // Create menu bar (same line as title)
         _menuBar = CreateMenuBar();
 
         // Create main views
         _addressSpaceView = new AddressSpaceView
         {
             X = 0,
-            Y = 2,
+            Y = 1,
             Width = Dim.Percent(35),
             Height = Dim.Percent(60)
         };
@@ -74,7 +74,7 @@ public class MainWindow : Toplevel
         _monitoredItemsView = new MonitoredItemsView
         {
             X = Pos.Right(_addressSpaceView),
-            Y = 2,
+            Y = 1,
             Width = Dim.Fill(),
             Height = Dim.Percent(60)
         };
@@ -177,7 +177,8 @@ public class MainWindow : Toplevel
 
         return new MenuBar
         {
-            Y = 1,
+            X = Pos.Right(_titleBanner),
+            Y = 0,
             Menus = new MenuBarItem[]
             {
                 new MenuBarItem("_File", new MenuItem[]
