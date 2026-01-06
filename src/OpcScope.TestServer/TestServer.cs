@@ -186,6 +186,10 @@ public class TestServer : IAsyncDisposable, IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Synchronous disposal. Note: This blocks on async cleanup.
+    /// Prefer using DisposeAsync() when possible.
+    /// </summary>
     public void Dispose()
     {
         if (!_disposed)
@@ -193,6 +197,7 @@ public class TestServer : IAsyncDisposable, IDisposable
             if (_server != null)
             {
                 // Use async method even in sync Dispose to ensure proper cleanup
+                // Note: This can potentially cause deadlocks in some synchronization contexts
                 _server.StopAsync().GetAwaiter().GetResult();
                 _server.Dispose();
                 _server = null;
