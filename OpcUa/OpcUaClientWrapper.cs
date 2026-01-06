@@ -42,7 +42,35 @@ public class OpcUaClientWrapper : IDisposable
             ProductUri = "urn:OpcScope",
             SecurityConfiguration = new SecurityConfiguration
             {
-                ApplicationCertificate = new CertificateIdentifier(),
+                ApplicationCertificate = new CertificateIdentifier
+                {
+                    StoreType = CertificateStoreType.Directory,
+                    StorePath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "OpcScope", "pki", "own"),
+                    SubjectName = "CN=OpcScope, O=OpcScope, DC=localhost"
+                },
+                TrustedIssuerCertificates = new CertificateTrustList
+                {
+                    StoreType = CertificateStoreType.Directory,
+                    StorePath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "OpcScope", "pki", "issuer")
+                },
+                TrustedPeerCertificates = new CertificateTrustList
+                {
+                    StoreType = CertificateStoreType.Directory,
+                    StorePath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "OpcScope", "pki", "trusted")
+                },
+                RejectedCertificateStore = new CertificateTrustList
+                {
+                    StoreType = CertificateStoreType.Directory,
+                    StorePath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "OpcScope", "pki", "rejected")
+                },
                 AutoAcceptUntrustedCertificates = true,
                 AddAppCertToTrustedStore = false
             },
@@ -264,18 +292,33 @@ public class OpcUaClientWrapper : IDisposable
         }
     }
 
-    private static async Task<EndpointDescription> DiscoverAndSelectEndpointAsync(
+    private async Task<EndpointDescription> DiscoverAndSelectEndpointAsync(
         ApplicationConfiguration config,
         string endpointUrl,
         bool useSecurity)
     {
         // Discover endpoints from the server
         var uri = new Uri(endpointUrl);
+        _logger.Info($"Discovering endpoints at {uri}...");
+
         var endpointConfig = EndpointConfiguration.Create(config);
 #pragma warning disable CS0618 // DiscoveryClient.Create is obsolete but CreateAsync requires ITelemetryContext
         using var client = DiscoveryClient.Create(uri, endpointConfig);
 #pragma warning restore CS0618
-        var endpoints = await client.GetEndpointsAsync(null);
+
+        EndpointDescriptionCollection endpoints;
+        try
+        {
+            endpoints = await client.GetEndpointsAsync(null);
+            _logger.Info($"Found {endpoints.Count} endpoints");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Endpoint discovery failed: {ex.GetType().Name} - {ex.Message}");
+            if (ex.InnerException != null)
+                _logger.Error($"  Inner: {ex.InnerException.Message}");
+            throw;
+        }
 
         // Select the best endpoint based on security preference
         EndpointDescription? selectedEndpoint = null;
