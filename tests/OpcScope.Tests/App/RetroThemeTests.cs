@@ -16,15 +16,15 @@ public class RetroThemeTests
     public void DarkTheme_HasCorrectDescription()
     {
         var theme = new DarkTheme();
-        Assert.Equal("Dark theme", theme.Description);
+        Assert.Equal("Retro CRT dark theme", theme.Description);
     }
 
     [Fact]
     public void DarkTheme_HasDarkBackground()
     {
         var theme = new DarkTheme();
-        // Dark charcoal background
-        Assert.Equal(new Color(30, 32, 36), theme.Background);
+        // Dark charcoal background #1a1a1a
+        Assert.Equal(new Color(26, 26, 26), theme.Background);
     }
 
     [Fact]
@@ -38,15 +38,15 @@ public class RetroThemeTests
     public void LightTheme_HasCorrectDescription()
     {
         var theme = new LightTheme();
-        Assert.Equal("Light theme", theme.Description);
+        Assert.Equal("Retro CRT light theme", theme.Description);
     }
 
     [Fact]
     public void LightTheme_HasLightBackground()
     {
         var theme = new LightTheme();
-        // Off-white background
-        Assert.Equal(new Color(245, 245, 242), theme.Background);
+        // Warm paper white background #f5f5f0
+        Assert.Equal(new Color(245, 245, 240), theme.Background);
     }
 
     [Theory]
@@ -131,32 +131,32 @@ public class RetroThemeTests
     public void DarkTheme_HasErrorColor()
     {
         var theme = new DarkTheme();
-        // Soft red for dark backgrounds
-        Assert.Equal(new Color(230, 90, 90), theme.Error);
+        // Dusty brick red #a65454 for dark backgrounds
+        Assert.Equal(new Color(166, 84, 84), theme.Error);
     }
 
     [Fact]
     public void DarkTheme_HasWarningColor()
     {
         var theme = new DarkTheme();
-        // Warm amber for dark backgrounds
-        Assert.Equal(new Color(230, 180, 80), theme.Warning);
+        // Mustard yellow #c9a227 for dark backgrounds
+        Assert.Equal(new Color(201, 162, 39), theme.Warning);
     }
 
     [Fact]
     public void LightTheme_HasErrorColor()
     {
         var theme = new LightTheme();
-        // Dark red for light backgrounds
-        Assert.Equal(new Color(180, 60, 60), theme.Error);
+        // Dark red #8b4545 for light backgrounds
+        Assert.Equal(new Color(139, 69, 69), theme.Error);
     }
 
     [Fact]
     public void LightTheme_HasWarningColor()
     {
         var theme = new LightTheme();
-        // Dark amber for light backgrounds
-        Assert.Equal(new Color(180, 140, 40), theme.Warning);
+        // Dark mustard #a88620 for light backgrounds
+        Assert.Equal(new Color(168, 134, 32), theme.Warning);
     }
 
     [Fact]
@@ -264,11 +264,40 @@ public class RetroThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
-    public void AllThemes_UseSingleLineBorders(Type themeType)
+    public void AllThemes_UseDoubleBorderAndSingleFrame(Type themeType)
     {
         var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
 
-        Assert.Equal(LineStyle.Single, theme.BorderLineStyle);
+        // Main window border is double-line for emphasis
+        Assert.Equal(LineStyle.Double, theme.BorderLineStyle);
+        // Frame panels use single-line
         Assert.Equal(LineStyle.Single, theme.FrameLineStyle);
+    }
+
+    [Theory]
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
+    public void AllThemes_HaveStatusColors(Type themeType)
+    {
+        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+
+        // New OPC UA status colors
+        Assert.NotEqual(default, theme.StatusGood);
+        Assert.NotEqual(default, theme.StatusBad);
+        Assert.NotEqual(default, theme.StatusUncertain);
+        Assert.NotEqual(default, theme.MutedText);
+    }
+
+    [Theory]
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
+    public void AllThemes_HaveConnectionIndicators(Type themeType)
+    {
+        var theme = (RetroTheme)Activator.CreateInstance(themeType)!;
+
+        Assert.Contains("Connected", theme.ConnectedIndicator);
+        Assert.Contains("Not Connected", theme.DisconnectedIndicator);
+        Assert.Contains("REC", theme.RecordingLabel);
+        Assert.Contains("STOP", theme.StoppedLabel);
     }
 }

@@ -10,6 +10,8 @@ public static class ThemeStyler
 {
     /// <summary>
     /// Applies full theme styling to a view including borders, colors, and spacing.
+    /// Note: Does NOT override BorderStyle - caller should set that explicitly to control
+    /// whether a view uses emphasized (double-line) or secondary (single-line) borders.
     /// </summary>
     public static void ApplyTo(View view, RetroTheme? theme = null)
     {
@@ -18,13 +20,14 @@ public static class ThemeStyler
         // Apply color scheme
         view.ColorScheme = theme.MainColorScheme;
 
-        // Apply border style using Terminal.Gui v2 BorderStyle property
-        view.BorderStyle = theme.FrameLineStyle;
+        // Note: BorderStyle is NOT set here - callers should set it explicitly
+        // to control emphasized vs secondary border styling
 
-        // Configure border colors
+        // Configure border colors - use BorderColorScheme for consistent grey borders
+        // that don't change to amber/yellow when focused (avoids terminal inconsistencies)
         if (view.Border != null)
         {
-            view.Border.ColorScheme = theme.FrameColorScheme;
+            view.Border.ColorScheme = theme.BorderColorScheme;
         }
 
         // Apply margin and padding from theme
@@ -62,7 +65,7 @@ public static class ThemeStyler
 
         if (dialog.Border != null)
         {
-            dialog.Border.ColorScheme = theme.FrameColorScheme;
+            dialog.Border.ColorScheme = theme.BorderColorScheme;
         }
     }
 

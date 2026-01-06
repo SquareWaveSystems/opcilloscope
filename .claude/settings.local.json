@@ -6,7 +6,11 @@
       "Bash(grep:*)",
       "mcp__context7__resolve-library-id",
       "WebFetch(domain:github.com)",
-      "Bash(dotnet test:*)"
+      "Bash(dotnet test:*)",
+      "WebSearch"
     ]
+  },
+  "remote": {
+    "defaultEnvironmentId": "env_01CxDx34PWZxitXpLTHPR3ME"
   }
 }

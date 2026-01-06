@@ -28,6 +28,14 @@ public abstract class RetroTheme
     public abstract Color Error { get; }
     public abstract Color Warning { get; }
 
+    // === OPC UA Status Colors ===
+    public abstract Color StatusGood { get; }       // Good status - muted green
+    public abstract Color StatusBad { get; }        // Bad status - dusty red
+    public abstract Color StatusUncertain { get; }  // Uncertain status - amber
+
+    // === Muted Text ===
+    public abstract Color MutedText { get; }        // For timestamps, attribution, secondary info
+
     // === Terminal.Gui v2 LineStyle for borders ===
     /// <summary>
     /// The LineStyle used for view borders (Single, Double, Rounded, etc.)
@@ -38,6 +46,16 @@ public abstract class RetroTheme
     /// The LineStyle used for frames/panels (can differ from main borders)
     /// </summary>
     public virtual LineStyle FrameLineStyle => LineStyle.Double;
+
+    /// <summary>
+    /// LineStyle for emphasized panels (main window, monitored items) - typically double-line
+    /// </summary>
+    public virtual LineStyle EmphasizedBorderStyle => LineStyle.Double;
+
+    /// <summary>
+    /// LineStyle for secondary panels (log, node details, address space) - typically single-line
+    /// </summary>
+    public virtual LineStyle SecondaryBorderStyle => LineStyle.Single;
 
     /// <summary>
     /// Whether to use the SuperView's LineCanvas for auto-joining borders
@@ -67,6 +85,10 @@ public abstract class RetroTheme
     private Attribute? _errorAttr;
     private Attribute? _warningAttr;
     private Attribute? _glowAttr;
+    private Attribute? _statusGoodAttr;
+    private Attribute? _statusBadAttr;
+    private Attribute? _statusUncertainAttr;
+    private Attribute? _mutedTextAttr;
 
     // === Derived Attributes (for direct drawing) ===
     public Attribute NormalAttr => _normalAttr ??= new(Foreground, Background);
@@ -84,6 +106,12 @@ public abstract class RetroTheme
     // Highlight effect for active elements
     public Attribute GlowAttr => _glowAttr ??= new(Color.White, Background);
 
+    // OPC UA Status Attributes
+    public Attribute StatusGoodAttr => _statusGoodAttr ??= new(StatusGood, Background);
+    public Attribute StatusBadAttr => _statusBadAttr ??= new(StatusBad, Background);
+    public Attribute StatusUncertainAttr => _statusUncertainAttr ??= new(StatusUncertain, Background);
+    public Attribute MutedTextAttr => _mutedTextAttr ??= new(MutedText, Background);
+
     // Whether to enable the glow effect on the leading edge of the plot
     public virtual bool EnableGlow => true;
 
@@ -93,6 +121,7 @@ public abstract class RetroTheme
     private ColorScheme? _menuColorScheme;
     private ColorScheme? _buttonColorScheme;
     private ColorScheme? _frameColorScheme;
+    private ColorScheme? _borderColorScheme;
 
     public virtual ColorScheme MainColorScheme => _mainColorScheme ??= new()
     {
@@ -139,6 +168,19 @@ public abstract class RetroTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
+    /// <summary>
+    /// Color scheme for structural borders - uses grey for border lines,
+    /// but accent color for titles (HotNormal is used for title text).
+    /// </summary>
+    public virtual ColorScheme BorderColorScheme => _borderColorScheme ??= new()
+    {
+        Normal = BorderAttr,
+        Focus = BorderAttr,
+        HotNormal = AccentAttr,  // Title text uses accent color
+        HotFocus = AccentAttr,
+        Disabled = BorderAttr
+    };
+
     // === Box Drawing Characters ===
     public virtual char BoxTopLeft => '╔';
     public virtual char BoxTopRight => '╗';
@@ -162,4 +204,18 @@ public abstract class RetroTheme
     public virtual string StatusLive => "● LIVE";
     public virtual string StatusHold => "○ HOLD";
     public virtual string NoSignalMessage => "▶ NO SIGNAL ◀";
+
+    // === Connection Status Indicators ===
+    public virtual string ConnectedIndicator => "● Connected";
+    public virtual string DisconnectedIndicator => "○ Not Connected";
+    public virtual string ConnectingIndicator => "Connecting";
+
+    // === Recording Indicators ===
+    public virtual string RecordingLabel => "◉ REC";
+    public virtual string StoppedLabel => "○ STOP";
+
+    // === OPC UA Status Icons for table display ===
+    public virtual string StatusGoodIcon => "●";
+    public virtual string StatusUncertainIcon => "▲";
+    public virtual string StatusBadIcon => "✕";
 }
