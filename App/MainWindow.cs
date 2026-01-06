@@ -20,8 +20,8 @@ public class MainWindow : Toplevel
     private readonly OpcUaClientWrapper _client;
     private readonly NodeBrowser _nodeBrowser;
     private SubscriptionManager? _subscriptionManager;
-    private readonly CsvRecordingManager _csvRecordingManager;
-    private object? _recordingStatusTimer;
+    private EmbeddedTestServer? _testServer;
+    private bool _isStartingTestServer;
 
     private readonly Label _titleBanner;
     private readonly MenuBar _menuBar;
@@ -578,86 +578,6 @@ public class MainWindow : Toplevel
     {
         var dialog = new TrendPlotDialog(_subscriptionManager, node);
         Application.Run(dialog);
-    }
-
-    private void OnRecordRequested()
-    {
-        if (_csvRecordingManager.IsRecording)
-        {
-            _logger.Warning("Recording is already in progress");
-            return;
-        }
-
-        if (_subscriptionManager == null || !_subscriptionManager.MonitoredItems.Any())
-        {
-            MessageBox.Query("Record", "No items to record. Subscribe to items first.", "OK");
-            return;
-        }
-
-        using var dialog = new SaveDialog
-        {
-            Title = "Save Recording As",
-            AllowedTypes = new List<IAllowedType> { new AllowedType("CSV Files", ".csv") }
-        };
-
-        Application.Run(dialog);
-
-        if (!dialog.Canceled && dialog.Path != null)
-        {
-            var path = dialog.Path.ToString();
-            if (!path!.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-            {
-                path += ".csv";
-            }
-
-            if (_csvRecordingManager.StartRecording(path))
-            {
-                _monitoredItemsView.SetRecordingState(true, "REC");
-                StartRecordingStatusUpdates();
-            }
-            else
-            {
-                MessageBox.ErrorQuery("Recording Error", "Failed to start recording", "OK");
-            }
-        }
-    }
-
-    private void OnStopRecordingRequested()
-    {
-        if (!_csvRecordingManager.IsRecording)
-        {
-            return;
-        }
-
-        StopRecordingStatusUpdates();
-        _csvRecordingManager.StopRecording();
-        _monitoredItemsView.SetRecordingState(false, "");
-        MessageBox.Query("Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
-    }
-
-    private void StartRecordingStatusUpdates()
-    {
-        // Use Terminal.Gui's Application.AddTimeout for periodic updates
-        _recordingStatusTimer = Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
-        {
-            if (_csvRecordingManager.IsRecording)
-            {
-                var duration = _csvRecordingManager.RecordingDuration;
-                var status = $"REC {duration:mm\\:ss} ({_csvRecordingManager.RecordCount} records)";
-                _monitoredItemsView.UpdateRecordingStatus(status);
-                return true; // Continue timer
-            }
-            return false; // Stop timer
-        });
-    }
-
-    private void StopRecordingStatusUpdates()
-    {
-        if (_recordingStatusTimer != null)
-        {
-            Application.RemoveTimeout(_recordingStatusTimer);
-            _recordingStatusTimer = null;
-        }
     }
 
     private void ExportToCsv()
