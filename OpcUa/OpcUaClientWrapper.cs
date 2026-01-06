@@ -278,7 +278,9 @@ public class OpcUaClientWrapper : IDisposable
         // Discover endpoints from the server
         var uri = new Uri(endpointUrl);
         var endpointConfig = EndpointConfiguration.Create(config);
+#pragma warning disable CS0618 // DiscoveryClient.Create is obsolete but CreateAsync requires ITelemetryContext
         using var client = DiscoveryClient.Create(uri, endpointConfig);
+#pragma warning restore CS0618
         var endpoints = await client.GetEndpointsAsync(null);
 
         // Select the best endpoint based on security preference
