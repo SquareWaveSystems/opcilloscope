@@ -132,13 +132,13 @@ public class ConfigurationService
     /// </summary>
     /// <param name="endpointUrl">The current server endpoint URL.</param>
     /// <param name="publishingInterval">The current publishing interval in ms.</param>
-    /// <param name="monitoredItems">The current monitored items.</param>
+    /// <param name="monitoredVariables">The current monitored variables.</param>
     /// <param name="existingMetadata">Optional existing metadata to preserve.</param>
     /// <returns>A new configuration object representing the current state.</returns>
     public OpcScopeConfig CaptureCurrentState(
         string? endpointUrl,
         int publishingInterval,
-        IEnumerable<MonitoredNode> monitoredItems,
+        IEnumerable<MonitoredNode> monitoredVariables,
         ConfigMetadata? existingMetadata = null)
     {
         return new OpcScopeConfig
@@ -151,7 +151,7 @@ public class ConfigurationService
             {
                 PublishingIntervalMs = publishingInterval
             },
-            MonitoredNodes = monitoredItems.Select(m => new MonitoredNodeConfig
+            MonitoredNodes = monitoredVariables.Select(m => new MonitoredNodeConfig
             {
                 NodeId = m.NodeId.ToString(),
                 DisplayName = m.DisplayName,

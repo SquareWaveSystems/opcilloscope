@@ -3,7 +3,7 @@ using Opc.Ua;
 namespace OpcScope.OpcUa.Models;
 
 /// <summary>
-/// View model for monitored items displayed in the table.
+/// View model for monitored variables displayed in the table.
 /// </summary>
 public class MonitoredNode
 {

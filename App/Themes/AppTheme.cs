@@ -48,7 +48,7 @@ public abstract class AppTheme
     public virtual LineStyle FrameLineStyle => LineStyle.Double;
 
     /// <summary>
-    /// LineStyle for emphasized panels (main window, monitored items) - typically double-line
+    /// LineStyle for emphasized panels (main window, monitored variables) - typically double-line
     /// </summary>
     public virtual LineStyle EmphasizedBorderStyle => LineStyle.Double;
 

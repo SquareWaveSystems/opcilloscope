@@ -24,7 +24,7 @@ public class MainWindow : Toplevel
 
     private MenuBar _menuBar;
     private readonly AddressSpaceView _addressSpaceView;
-    private readonly MonitoredItemsView _monitoredItemsView;
+    private readonly MonitoredVariablesView _monitoredVariablesView;
     private readonly NodeDetailsView _nodeDetailsView;
     private readonly LogView _logView;
     private readonly StatusBar _statusBar;
@@ -56,15 +56,15 @@ public class MainWindow : Toplevel
         _connectionManager.StateChanged += OnConnectionStateChanged;
         _connectionManager.ConnectionError += OnConnectionError;
         _connectionManager.ValueChanged += OnValueChanged;
-        _connectionManager.ItemAdded += item =>
+        _connectionManager.VariableAdded += variable =>
         {
-            UiThread.Run(() => _monitoredItemsView.AddItem(item));
+            UiThread.Run(() => _monitoredVariablesView.AddVariable(variable));
             _configService.MarkDirty();
             UiThread.Run(UpdateWindowTitle);
         };
-        _connectionManager.ItemRemoved += handle =>
+        _connectionManager.VariableRemoved += handle =>
         {
-            UiThread.Run(() => _monitoredItemsView.RemoveItem(handle));
+            UiThread.Run(() => _monitoredVariablesView.RemoveVariable(handle));
             _configService.MarkDirty();
             UiThread.Run(UpdateWindowTitle);
         };
@@ -104,7 +104,7 @@ public class MainWindow : Toplevel
             Height = Dim.Percent(60)
         };
 
-        _monitoredItemsView = new MonitoredItemsView
+        _monitoredVariablesView = new MonitoredVariablesView
         {
             X = Pos.Right(_addressSpaceView),
             Y = 1,
@@ -149,7 +149,7 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
         _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
         _statusBar.Add(new Shortcut(Key.W, "Write Val", WriteSelected));
-        _statusBar.Add(new Shortcut(Key.Space, "Rec Select", null));  // Visual hint only - handled in MonitoredItemsView
+        _statusBar.Add(new Shortcut(Key.Space, "Rec Select", null));  // Visual hint only - handled in MonitoredVariablesView
         _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
         _statusBar.Add(new Shortcut(Key.R.WithCtrl, "Rec", ToggleRecording));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
@@ -199,9 +199,9 @@ public class MainWindow : Toplevel
         // Wire up view events
         _addressSpaceView.NodeSelected += OnNodeSelected;
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
-        _monitoredItemsView.UnsubscribeRequested += OnUnsubscribeRequested;
-        _monitoredItemsView.WriteRequested += OnWriteRequested;
-        _monitoredItemsView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredVariablesView.UnsubscribeRequested += OnUnsubscribeRequested;
+        _monitoredVariablesView.WriteRequested += OnWriteRequested;
+        _monitoredVariablesView.TrendPlotRequested += OnTrendPlotRequested;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -210,7 +210,7 @@ public class MainWindow : Toplevel
         // Add all views
         Add(_menuBar);
         Add(_addressSpaceView);
-        Add(_monitoredItemsView);
+        Add(_monitoredVariablesView);
         Add(_nodeDetailsView);
         Add(_logView);
         Add(_statusBar);
@@ -364,9 +364,9 @@ public class MainWindow : Toplevel
         UpdateCompanyLabelForWidth();
 
         // Apply to child views with border differentiation
-        // MonitoredItems gets double-line (emphasized)
-        _monitoredItemsView.BorderStyle = theme.EmphasizedBorderStyle;
-        ThemeStyler.ApplyToFrame(_monitoredItemsView, theme);
+        // MonitoredVariables gets double-line (emphasized)
+        _monitoredVariablesView.BorderStyle = theme.EmphasizedBorderStyle;
+        ThemeStyler.ApplyToFrame(_monitoredVariablesView, theme);
 
         // Other panels get single-line (secondary)
         _addressSpaceView.BorderStyle = theme.SecondaryBorderStyle;
@@ -457,7 +457,7 @@ public class MainWindow : Toplevel
         _connectionManager.Disconnect();
 
         _addressSpaceView.Clear();
-        _monitoredItemsView.Clear();
+        _monitoredVariablesView.Clear();
         _nodeDetailsView.Clear();
 
         UpdateConnectionStatus(isConnected: false);
@@ -510,19 +510,19 @@ public class MainWindow : Toplevel
 
     private void UnsubscribeSelected()
     {
-        var item = _monitoredItemsView.SelectedItem;
-        if (item != null)
+        var variable = _monitoredVariablesView.SelectedVariable;
+        if (variable != null)
         {
-            OnUnsubscribeRequested(item);
+            OnUnsubscribeRequested(variable);
         }
     }
 
     private void WriteSelected()
     {
-        var item = _monitoredItemsView.SelectedItem;
-        if (item != null)
+        var variable = _monitoredVariablesView.SelectedVariable;
+        if (variable != null)
         {
-            OnWriteRequested(item);
+            OnWriteRequested(variable);
         }
     }
 
@@ -641,15 +641,15 @@ public class MainWindow : Toplevel
         return value.ToString() ?? "null";
     }
 
-    private void OnValueChanged(MonitoredNode item)
+    private void OnValueChanged(MonitoredNode variable)
     {
-        // Record to CSV if recording is active AND item is selected for scope/recording
-        if (item.IsSelectedForScope)
+        // Record to CSV if recording is active AND variable is selected for scope/recording
+        if (variable.IsSelectedForScope)
         {
-            _csvRecordingManager.RecordValue(item);
+            _csvRecordingManager.RecordValue(variable);
         }
 
-        UiThread.Run(() => _monitoredItemsView.UpdateItem(item));
+        UiThread.Run(() => _monitoredVariablesView.UpdateVariable(variable));
     }
 
     private void OnConnectionStateChanged(ConnectionState state)
@@ -819,11 +819,11 @@ public class MainWindow : Toplevel
             return;
         }
 
-        var selectedNodes = _monitoredItemsView.ScopeSelectedNodes;
+        var selectedNodes = _monitoredVariablesView.ScopeSelectedNodes;
 
         if (selectedNodes.Count == 0)
         {
-            MessageBox.Query("Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored items.", "OK");
+            MessageBox.Query("Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored variables.", "OK");
             return;
         }
 
@@ -840,20 +840,20 @@ public class MainWindow : Toplevel
         }
 
         var subscriptionManager = _connectionManager.SubscriptionManager;
-        if (subscriptionManager == null || !subscriptionManager.MonitoredItems.Any())
+        if (subscriptionManager == null || !subscriptionManager.MonitoredVariables.Any())
         {
-            MessageBox.Query("Record", "No items to record. Subscribe to items first.", "OK");
+            MessageBox.Query("Record", "No variables to record. Subscribe to variables first.", "OK");
             return;
         }
 
-        // Check that at least one item is selected for recording
-        var selectedCount = _monitoredItemsView.ScopeSelectionCount;
+        // Check that at least one variable is selected for recording
+        var selectedCount = _monitoredVariablesView.ScopeSelectionCount;
         if (selectedCount == 0)
         {
             MessageBox.Query("Record",
-                "No items selected for recording.\n\n" +
-                "Use Space to select items in the Rec column (◉).\n" +
-                "Selected items will be recorded and shown in Scope.", "OK");
+                "No variables selected for recording.\n\n" +
+                "Use Space to select variables in the Rec column (◉).\n" +
+                "Selected variables will be recorded and shown in Scope.", "OK");
             return;
         }
 
@@ -875,7 +875,7 @@ public class MainWindow : Toplevel
 
             if (_csvRecordingManager.StartRecording(path))
             {
-                _monitoredItemsView.UpdateRecordingStatus($"◉ REC ({selectedCount})", true);
+                _monitoredVariablesView.UpdateRecordingStatus($"◉ REC ({selectedCount})", true);
                 StartRecordingStatusUpdates();
             }
             else
@@ -894,7 +894,7 @@ public class MainWindow : Toplevel
 
         StopRecordingStatusUpdates();
         _csvRecordingManager.StopRecording();
-        _monitoredItemsView.UpdateRecordingStatus("", false);
+        _monitoredVariablesView.UpdateRecordingStatus("", false);
         MessageBox.Query("Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
     }
 
@@ -906,7 +906,7 @@ public class MainWindow : Toplevel
             if (_csvRecordingManager.IsRecording)
             {
                 var duration = _csvRecordingManager.RecordingDuration;
-                _monitoredItemsView.UpdateRecordingStatus($"◉ {duration:mm\\:ss}", true);
+                _monitoredVariablesView.UpdateRecordingStatus($"◉ {duration:mm\\:ss}", true);
                 return true; // Continue timer
             }
             return false; // Stop timer
@@ -933,9 +933,9 @@ Keyboard Shortcuts:
   F10       - Open menu
   Enter     - Subscribe to selected node
   Space     - Toggle recording selection (◉ = record & show in Scope)
-  Delete    - Unsubscribe from selected item
-  W         - Write value to selected item
-  Ctrl+G    - Open Scope with selected items
+  Delete    - Unsubscribe from selected variable
+  W         - Write value to selected variable
+  Ctrl+G    - Open Scope with selected variables
   Ctrl+R    - Toggle recording (start/stop)
   Ctrl+O    - Connect to server
   Ctrl+Q    - Quit
@@ -946,8 +946,8 @@ Navigation:
   Space     - Expand/collapse tree node (in tree view)
 
 Scope View:
-  - Select up to 5 items using Space in Monitored Items
-  - Press Ctrl+G to launch Scope with selected items
+  - Select up to 5 variables using Space in Monitored Variables
+  - Press Ctrl+G to launch Scope with selected variables
   - X-axis shows elapsed time
   - Each signal displayed with distinct color
 
@@ -957,8 +957,8 @@ Scope Controls (in dialog):
   R         - Reset to auto-scale
 
 CSV Recording & Scope:
-  - Press Space on items to select for recording (◉ in Rec column)
-  - Same items are shown in Scope view and recorded to CSV
+  - Press Space on variables to select for recording (◉ in Rec column)
+  - Same variables are shown in Scope view and recorded to CSV
   - Press Ctrl+R to toggle recording on/off
   - Recording indicator shows in status bar with elapsed time
   - CSV format: Timestamp, DisplayName, NodeId, Value, Status
@@ -1094,7 +1094,7 @@ License: MIT
                 {
                     // Only after successful connection, disconnect old and clear views
                     _addressSpaceView.Clear();
-                    _monitoredItemsView.Clear();
+                    _monitoredVariablesView.Clear();
                     _nodeDetailsView.Clear();
                     
                     _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
@@ -1140,9 +1140,9 @@ License: MIT
                 {
                     _connectionManager.Disconnect();
                 }
-                
+
                 _addressSpaceView.Clear();
-                _monitoredItemsView.Clear();
+                _monitoredVariablesView.Clear();
                 _nodeDetailsView.Clear();
                 
                 _recentFiles.Add(filePath);
@@ -1170,13 +1170,13 @@ License: MIT
         {
             ShowActivity("Saving configuration...");
 
-            var monitoredItems = _connectionManager.SubscriptionManager?.MonitoredItems
+            var monitoredVariables = _connectionManager.SubscriptionManager?.MonitoredVariables
                 ?? Enumerable.Empty<MonitoredNode>();
 
             var config = _configService.CaptureCurrentState(
                 _connectionManager.CurrentEndpoint,
                 _connectionManager.SubscriptionManager?.PublishingInterval ?? 1000,
-                monitoredItems,
+                monitoredVariables,
                 _currentMetadata
             );
 

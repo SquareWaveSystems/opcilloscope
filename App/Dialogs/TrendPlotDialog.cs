@@ -26,7 +26,7 @@ public class TrendPlotDialog : Dialog
     public TrendPlotDialog(SubscriptionManager? subscriptionManager = null, MonitoredNode? initialNode = null)
     {
         _subscriptionManager = subscriptionManager;
-        _availableNodes = subscriptionManager?.MonitoredItems;
+        _availableNodes = subscriptionManager?.MonitoredVariables;
 
         Title = $"{Theme.TitleDecoration}[ OSCILLOSCOPE ]{Theme.TitleDecoration}";
         Width = Dim.Percent(85);
@@ -119,7 +119,7 @@ public class TrendPlotDialog : Dialog
     {
         if (_availableNodes == null || !_availableNodes.Any())
         {
-            MessageBox.Query(Theme.NoSignalMessage, "No monitored items available.\nSubscribe to a variable node first.", "OK");
+            MessageBox.Query(Theme.NoSignalMessage, "No monitored variables available.\nSubscribe to a variable node first.", "OK");
             return;
         }
 

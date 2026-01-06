@@ -8,10 +8,10 @@ using ThemeManager = OpcScope.App.Themes.ThemeManager;
 namespace OpcScope.App.Views;
 
 /// <summary>
-/// TableView for displaying subscribed/monitored items with real-time updates.
+/// TableView for displaying subscribed/monitored variables with real-time updates.
 /// Features theme-aware styling, row coloring based on status, and CSV recording controls.
 /// </summary>
-public class MonitoredItemsView : FrameView
+public class MonitoredVariablesView : FrameView
 {
     // Checkbox display constants
     private const string CheckedBox = "[●]";
@@ -38,14 +38,14 @@ public class MonitoredItemsView : FrameView
     public event Action<MonitoredNode>? TrendPlotRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
 
-    public MonitoredNode? SelectedItem
+    public MonitoredNode? SelectedVariable
     {
         get
         {
             if (_tableView.SelectedRow >= 0 && _tableView.SelectedRow < _dataTable.Rows.Count)
             {
                 var row = _dataTable.Rows[_tableView.SelectedRow];
-                return row["_ItemRef"] as MonitoredNode;
+                return row["_VariableRef"] as MonitoredNode;
             }
             return null;
         }
@@ -61,7 +61,7 @@ public class MonitoredItemsView : FrameView
             var selected = new List<MonitoredNode>();
             foreach (DataRow row in _dataTable.Rows)
             {
-                if (row["_ItemRef"] is MonitoredNode node && node.IsSelectedForScope)
+                if (row["_VariableRef"] is MonitoredNode node && node.IsSelectedForScope)
                 {
                     selected.Add(node);
                 }
@@ -71,13 +71,13 @@ public class MonitoredItemsView : FrameView
     }
 
     /// <summary>
-    /// Gets the count of items selected for Scope.
+    /// Gets the count of variables selected for Scope.
     /// </summary>
     public int ScopeSelectionCount => _cachedScopeSelectionCount;
 
-    public MonitoredItemsView()
+    public MonitoredVariablesView()
     {
-        Title = " Monitored Items ";
+        Title = " Monitored Variables ";
         CanFocus = true;
 
         // Apply theme styling
@@ -94,14 +94,14 @@ public class MonitoredItemsView : FrameView
         };
 
         _dataTable = new DataTable();
-        _dataTable.Columns.Add("Rec", typeof(string));  // Recording selection (◉ = record this item)
+        _dataTable.Columns.Add("Rec", typeof(string));  // Recording selection (◉ = record this variable)
         _dataTable.Columns.Add("Name", typeof(string));
         _dataTable.Columns.Add("NodeId", typeof(string));
         _dataTable.Columns.Add("Access", typeof(string));
         _dataTable.Columns.Add("Time", typeof(string));
         _dataTable.Columns.Add("Status", typeof(string));
         _dataTable.Columns.Add("Value", typeof(string));  // Far right - width varies
-        _dataTable.Columns.Add("_ItemRef", typeof(MonitoredNode)); // Hidden reference
+        _dataTable.Columns.Add("_VariableRef", typeof(MonitoredNode)); // Hidden reference
 
         _tableView = new TableView
         {
@@ -130,9 +130,9 @@ public class MonitoredItemsView : FrameView
         _tableView.Style.ShowVerticalHeaderLines = false;
         _tableView.Style.ExpandLastColumn = true;
 
-        // Hide the internal _ItemRef column from display
-        var itemRefColumnStyle = _tableView.Style.GetOrCreateColumnStyle(_dataTable.Columns.IndexOf("_ItemRef"));
-        itemRefColumnStyle.Visible = false;
+        // Hide the internal _VariableRef column from display
+        var variableRefColumnStyle = _tableView.Style.GetOrCreateColumnStyle(_dataTable.Columns.IndexOf("_VariableRef"));
+        variableRefColumnStyle.Visible = false;
 
         // Note: Status icons (●/▲/✕) in text provide visual status indication
         // Terminal.Gui v2 TableView doesn't support per-row coloring
@@ -221,26 +221,26 @@ public class MonitoredItemsView : FrameView
         });
     }
 
-    public void AddItem(MonitoredNode item)
+    public void AddVariable(MonitoredNode variable)
     {
-        if (_rowsByHandle.ContainsKey(item.ClientHandle))
+        if (_rowsByHandle.ContainsKey(variable.ClientHandle))
             return;
 
         var row = _dataTable.NewRow();
-        row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
-        row["Name"] = item.DisplayName;
-        row["NodeId"] = item.NodeId.ToString();
-        row["Access"] = item.AccessString;
-        row["Time"] = item.TimestampString;
-        row["Status"] = FormatStatusWithIcon(item);
-        row["Value"] = item.Value;
-        row["_ItemRef"] = item;
+        row["Rec"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
+        row["Name"] = variable.DisplayName;
+        row["NodeId"] = variable.NodeId.ToString();
+        row["Access"] = variable.AccessString;
+        row["Time"] = variable.TimestampString;
+        row["Status"] = FormatStatusWithIcon(variable);
+        row["Value"] = variable.Value;
+        row["_VariableRef"] = variable;
 
         _dataTable.Rows.Add(row);
-        _rowsByHandle[item.ClientHandle] = row;
+        _rowsByHandle[variable.ClientHandle] = row;
 
-        // Update cache if item is already selected
-        if (item.IsSelectedForScope)
+        // Update cache if variable is already selected
+        if (variable.IsSelectedForScope)
         {
             _cachedScopeSelectionCount++;
         }
@@ -249,27 +249,27 @@ public class MonitoredItemsView : FrameView
         UpdateEmptyState();
     }
 
-    public void UpdateItem(MonitoredNode item)
+    public void UpdateVariable(MonitoredNode variable)
     {
-        if (!_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
+        if (!_rowsByHandle.TryGetValue(variable.ClientHandle, out var row))
             return;
 
-        row["Access"] = item.AccessString;
-        row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
-        row["Value"] = item.Value;
-        row["Time"] = item.TimestampString;
-        row["Status"] = FormatStatusWithIcon(item);
+        row["Access"] = variable.AccessString;
+        row["Rec"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
+        row["Value"] = variable.Value;
+        row["Time"] = variable.TimestampString;
+        row["Status"] = FormatStatusWithIcon(variable);
 
         _tableView.Update();
     }
 
-    public void RemoveItem(uint clientHandle)
+    public void RemoveVariable(uint clientHandle)
     {
         if (!_rowsByHandle.TryGetValue(clientHandle, out var row))
             return;
 
         // Clear scope selection before removing
-        if (row["_ItemRef"] is MonitoredNode node && node.IsSelectedForScope)
+        if (row["_VariableRef"] is MonitoredNode node && node.IsSelectedForScope)
         {
             node.IsSelectedForScope = false;
             _cachedScopeSelectionCount--;
@@ -288,7 +288,7 @@ public class MonitoredItemsView : FrameView
         // Clear all scope selections before clearing table
         foreach (DataRow row in _dataTable.Rows)
         {
-            if (row["_ItemRef"] is MonitoredNode node)
+            if (row["_VariableRef"] is MonitoredNode node)
             {
                 node.IsSelectedForScope = false;
             }
@@ -317,13 +317,13 @@ public class MonitoredItemsView : FrameView
 
     private void ToggleScopeSelection()
     {
-        var item = SelectedItem;
-        if (item == null) return;
+        var variable = SelectedVariable;
+        if (variable == null) return;
 
-        if (item.IsSelectedForScope)
+        if (variable.IsSelectedForScope)
         {
             // Deselect
-            item.IsSelectedForScope = false;
+            variable.IsSelectedForScope = false;
             _cachedScopeSelectionCount--;
         }
         else
@@ -333,7 +333,7 @@ public class MonitoredItemsView : FrameView
             {
                 // Show feedback that max is reached
                 var theme = ThemeManager.Current;
-                _selectionFeedback.Text = $"Max {MaxScopeSelections} items for Rec/Scope";
+                _selectionFeedback.Text = $"Max {MaxScopeSelections} variables for Rec/Scope";
                 _selectionFeedback.ColorScheme = new ColorScheme
                 {
                     Normal = new Attribute(theme.Warning, theme.Background),
@@ -354,14 +354,14 @@ public class MonitoredItemsView : FrameView
             }
 
             // Select
-            item.IsSelectedForScope = true;
+            variable.IsSelectedForScope = true;
             _cachedScopeSelectionCount++;
         }
 
         // Update the row display
-        if (_rowsByHandle.TryGetValue(item.ClientHandle, out var row))
+        if (_rowsByHandle.TryGetValue(variable.ClientHandle, out var row))
         {
-            row["Rec"] = item.IsSelectedForScope ? CheckedBox : UncheckedBox;
+            row["Rec"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
             _tableView.Update();
         }
 
@@ -372,7 +372,7 @@ public class MonitoredItemsView : FrameView
     {
         if (e == Key.Delete || e == Key.Backspace)
         {
-            var selected = SelectedItem;
+            var selected = SelectedVariable;
             if (selected != null)
             {
                 UnsubscribeRequested?.Invoke(selected);
@@ -381,13 +381,13 @@ public class MonitoredItemsView : FrameView
         }
         else if (e == Key.Space)
         {
-            // Toggle scope selection for the highlighted item
+            // Toggle scope selection for the highlighted variable
             ToggleScopeSelection();
             e.Handled = true;
         }
         else if (e == Key.W)
         {
-            var selected = SelectedItem;
+            var selected = SelectedVariable;
             if (selected != null)
             {
                 WriteRequested?.Invoke(selected);
@@ -396,7 +396,7 @@ public class MonitoredItemsView : FrameView
         }
         else if (e == Key.T)
         {
-            var selected = SelectedItem;
+            var selected = SelectedVariable;
             if (selected != null)
             {
                 TrendPlotRequested?.Invoke(selected);
