@@ -32,12 +32,19 @@ public class TestServer : IAsyncDisposable, IDisposable
         EndpointUrl = $"opc.tcp://localhost:{port}/UA/OpcScopeTest";
 
         var config = CreateApplicationConfiguration(port);
-        await config.ValidateAsync(ApplicationType.Server);
+        await config.Validate(ApplicationType.Server);
 
-        _application = new ApplicationInstance(config, null);
+        _application = new ApplicationInstance
+        {
+            ApplicationName = ApplicationName,
+            ApplicationType = ApplicationType.Server,
+            ApplicationConfiguration = config
+        };
 
         // Check certificate (create if needed)
-        var hasAppCertificate = await _application.CheckApplicationInstanceCertificatesAsync(silent: true);
+        var hasAppCertificate = await _application.CheckApplicationInstanceCertificate(
+            silent: true,
+            minimumKeySize: 0);
 
         if (!hasAppCertificate)
         {
@@ -48,7 +55,7 @@ public class TestServer : IAsyncDisposable, IDisposable
 
         // Create and start the server
         _server = new TestOpcUaServer();
-        await _application.StartAsync(_server);
+        await _application.Start(_server);
     }
 
     /// <summary>
@@ -58,7 +65,7 @@ public class TestServer : IAsyncDisposable, IDisposable
     {
         if (_server != null)
         {
-            await _server.StopAsync();
+            await Task.Run(() => _server.Stop());
             _server.Dispose();
             _server = null;
         }
