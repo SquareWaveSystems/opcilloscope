@@ -16,7 +16,6 @@
   <ItemGroup>
     <PackageReference Include="Terminal.Gui" Version="2.*" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.*" />
-    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Server" Version="1.5.*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +23,10 @@
     <Content Remove="tests/**" />
     <None Remove="tests/**" />
     <EmbeddedResource Remove="tests/**" />
+    <Compile Remove="src/**" />
+    <Content Remove="src/**" />
+    <None Remove="src/**" />
+    <EmbeddedResource Remove="src/**" />
   </ItemGroup>
 
 </Project>

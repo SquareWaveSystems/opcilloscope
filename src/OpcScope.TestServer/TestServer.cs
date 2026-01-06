@@ -2,27 +2,25 @@ using Opc.Ua;
 using Opc.Ua.Configuration;
 using Opc.Ua.Server;
 
-namespace OpcScope.Tests.Infrastructure;
+namespace OpcScope.TestServer;
 
 /// <summary>
-/// In-process OPC UA test server for integration testing.
-/// Uses OPC Foundation UA-.NETStandard stack.
+/// Standalone OPC UA test server for OpcScope testing and development.
 /// </summary>
-public class TestServer : IDisposable
+public class TestServer : IAsyncDisposable, IDisposable
 {
     private StandardServer? _server;
     private ApplicationInstance? _application;
     private bool _disposed;
 
-    public const string DefaultEndpointUrl = "opc.tcp://localhost:4840/UA/OpcScopeTest";
     public const string ApplicationName = "OpcScope Test Server";
     public const string ApplicationUri = "urn:opcscope:testserver";
 
-    public string EndpointUrl { get; private set; } = DefaultEndpointUrl;
+    public string EndpointUrl { get; private set; } = string.Empty;
     public bool IsRunning => _server != null;
 
     /// <summary>
-    /// Starts the test server asynchronously.
+    /// Starts the test server on the specified port.
     /// </summary>
     public async Task StartAsync(int port = 4840)
     {
@@ -43,7 +41,9 @@ public class TestServer : IDisposable
 
         if (!hasAppCertificate)
         {
-            throw new Exception("Application certificate validation failed");
+            throw new InvalidOperationException(
+                $"Application certificate validation failed. " +
+                $"An application instance certificate may be missing, invalid, or untrusted.");
         }
 
         // Create and start the server
@@ -66,6 +66,12 @@ public class TestServer : IDisposable
 
     private ApplicationConfiguration CreateApplicationConfiguration(int port)
     {
+        var pkiPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "OpcScope",
+            "TestServer",
+            "pki");
+
         var config = new ApplicationConfiguration
         {
             ApplicationName = ApplicationName,
@@ -78,43 +84,27 @@ public class TestServer : IDisposable
                 ApplicationCertificate = new CertificateIdentifier
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(
-                        Path.GetTempPath(),
-                        "OpcScopeTestServer",
-                        "pki",
-                        "own"),
+                    StorePath = Path.Combine(pkiPath, "own"),
                     SubjectName = $"CN={ApplicationName}, O=OpcScope, DC=localhost"
                 },
                 TrustedIssuerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(
-                        Path.GetTempPath(),
-                        "OpcScopeTestServer",
-                        "pki",
-                        "issuers")
+                    StorePath = Path.Combine(pkiPath, "issuers")
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(
-                        Path.GetTempPath(),
-                        "OpcScopeTestServer",
-                        "pki",
-                        "trusted")
+                    StorePath = Path.Combine(pkiPath, "trusted")
                 },
                 RejectedCertificateStore = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(
-                        Path.GetTempPath(),
-                        "OpcScopeTestServer",
-                        "pki",
-                        "rejected")
+                    StorePath = Path.Combine(pkiPath, "rejected")
                 },
                 AutoAcceptUntrustedCertificates = true,
                 RejectSHA1SignedCertificates = false,
-                MinimumCertificateKeySize = 1024
+                MinimumCertificateKeySize = 2048
             },
 
             TransportConfigurations = new TransportConfigurationCollection(),
@@ -176,36 +166,43 @@ public class TestServer : IDisposable
             {
                 OutputFilePath = null,
                 DeleteOnLoad = true,
-                TraceMasks = 0 // No tracing for tests
+                TraceMasks = 0
             }
         };
 
         return config;
     }
 
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
+    public async ValueTask DisposeAsync()
     {
         if (!_disposed)
         {
-            if (disposing)
+            await StopAsync();
+            _disposed = true;
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            if (_server != null)
             {
-                StopAsync().GetAwaiter().GetResult();
+                _server.Stop();
+                _server.Dispose();
+                _server = null;
             }
             _disposed = true;
         }
+        GC.SuppressFinalize(this);
     }
 }
 
 /// <summary>
 /// Custom OPC UA server implementation with test nodes.
 /// </summary>
-public class TestOpcUaServer : StandardServer
+internal class TestOpcUaServer : StandardServer
 {
     protected override MasterNodeManager CreateMasterNodeManager(
         IServerInternal server,

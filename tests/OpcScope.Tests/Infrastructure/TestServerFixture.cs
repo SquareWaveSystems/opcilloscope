@@ -1,6 +1,7 @@
 using Opc.Ua;
 using Opc.Ua.Client;
 using OpcScope.OpcUa;
+using OpcScope.TestServer;
 
 namespace OpcScope.Tests.Infrastructure;
 
@@ -14,7 +15,7 @@ public class TestServerFixture : IAsyncLifetime
     private static readonly object _portLock = new();
     private static int _nextPort = 4840;
 
-    private TestServer? _server;
+    private OpcScope.TestServer.TestServer? _server;
     private int _port;
 
     /// <summary>
@@ -25,7 +26,7 @@ public class TestServerFixture : IAsyncLifetime
     /// <summary>
     /// The test server instance.
     /// </summary>
-    public TestServer Server => _server ?? throw new InvalidOperationException("Server not started");
+    public OpcScope.TestServer.TestServer Server => _server ?? throw new InvalidOperationException("Server not started");
 
     /// <summary>
     /// Indicates whether the server is running.
@@ -45,7 +46,7 @@ public class TestServerFixture : IAsyncLifetime
     {
         _port = AllocatePort();
 
-        _server = new TestServer();
+        _server = new OpcScope.TestServer.TestServer();
         await _server.StartAsync(_port);
     }
 
@@ -124,7 +125,7 @@ public abstract class IntegrationTestBase : IClassFixture<TestServerFixture>, IA
             throw new InvalidOperationException("Client not connected");
         }
 
-        return Client.Session.NamespaceUris.GetIndex(TestNodeManager.NamespaceUri);
+        return Client.Session.NamespaceUris.GetIndex(OpcScope.TestServer.TestNodeManager.NamespaceUri);
     }
 }
 
