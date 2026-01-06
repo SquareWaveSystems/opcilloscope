@@ -547,15 +547,8 @@ public class MainWindow : Toplevel
 
             Application.Run(progressDialog);
             
-            // Ensure we wait for the export task to complete and propagate any exceptions
-            try
-            {
-                exportTask.GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Export task exception: {ex.Message}");
-            }
+            // Wait for the export task to complete before disposing
+            exportTask.Wait();
 
             progressDialog.Dispose();
         }
