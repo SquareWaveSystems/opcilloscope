@@ -89,7 +89,7 @@ public class LogView : FrameView
         };
     }
 
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         Application.Invoke(() =>
         {

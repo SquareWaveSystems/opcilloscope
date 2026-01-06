@@ -247,7 +247,7 @@ public class MonitoredItemsView : FrameView
         _recordingStatus.Text = statusText;
     }
 
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         Application.Invoke(() =>
         {

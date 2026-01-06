@@ -4,13 +4,13 @@ using Attribute = Terminal.Gui.Attribute;
 namespace OpcScope.App.Themes;
 
 /// <summary>
-/// Light theme with retro CRT aesthetic.
-/// Warm paper white with dark text for comfortable viewing.
+/// Light theme for comfortable viewing.
+/// Warm paper white with dark text.
 /// </summary>
-public class LightTheme : RetroTheme
+public class LightTheme : AppTheme
 {
     public override string Name => "Light";
-    public override string Description => "Retro CRT light theme";
+    public override string Description => "Light terminal theme";
 
     // Main window uses double-line for emphasis, frames use single
     public override LineStyle BorderLineStyle => LineStyle.Double;

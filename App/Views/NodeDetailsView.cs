@@ -43,7 +43,7 @@ public class NodeDetailsView : FrameView
         Add(_detailsLabel);
     }
 
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         Application.Invoke(() =>
         {

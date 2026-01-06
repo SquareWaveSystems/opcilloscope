@@ -11,7 +11,6 @@ namespace OpcScope.App;
 
 /// <summary>
 /// Main application window with layout orchestration.
-/// Supports retro-futuristic themes inspired by cassette futurism.
 /// </summary>
 public class MainWindow : Toplevel
 {
@@ -359,7 +358,7 @@ public class MainWindow : Toplevel
         ThemeStyler.ApplyToFrame(_logView, theme);
     }
 
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         UiThread.Run(() =>
         {
@@ -1031,10 +1030,6 @@ Built with:
   - .NET 10
   - Terminal.Gui v2
   - OPC Foundation UA-.NETStandard
-
-Themes inspired by:
-  - Cassette Futurism (Alien, Blade Runner)
-  - github.com/Imetomi/retro-futuristic-ui-design
 
 © 2026 Square Wave Systems
 License: MIT

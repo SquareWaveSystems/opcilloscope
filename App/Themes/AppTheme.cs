@@ -8,7 +8,7 @@ namespace OpcScope.App.Themes;
 /// Inspired by classic computing displays and industrial control systems.
 /// Leverages Terminal.Gui v2 features: LineStyle, Border/Margin/Padding, ColorSchemes.
 /// </summary>
-public abstract class RetroTheme
+public abstract class AppTheme
 {
     // === Theme Identity ===
     public abstract string Name { get; }

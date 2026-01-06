@@ -47,8 +47,8 @@ public class ThemeManagerTests
     public void ThemeManager_SetTheme_FiresThemeChangedEvent()
     {
         // Arrange
-        RetroTheme? changedTheme = null;
-        Action<RetroTheme> handler = theme => changedTheme = theme;
+        AppTheme? changedTheme = null;
+        Action<AppTheme> handler = theme => changedTheme = theme;
         ThemeManager.ThemeChanged += handler;
         var lightTheme = new LightTheme();
 
@@ -76,7 +76,7 @@ public class ThemeManagerTests
         var currentTheme = ThemeManager.Current;
 
         // Act
-        ThemeManager.SetTheme((RetroTheme)null!);
+        ThemeManager.SetTheme((AppTheme)null!);
 
         // Assert
         Assert.Same(currentTheme, ThemeManager.Current);
@@ -180,7 +180,7 @@ public class ThemeManagerTests
     public async Task ThemeManager_ConcurrentAccess_IsThreadSafe()
     {
         // Arrange
-        var themes = new RetroTheme[]
+        var themes = new AppTheme[]
         {
             new DarkTheme(),
             new LightTheme()
@@ -233,9 +233,9 @@ public class ThemeManagerTests
         // even when called outside the lock (testing the race condition fix)
 
         // Arrange
-        var receivedThemes = new List<RetroTheme>();
+        var receivedThemes = new List<AppTheme>();
         var lockObj = new object();
-        Action<RetroTheme> handler = theme =>
+        Action<AppTheme> handler = theme =>
         {
             lock (lockObj)
             {
@@ -247,7 +247,7 @@ public class ThemeManagerTests
         try
         {
             // Act - Rapidly change themes
-            var themes = new RetroTheme[]
+            var themes = new AppTheme[]
             {
                 new DarkTheme(),
                 new LightTheme()

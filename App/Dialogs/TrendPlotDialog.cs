@@ -21,7 +21,7 @@ public class TrendPlotDialog : Dialog
     private readonly Button _closeButton;
 
     // Theme-aware accessor
-    private RetroTheme Theme => ThemeManager.Current;
+    private AppTheme Theme => ThemeManager.Current;
 
     public TrendPlotDialog(SubscriptionManager? subscriptionManager = null, MonitoredNode? initialNode = null)
     {
@@ -233,7 +233,7 @@ public class TrendPlotDialog : Dialog
         _trendPlotView.Clear();
     }
 
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         Application.Invoke(() =>
         {

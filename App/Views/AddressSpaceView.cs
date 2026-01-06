@@ -83,7 +83,7 @@ public class AddressSpaceView : FrameView
         _emptyStateLabel.Visible = true;
     }
 
-    private void OnThemeChanged(RetroTheme theme)
+    private void OnThemeChanged(AppTheme theme)
     {
         Application.Invoke(() =>
         {

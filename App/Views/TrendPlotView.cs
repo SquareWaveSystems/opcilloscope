@@ -16,7 +16,7 @@ namespace OpcScope.App.Views;
 public class TrendPlotView : View
 {
     // === Theme tracking ===
-    private RetroTheme _currentTheme = null!;
+    private AppTheme _currentTheme = null!;
     private readonly object _themeLock = new();
 
     // Ring buffer for samples (preallocated)
@@ -142,7 +142,7 @@ public class TrendPlotView : View
 
     private void ApplyTheme()
     {
-        RetroTheme theme;
+        AppTheme theme;
         lock (_themeLock)
         {
             theme = _currentTheme;
@@ -203,7 +203,7 @@ public class TrendPlotView : View
         _graphView.BorderStyle = theme.BorderLineStyle;
     }
 
-    private void OnThemeChanged(RetroTheme newTheme)
+    private void OnThemeChanged(AppTheme newTheme)
     {
         lock (_themeLock)
         {
@@ -456,7 +456,7 @@ public class TrendPlotView : View
         _visibleMax += padding;
 
         // Update header
-        RetroTheme theme;
+        AppTheme theme;
         lock (_themeLock)
         {
             theme = _currentTheme;

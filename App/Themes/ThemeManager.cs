@@ -5,13 +5,13 @@ namespace OpcScope.App.Themes;
 /// </summary>
 public static class ThemeManager
 {
-    private static RetroTheme _currentTheme = new DarkTheme();
+    private static AppTheme _currentTheme = new DarkTheme();
     private static readonly object _lock = new();
 
     /// <summary>
     /// Available themes in the application.
     /// </summary>
-    public static IReadOnlyList<RetroTheme> AvailableThemes { get; } = new RetroTheme[]
+    public static IReadOnlyList<AppTheme> AvailableThemes { get; } = new AppTheme[]
     {
         new DarkTheme(),
         new LightTheme()
@@ -20,7 +20,7 @@ public static class ThemeManager
     /// <summary>
     /// Gets the currently active theme.
     /// </summary>
-    public static RetroTheme Current
+    public static AppTheme Current
     {
         get
         {
@@ -34,7 +34,7 @@ public static class ThemeManager
     /// <summary>
     /// Event fired when the theme changes.
     /// </summary>
-    public static event Action<RetroTheme>? ThemeChanged;
+    public static event Action<AppTheme>? ThemeChanged;
 
     /// <summary>
     /// Sets the current theme by name.
@@ -53,12 +53,12 @@ public static class ThemeManager
     /// <summary>
     /// Sets the current theme.
     /// </summary>
-    public static void SetTheme(RetroTheme theme)
+    public static void SetTheme(AppTheme theme)
     {
         if (theme == null) return;
 
-        RetroTheme themeToUse;
-        Action<RetroTheme>? handlers;
+        AppTheme themeToUse;
+        Action<AppTheme>? handlers;
 
         lock (_lock)
         {
