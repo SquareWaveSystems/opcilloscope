@@ -71,6 +71,7 @@ public class NodeBrowser
             var refs = await _client.BrowseAsync(parent.NodeId);
             var children = new List<BrowsedNode>();
 
+            // First pass: create all child nodes without async operations
             foreach (var r in refs)
             {
                 // Convert ExpandedNodeId to NodeId
@@ -92,19 +93,25 @@ public class NodeBrowser
                     DisplayName = r.DisplayName?.Text ?? r.BrowseName?.Name ?? "Unknown",
                     NodeClass = r.NodeClass,
                     DataType = typeDefNodeId,
-                    Parent = parent
+                    Parent = parent,
+                    // Optimistically assume nodes may have children (will be resolved on expand)
+                    // This avoids N extra browse calls per tree expansion
+                    HasChildren = r.NodeClass == NodeClass.Object || r.NodeClass == NodeClass.Variable
                 };
 
-                // For variables, try to get the data type
-                if (r.NodeClass == NodeClass.Variable)
-                {
-                    child.DataTypeName = await GetDataTypeNameAsync(targetNodeId);
-                }
-
-                // Check if node has children by doing a quick browse
-                child.HasChildren = await HasChildrenAsync(targetNodeId);
-
                 children.Add(child);
+            }
+
+            // Second pass: fetch data type names for variables in parallel
+            // This is the only async operation we still need - HasChildren is now lazy
+            var variableNodes = children.Where(c => c.NodeClass == NodeClass.Variable).ToList();
+            if (variableNodes.Count > 0)
+            {
+                var dataTypeTasks = variableNodes.Select(async child =>
+                {
+                    child.DataTypeName = await GetDataTypeNameAsync(child.NodeId);
+                });
+                await Task.WhenAll(dataTypeTasks);
             }
 
             parent.ChildrenLoaded = true;
