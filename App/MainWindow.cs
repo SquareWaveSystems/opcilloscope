@@ -212,7 +212,7 @@ public class MainWindow : Toplevel
         ApplyTheme();
 
         // Handle window resize to update connection status label position
-        LayoutComplete += (s, e) => UpdateConnectionStatusLabelPosition();
+        Application.SizeChanging += (s, e) => UiThread.Run(UpdateConnectionStatusLabelPosition);
 
         // Allow any key press to skip the startup sequence
         KeyDown += (s, e) =>
@@ -273,7 +273,7 @@ public class MainWindow : Toplevel
 
                 _startupOverlay.Add(_startupLabel);
                 Add(_startupOverlay);
-                _startupOverlay.MoveToStart(); // Bring to front
+                MoveSubviewToEnd(_startupOverlay); // Bring to front
                 SetNeedsLayout();
             });
 
