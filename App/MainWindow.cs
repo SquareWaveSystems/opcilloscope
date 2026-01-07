@@ -990,24 +990,18 @@ public class MainWindow : Toplevel
             return;
         }
 
-        using var dialog = new SaveDialog
-        {
-            Title = "Save Recording As",
-            AllowedTypes = new List<IAllowedType> { new AllowedType("CSV Files", ".csv") },
-            Path = $"recording_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
-        };
+        // Get default directory and generate filename
+        var defaultDir = CsvRecordingManager.EnsureRecordingsDirectory();
+        var defaultFilename = CsvRecordingManager.GenerateDefaultRecordingFilename(
+            _connectionManager.CurrentEndpoint,
+            selectedCount);
 
+        using var dialog = new SaveRecordingDialog(defaultDir, defaultFilename);
         Application.Run(dialog);
 
-        if (!dialog.Canceled && dialog.Path != null)
+        if (dialog.Confirmed && dialog.FilePath != null)
         {
-            var path = dialog.Path.ToString();
-            if (!path!.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-            {
-                path += ".csv";
-            }
-
-            if (_csvRecordingManager.StartRecording(path))
+            if (_csvRecordingManager.StartRecording(dialog.FilePath))
             {
                 _monitoredVariablesView.UpdateRecordingStatus($"◉ REC ({selectedCount})", true);
                 StartRecordingStatusUpdates();

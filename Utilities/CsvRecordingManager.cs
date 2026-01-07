@@ -9,6 +9,171 @@ namespace Opcilloscope.Utilities;
 /// </summary>
 public class CsvRecordingManager : IDisposable
 {
+    /// <summary>
+    /// The file extension used for recording files.
+    /// </summary>
+    public const string RecordingFileExtension = ".csv";
+
+    /// <summary>
+    /// Gets the default directory for recording files.
+    /// Uses cross-platform appropriate locations:
+    /// - Windows: %USERPROFILE%/Documents/OpcScope/recordings/
+    /// - macOS: ~/Documents/OpcScope/recordings/
+    /// - Linux: ~/Documents/opcscope/recordings/ (or $XDG_DOCUMENTS_DIR/opcscope/recordings/)
+    /// </summary>
+    /// <returns>Path to the default recordings directory.</returns>
+    public static string GetDefaultRecordingsDirectory()
+    {
+        string documentsDir;
+
+        if (OperatingSystem.IsLinux())
+        {
+            // Linux: Use XDG_DOCUMENTS_DIR or fall back to ~/Documents
+            var xdgDocuments = Environment.GetEnvironmentVariable("XDG_DOCUMENTS_DIR");
+            if (!string.IsNullOrEmpty(xdgDocuments))
+            {
+                documentsDir = xdgDocuments;
+            }
+            else
+            {
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                documentsDir = Path.Combine(home, "Documents");
+            }
+        }
+        else
+        {
+            // Windows and macOS: use system Documents folder
+            documentsDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+            // Fallback if Documents folder is not available
+            if (string.IsNullOrEmpty(documentsDir))
+            {
+                documentsDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            }
+        }
+
+        // Fallback to temp if all else fails
+        if (string.IsNullOrEmpty(documentsDir))
+        {
+            documentsDir = Path.GetTempPath();
+        }
+
+        // Use lowercase folder name on Linux, PascalCase on Windows/macOS
+        var appFolder = OperatingSystem.IsLinux() ? "opcscope" : "OpcScope";
+
+        var dir = Path.Combine(documentsDir, appFolder, "recordings");
+        return dir;
+    }
+
+    /// <summary>
+    /// Ensures the default recordings directory exists.
+    /// </summary>
+    /// <returns>Path to the recordings directory.</returns>
+    public static string EnsureRecordingsDirectory()
+    {
+        var dir = GetDefaultRecordingsDirectory();
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>
+    /// Generates a default filename for saving a recording.
+    /// Format: {sanitized_connection_url}_{variable_count}vars_{timestamp}.csv
+    /// </summary>
+    /// <param name="connectionUrl">The OPC UA connection URL, or null if not connected.</param>
+    /// <param name="variableCount">The number of variables being recorded.</param>
+    /// <returns>A sanitized filename with .csv extension.</returns>
+    public static string GenerateDefaultRecordingFilename(string? connectionUrl, int variableCount)
+    {
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        string baseName;
+
+        if (!string.IsNullOrEmpty(connectionUrl))
+        {
+            baseName = SanitizeUrlForFilename(connectionUrl);
+        }
+        else
+        {
+            baseName = "recording";
+        }
+
+        return $"{baseName}_{variableCount}vars_{timestamp}{RecordingFileExtension}";
+    }
+
+    /// <summary>
+    /// Sanitizes a URL to be used as part of a filename.
+    /// Replaces invalid filename characters with underscores.
+    /// </summary>
+    /// <param name="url">The URL to sanitize.</param>
+    /// <returns>A filename-safe string derived from the URL.</returns>
+    public static string SanitizeUrlForFilename(string url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return "unknown";
+
+        // Remove protocol prefix
+        var sanitized = url;
+        if (sanitized.StartsWith("opc.tcp://", StringComparison.OrdinalIgnoreCase))
+            sanitized = sanitized.Substring(10);
+        else if (sanitized.StartsWith("opc.https://", StringComparison.OrdinalIgnoreCase))
+            sanitized = sanitized.Substring(12);
+        else if (sanitized.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            sanitized = sanitized.Substring(8);
+        else if (sanitized.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            sanitized = sanitized.Substring(7);
+
+        // Replace invalid filename characters with underscores
+        var invalidChars = Path.GetInvalidFileNameChars();
+        foreach (var c in invalidChars)
+        {
+            sanitized = sanitized.Replace(c, '_');
+        }
+
+        // Also replace common URL special characters
+        sanitized = sanitized
+            .Replace(':', '_')
+            .Replace('/', '_')
+            .Replace('\\', '_')
+            .Replace('?', '_')
+            .Replace('&', '_')
+            .Replace('=', '_');
+
+        // Remove consecutive underscores
+        while (sanitized.Contains("__"))
+        {
+            sanitized = sanitized.Replace("__", "_");
+        }
+
+        // Trim underscores from start and end
+        sanitized = sanitized.Trim('_');
+
+        // Limit length to avoid overly long filenames
+        if (sanitized.Length > 50)
+        {
+            sanitized = sanitized.Substring(0, 50).TrimEnd('_');
+        }
+
+        return string.IsNullOrEmpty(sanitized) ? "unknown" : sanitized;
+    }
+
+    /// <summary>
+    /// Ensures a filename has the correct .csv extension.
+    /// </summary>
+    /// <param name="filename">The filename to check.</param>
+    /// <returns>The filename with .csv extension.</returns>
+    public static string EnsureRecordingExtension(string filename)
+    {
+        if (string.IsNullOrEmpty(filename))
+            return filename;
+
+        if (!filename.EndsWith(RecordingFileExtension, StringComparison.OrdinalIgnoreCase))
+        {
+            return filename + RecordingFileExtension;
+        }
+
+        return filename;
+    }
+
     private readonly Logger _logger;
     private StreamWriter? _writer;
     private string? _filePath;
