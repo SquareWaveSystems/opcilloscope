@@ -43,35 +43,30 @@ public class TestNodeManager : CustomNodeManager2
         {
             base.CreateAddressSpace(externalReferences);
 
-            // Get the Objects folder NodeId
-            var objectsFolderId = ExpandedNodeId.ToNodeId(ObjectIds.ObjectsFolder, Server.NamespaceUris);
+            // Get reference to ObjectsFolder - we'll add references to it
+            var objectsFolderId = ObjectIds.ObjectsFolder;
 
-            // Create our folders as root nodes (not children of ObjectsFolder in our node manager)
-            var simulationFolder = CreateRootFolder("Simulation", "Simulation");
+            // Create Simulation folder
+            var simulationFolder = CreateFolderUnderObjects(
+                externalReferences, objectsFolderId, "Simulation", "Simulation");
             CreateSimulationNodes(simulationFolder);
             AddPredefinedNode(SystemContext, simulationFolder);
 
-            var staticDataFolder = CreateRootFolder("StaticData", "StaticData");
+            // Create StaticData folder
+            var staticDataFolder = CreateFolderUnderObjects(
+                externalReferences, objectsFolderId, "StaticData", "StaticData");
             CreateStaticDataNodes(staticDataFolder);
             AddPredefinedNode(SystemContext, staticDataFolder);
-
-            // Add references from Objects folder to our folders via externalReferences
-            // This is how custom NodeManagers add nodes as children of predefined nodes
-            if (!externalReferences.TryGetValue(objectsFolderId, out var references))
-            {
-                references = new List<IReference>();
-                externalReferences[objectsFolderId] = references;
-            }
-
-            // Add Organizes references from ObjectsFolder to our folders
-            references.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, simulationFolder.NodeId));
-            references.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, staticDataFolder.NodeId));
 
             StartSimulation();
         }
     }
 
-    private FolderState CreateRootFolder(string path, string name)
+    private FolderState CreateFolderUnderObjects(
+        IDictionary<NodeId, IList<IReference>> externalReferences,
+        NodeId parentId,
+        string path,
+        string name)
     {
         var folder = new FolderState(null)
         {
@@ -85,6 +80,19 @@ public class TestNodeManager : CustomNodeManager2
             UserWriteMask = AttributeWriteMask.None,
             EventNotifier = EventNotifiers.None
         };
+
+        // Add reference from Objects folder to our folder
+        if (externalReferences != null)
+        {
+            if (!externalReferences.TryGetValue(parentId, out var references))
+            {
+                references = new List<IReference>();
+                externalReferences[parentId] = references;
+            }
+
+            folder.AddReference(ReferenceTypeIds.Organizes, true, parentId);
+            references.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, folder.NodeId));
+        }
 
         return folder;
     }
