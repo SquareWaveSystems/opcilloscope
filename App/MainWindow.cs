@@ -43,6 +43,9 @@ public class MainWindow : Toplevel
 
     private string? _lastEndpoint;
 
+    // Focus tracking for context-aware UI
+    private View? _focusedPanel;
+
     public MainWindow()
     {
         _logger = new Logger();
@@ -187,6 +190,12 @@ public class MainWindow : Toplevel
         _monitoredVariablesView.WriteRequested += OnWriteRequested;
         _monitoredVariablesView.TrendPlotRequested += OnTrendPlotRequested;
         _monitoredVariablesView.RecordToggleRequested += ToggleRecording;
+
+        // Wire up focus tracking for border highlighting and context-aware shortcuts
+        _addressSpaceView.Enter += OnPanelFocused;
+        _monitoredVariablesView.Enter += OnPanelFocused;
+        _nodeDetailsView.Enter += OnPanelFocused;
+        _logView.Enter += OnPanelFocused;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -361,6 +370,12 @@ public class MainWindow : Toplevel
         ThemeStyler.ApplyToFrame(_addressSpaceView, theme);
         ThemeStyler.ApplyToFrame(_nodeDetailsView, theme);
         ThemeStyler.ApplyToFrame(_logView, theme);
+
+        // Preserve focus highlight on the currently focused panel
+        if (_focusedPanel != null)
+        {
+            UpdatePanelBorder(_focusedPanel, isFocused: true);
+        }
     }
 
     private void OnThemeChanged(AppTheme theme)
@@ -517,6 +532,113 @@ public class MainWindow : Toplevel
     {
         _nodeDetailsView.ShowNodeAsync(node).FireAndForget(_logger);
     }
+
+    #region Focus Tracking and Context-Aware UI
+
+    /// <summary>
+    /// Handles focus changes to update border highlighting and status bar shortcuts.
+    /// </summary>
+    private void OnPanelFocused(object? sender, FocusEventArgs e)
+    {
+        if (sender is not View panel) return;
+
+        // Update border styling for previous panel (remove highlight)
+        if (_focusedPanel != null && _focusedPanel != panel)
+        {
+            UpdatePanelBorder(_focusedPanel, isFocused: false);
+        }
+
+        // Update border styling for new panel (add highlight)
+        _focusedPanel = panel;
+        UpdatePanelBorder(panel, isFocused: true);
+
+        // Update status bar shortcuts based on focused panel
+        UpdateStatusBarShortcuts();
+    }
+
+    /// <summary>
+    /// Updates the border color scheme of a panel based on focus state.
+    /// </summary>
+    private void UpdatePanelBorder(View panel, bool isFocused)
+    {
+        var theme = ThemeManager.Current;
+
+        if (panel is FrameView frameView && frameView.Border != null)
+        {
+            frameView.Border.ColorScheme = isFocused
+                ? theme.FocusedBorderColorScheme
+                : theme.BorderColorScheme;
+            frameView.SetNeedsLayout();
+        }
+    }
+
+    /// <summary>
+    /// Updates the status bar shortcuts based on which panel has focus.
+    /// </summary>
+    private void UpdateStatusBarShortcuts()
+    {
+        // Remove existing shortcuts (preserve activity spinner and labels)
+        var itemsToRemove = _statusBar.Subviews
+            .OfType<Shortcut>()
+            .ToList();
+
+        foreach (var item in itemsToRemove)
+        {
+            _statusBar.Remove(item);
+        }
+
+        var theme = ThemeManager.Current;
+
+        // Always add global shortcuts first
+        _statusBar.Add(new Shortcut(Key.F1, "Help", ShowHelp));
+        _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
+
+        // Add context-specific shortcuts based on focused panel
+        if (_focusedPanel == _addressSpaceView)
+        {
+            _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
+            _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
+        }
+        else if (_focusedPanel == _monitoredVariablesView)
+        {
+            _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
+            _statusBar.Add(new Shortcut(Key.Space, "Select", () => { })); // Handled by view
+            _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
+            _statusBar.Add(new Shortcut(Key.T, "Trend", ShowTrendForSelected));
+            _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
+        }
+        else if (_focusedPanel == _logView)
+        {
+            // Log view has minimal shortcuts - just global ones
+            _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
+        }
+        else if (_focusedPanel == _nodeDetailsView)
+        {
+            // Node details is read-only - just global shortcuts
+            _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
+        }
+        else
+        {
+            // Default: show refresh
+            _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
+        }
+
+        _statusBar.SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Shows trend plot for the selected variable in the monitored view.
+    /// </summary>
+    private void ShowTrendForSelected()
+    {
+        var variable = _monitoredVariablesView.SelectedVariable;
+        if (variable != null)
+        {
+            OnTrendPlotRequested(variable);
+        }
+    }
+
+    #endregion
 
     private void OnSubscribeRequested(BrowsedNode node)
     {
@@ -1189,6 +1311,13 @@ License: MIT
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _monitoredVariablesView.RecordToggleRequested -= ToggleRecording;
+
+            // Unsubscribe from focus events
+            _addressSpaceView.Enter -= OnPanelFocused;
+            _monitoredVariablesView.Enter -= OnPanelFocused;
+            _nodeDetailsView.Enter -= OnPanelFocused;
+            _logView.Enter -= OnPanelFocused;
+
             _connectionManager.Dispose();
         }
         base.Dispose(disposing);
