@@ -190,6 +190,7 @@ public class MainWindow : Toplevel
         _monitoredVariablesView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredVariablesView.WriteRequested += OnWriteRequested;
         _monitoredVariablesView.TrendPlotRequested += OnTrendPlotRequested;
+        _monitoredVariablesView.ScopeRequested += LaunchScope;
         _monitoredVariablesView.RecordToggleRequested += ToggleRecording;
 
         // Focus tracking using polling-based FocusManager (workaround for Terminal.Gui v2 Enter event instability)
@@ -298,7 +299,7 @@ public class MainWindow : Toplevel
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
-                    new MenuItem("_Scope", "Ctrl+G", LaunchScope),
+                    new MenuItem("_Scope", "S", LaunchScope),
                     new MenuItem("_Refresh Tree", "F5", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     _themeToggleItem,
@@ -610,7 +611,7 @@ public class MainWindow : Toplevel
             _statusBar.Add(new Shortcut(Key.Space, "Rec", () => { })); // Handled by view
             _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
             _statusBar.Add(new Shortcut(Key.T, "Trend", ShowTrendForSelected));
-            _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
+            _statusBar.Add(new Shortcut(Key.S, "Scope", LaunchScope));
         }
         else
         {
@@ -1327,6 +1328,7 @@ License: MIT
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _monitoredVariablesView.RecordToggleRequested -= ToggleRecording;
+            _monitoredVariablesView.ScopeRequested -= LaunchScope;
 
             // Stop focus tracking
             if (_focusManager != null)

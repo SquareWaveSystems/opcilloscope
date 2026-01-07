@@ -41,6 +41,7 @@ public class MonitoredVariablesView : FrameView
     public event Action? RecordToggleRequested;
     public event Action<MonitoredNode>? WriteRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
+    public event Action? ScopeRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
 
     public MonitoredNode? SelectedVariable
@@ -384,6 +385,11 @@ public class MonitoredVariablesView : FrameView
                 TrendPlotRequested?.Invoke(selected);
                 e.Handled = true;
             }
+        }
+        else if (e == Key.S)
+        {
+            ScopeRequested?.Invoke();
+            e.Handled = true;
         }
     }
 

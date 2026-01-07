@@ -56,7 +56,7 @@ MONITORED VARIABLES
   Space            Toggle recording selection
   W                Write value to node
   T                Show trend plot
-  Ctrl+G           Open Scope with selected
+  S                Open Scope with selected
 
 SCOPE VIEW CONTROLS
   Space            Pause/resume plotting
