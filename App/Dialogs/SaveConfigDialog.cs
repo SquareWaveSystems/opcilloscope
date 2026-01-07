@@ -18,7 +18,7 @@ public class SaveConfigDialog : Dialog
     private bool _confirmed;
 
     /// <summary>
-    /// Gets the full path to save the file (directory + filename with .cfg extension).
+    /// Gets the full path to save the file (directory + filename with .opcilloscope extension).
     /// </summary>
     public string FilePath => Path.Combine(_currentDirectory,
         ConfigurationService.EnsureConfigExtension(_currentFilename));
@@ -32,7 +32,7 @@ public class SaveConfigDialog : Dialog
     /// Creates a new SaveConfigDialog with the specified default directory and filename.
     /// </summary>
     /// <param name="defaultDirectory">The default directory to save to.</param>
-    /// <param name="defaultFilename">The default filename (with or without .cfg extension).</param>
+    /// <param name="defaultFilename">The default filename (with or without .opcilloscope extension).</param>
     public SaveConfigDialog(string defaultDirectory, string defaultFilename)
     {
         var theme = AppThemeManager.Current;
@@ -111,7 +111,7 @@ public class SaveConfigDialog : Dialog
         {
             X = 1,
             Y = 6,
-            Text = $"Save as type: OpcScope Config (*{ConfigurationService.ConfigFileExtension})",
+            Text = $"Save as type: Opcilloscope Config (*{ConfigurationService.ConfigFileExtension})",
             ColorScheme = theme.MainColorScheme
         };
 
@@ -160,16 +160,19 @@ public class SaveConfigDialog : Dialog
         _filenameField.SetFocus();
     }
 
+    /// <summary>
+    /// Handles the Browse button click to select a save location.
+    /// Opens a file dialog that allows the user to navigate directories.
+    /// The selected directory is extracted while preserving the current filename.
+    /// </summary>
     private void OnBrowseDirectory(object? sender, CommandEventArgs e)
     {
-        // Use OpenDialog to browse for a directory
-        // Note: Terminal.Gui's OpenDialog can browse directories
         using var dialog = new OpenDialog
         {
-            Title = "Select Folder",
+            Title = "Browse for Save Location",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("OpcScope Config", ConfigurationService.ConfigFileExtension)
+                new AllowedType("Opcilloscope Config", ConfigurationService.ConfigFileExtension)
             },
             Path = _currentDirectory,
             // We'll let user navigate to any directory and extract the directory path
