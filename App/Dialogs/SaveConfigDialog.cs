@@ -18,7 +18,7 @@ public class SaveConfigDialog : Dialog
     private bool _confirmed;
 
     /// <summary>
-    /// Gets the full path to save the file (directory + filename with .opcilloscope extension).
+    /// Gets the full path to save the file (directory + filename with .cfg extension).
     /// </summary>
     public string FilePath => Path.Combine(_currentDirectory,
         ConfigurationService.EnsureConfigExtension(_currentFilename));
@@ -32,7 +32,7 @@ public class SaveConfigDialog : Dialog
     /// Creates a new SaveConfigDialog with the specified default directory and filename.
     /// </summary>
     /// <param name="defaultDirectory">The default directory to save to.</param>
-    /// <param name="defaultFilename">The default filename (with or without .opcilloscope extension).</param>
+    /// <param name="defaultFilename">The default filename (with or without .cfg extension).</param>
     public SaveConfigDialog(string defaultDirectory, string defaultFilename)
     {
         var theme = AppThemeManager.Current;

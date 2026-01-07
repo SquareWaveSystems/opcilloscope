@@ -240,16 +240,16 @@ public class ConfigurationService
     }
 
     /// <summary>
-    /// The file extension used for configuration files (.opcilloscope).
+    /// The file extension used for configuration files (.cfg).
     /// </summary>
-    public const string ConfigFileExtension = ".opcilloscope";
+    public const string ConfigFileExtension = ".cfg";
 
     /// <summary>
     /// Generates a default filename for saving a configuration.
-    /// Format: {sanitized_connection_url}_{timestamp}.opcilloscope
+    /// Format: {sanitized_connection_url}_{timestamp}.cfg
     /// </summary>
     /// <param name="connectionUrl">The OPC UA connection URL, or null if not connected.</param>
-    /// <returns>A sanitized filename with .opcilloscope extension.</returns>
+    /// <returns>A sanitized filename with .cfg extension.</returns>
     public static string GenerateDefaultFilename(string? connectionUrl)
     {
         var timestamp = DateTime.Now.ToString("yyyyMMddHHmm");
@@ -324,10 +324,10 @@ public class ConfigurationService
     }
 
     /// <summary>
-    /// Ensures a filename has the correct .opcilloscope extension.
+    /// Ensures a filename has the correct .cfg extension.
     /// </summary>
     /// <param name="filename">The filename to check.</param>
-    /// <returns>The filename with .opcilloscope extension.</returns>
+    /// <returns>The filename with .cfg extension.</returns>
     public static string EnsureConfigExtension(string filename)
     {
         if (string.IsNullOrEmpty(filename))
