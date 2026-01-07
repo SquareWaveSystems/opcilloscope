@@ -240,7 +240,7 @@ public class ConfigurationService
     }
 
     /// <summary>
-    /// The file extension used for configuration files.
+    /// The file extension used for configuration files (.cfg).
     /// </summary>
     public const string ConfigFileExtension = ".cfg";
 
