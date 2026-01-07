@@ -1,8 +1,8 @@
-# OpcScope UAT Checklist
+# opcilloscope UAT Checklist
 
 ## Application Startup
 - [ ] App launches without arguments
-- [ ] App launches with config file argument (`opcscope config.opcscope`)
+- [ ] App launches with config file argument (`opcilloscope config.cfg`)
 - [ ] App launches with `--config` flag
 - [ ] `--help` displays usage information
 - [ ] Invalid config file shows error gracefully

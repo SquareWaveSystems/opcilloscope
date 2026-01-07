@@ -3,6 +3,18 @@
 ## Overview
 Opcilloscope is a terminal-based OPC UA client/monitor application built with .NET 10, Terminal.Gui v2, and OPC Foundation Client SDK (`OPCFoundation.NetStandard.Opc.Ua.Client`). It provides real-time browsing, monitoring, and visualization of industrial automation data.
 
+## Naming Convention
+
+The project name is **opcilloscope** (lowercase "o") in all contexts except where .NET naming conventions require PascalCase:
+
+| Context | Name | Example |
+|---------|------|---------|
+| User-facing text, CLI, URLs | `opcilloscope` | `opcilloscope --help` |
+| C# namespaces, classes, projects | `Opcilloscope` | `namespace Opcilloscope.App` |
+| File/folder names (code) | `Opcilloscope` | `Opcilloscope.csproj` |
+| Config directories (all platforms) | `opcilloscope` | `~/.config/opcilloscope/` |
+| Release artifacts | `opcilloscope` | `opcilloscope-linux-x64.tar.gz` |
+
 ## Environment Setup
 
 ### .NET SDK Installation

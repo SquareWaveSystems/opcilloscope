@@ -1,10 +1,10 @@
-# OpcScope
+# opcilloscope
 
 **The lightweight OPC UA client that gets out of your way.**
 
 Browse, monitor, and subscribe to industrial automation data — right from your terminal. No bloated GUI, no complex setup, no license fees.
 
-![OpcScope Demo](docs/assets/hero-demo.gif)
+![opcilloscope Demo](docs/assets/hero-demo.gif)
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-purple)](https://dotnet.microsoft.com/download/dotnet/10.0)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
@@ -12,10 +12,10 @@ Browse, monitor, and subscribe to industrial automation data — right from your
 
 ---
 
-## Why OpcScope?
+## Why opcilloscope?
 
-| Traditional OPC Clients | OpcScope |
-|------------------------|----------|
+| Traditional OPC Clients | opcilloscope |
+|------------------------|--------------|
 | Heavy desktop apps with complex licensing | Single portable binary, MIT licensed |
 | Minutes to install and configure | `curl | bash` and you're running |
 | Resource-hungry GUIs | ~50MB RAM, runs anywhere |
@@ -74,32 +74,32 @@ Save your connection and subscriptions to a config file. Load it next time to pi
 
 **Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BrettKinny/OpcScope/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/BrettKinny/opcilloscope/main/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/BrettKinny/OpcScope/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/BrettKinny/opcilloscope/main/install.ps1 | iex
 ```
 
 ### Or Download a Release
 
-Grab the latest from [GitHub Releases](https://github.com/BrettKinny/OpcScope/releases):
+Grab the latest from [GitHub Releases](https://github.com/BrettKinny/opcilloscope/releases):
 
 | Platform | File |
 |----------|------|
-| Windows x64 | `opcscope-win-x64.zip` |
-| Windows ARM64 | `opcscope-win-arm64.zip` |
-| Linux x64 | `opcscope-linux-x64.tar.gz` |
-| Linux ARM64 | `opcscope-linux-arm64.tar.gz` |
-| macOS Intel | `opcscope-osx-x64.tar.gz` |
-| macOS Apple Silicon | `opcscope-osx-arm64.tar.gz` |
+| Windows x64 | `opcilloscope-win-x64.zip` |
+| Windows ARM64 | `opcilloscope-win-arm64.zip` |
+| Linux x64 | `opcilloscope-linux-x64.tar.gz` |
+| Linux ARM64 | `opcilloscope-linux-arm64.tar.gz` |
+| macOS Intel | `opcilloscope-osx-x64.tar.gz` |
+| macOS Apple Silicon | `opcilloscope-osx-arm64.tar.gz` |
 
 ### Build From Source
 
 ```bash
-git clone https://github.com/BrettKinny/OpcScope.git
-cd OpcScope
+git clone https://github.com/BrettKinny/opcilloscope.git
+cd opcilloscope
 dotnet build
 dotnet run
 ```
@@ -110,7 +110,7 @@ Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ## Keyboard Shortcuts
 
-OpcScope is designed for keyboard-first workflows:
+opcilloscope is designed for keyboard-first workflows:
 
 | Key | Action |
 |-----|--------|
@@ -129,11 +129,11 @@ OpcScope is designed for keyboard-first workflows:
 
 ```bash
 # Launch with a saved configuration
-opcscope config.opcscope
-opcscope --config production.json
+opcilloscope config.cfg
+opcilloscope --config production.json
 
 # Show help
-opcscope --help
+opcilloscope --help
 ```
 
 ---
@@ -187,7 +187,7 @@ Don't have an OPC UA server handy? Try these:
 ## Project Structure
 
 ```
-OpcScope/
+Opcilloscope/
 ├── Program.cs                   # Entry point
 ├── App/
 │   ├── MainWindow.cs           # Layout orchestration

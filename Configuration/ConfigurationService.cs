@@ -193,9 +193,9 @@ public class ConfigurationService
     /// <summary>
     /// Gets the default directory for configuration files.
     /// Uses cross-platform appropriate locations:
-    /// - Windows: %APPDATA%/OpcScope/configs/
-    /// - macOS: ~/Library/Application Support/OpcScope/configs/
-    /// - Linux: ~/.config/opcscope/configs/
+    /// - Windows: %APPDATA%/opcilloscope/configs/
+    /// - macOS: ~/Library/Application Support/opcilloscope/configs/
+    /// - Linux: ~/.config/opcilloscope/configs/
     /// </summary>
     /// <returns>Path to the default configuration directory.</returns>
     public static string GetDefaultConfigDirectory()
@@ -205,19 +205,19 @@ public class ConfigurationService
 
         if (OperatingSystem.IsWindows())
         {
-            // Windows: %APPDATA%/OpcScope/configs/
+            // Windows: %APPDATA%/opcilloscope/configs/
             baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            appFolder = "OpcScope";
+            appFolder = "opcilloscope";
         }
         else if (OperatingSystem.IsMacOS())
         {
-            // macOS: ~/Library/Application Support/OpcScope/configs/
+            // macOS: ~/Library/Application Support/opcilloscope/configs/
             baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            appFolder = "OpcScope";
+            appFolder = "opcilloscope";
         }
         else
         {
-            // Linux: ~/.config/opcscope/configs/
+            // Linux: ~/.config/opcilloscope/configs/
             var configHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
             if (string.IsNullOrEmpty(configHome))
             {
@@ -225,7 +225,7 @@ public class ConfigurationService
                 configHome = Path.Combine(home, ".config");
             }
             baseDir = configHome;
-            appFolder = "opcscope"; // lowercase for Linux convention
+            appFolder = "opcilloscope";
         }
 
         // Fallback if base directory is empty
