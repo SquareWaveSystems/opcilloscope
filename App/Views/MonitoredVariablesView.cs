@@ -143,6 +143,7 @@ public class MonitoredVariablesView : FrameView
         // Terminal.Gui v2 TableView doesn't support per-row coloring
 
         _tableView.KeyDown += HandleKeyDown;
+        _tableView.MouseClick += HandleMouseClick;
 
         // Create empty state label
         _emptyStateLabel = new Label
@@ -341,6 +342,70 @@ public class MonitoredVariablesView : FrameView
         var variable = SelectedVariable;
         if (variable == null) return;
 
+        ToggleScopeSelectionForVariable(variable);
+    }
+
+    private void OnRecordButtonClicked(object? sender, CommandEventArgs e)
+    {
+        RecordToggleRequested?.Invoke();
+    }
+
+    private void HandleKeyDown(object? _, Key e)
+    {
+        if (e == Key.Delete || e == Key.Backspace)
+        {
+            var selected = SelectedVariable;
+            if (selected != null)
+            {
+                UnsubscribeRequested?.Invoke(selected);
+                e.Handled = true;
+            }
+        }
+        else if (e == Key.Space)
+        {
+            // Toggle scope selection for the highlighted variable
+            ToggleScopeSelection();
+            e.Handled = true;
+        }
+        else if (e == Key.W)
+        {
+            var selected = SelectedVariable;
+            if (selected != null)
+            {
+                WriteRequested?.Invoke(selected);
+                e.Handled = true;
+            }
+        }
+        else if (e == Key.T)
+        {
+            var selected = SelectedVariable;
+            if (selected != null)
+            {
+                TrendPlotRequested?.Invoke(selected);
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void HandleMouseClick(object? sender, MouseEventArgs e)
+    {
+        // Convert screen position to table cell
+        var cellPoint = _tableView.ScreenToCell(e.Position.X, e.Position.Y, out int? columnIndex, out int? rowIndex);
+
+        // Check if click is on the "Rec" column (index 0) and on a valid row
+        if (columnIndex == 0 && rowIndex.HasValue && rowIndex.Value >= 0 && rowIndex.Value < _dataTable.Rows.Count)
+        {
+            var row = _dataTable.Rows[rowIndex.Value];
+            var variable = row["_VariableRef"] as MonitoredNode;
+            if (variable == null) return;
+
+            ToggleScopeSelectionForVariable(variable);
+            e.Handled = true;
+        }
+    }
+
+    private void ToggleScopeSelectionForVariable(MonitoredNode variable)
+    {
         if (variable.IsSelectedForScope)
         {
             // Deselect
@@ -389,48 +454,6 @@ public class MonitoredVariablesView : FrameView
         ScopeSelectionChanged?.Invoke(ScopeSelectionCount);
     }
 
-    private void OnRecordButtonClicked(object? sender, CommandEventArgs e)
-    {
-        RecordToggleRequested?.Invoke();
-    }
-
-    private void HandleKeyDown(object? _, Key e)
-    {
-        if (e == Key.Delete || e == Key.Backspace)
-        {
-            var selected = SelectedVariable;
-            if (selected != null)
-            {
-                UnsubscribeRequested?.Invoke(selected);
-                e.Handled = true;
-            }
-        }
-        else if (e == Key.Space)
-        {
-            // Toggle scope selection for the highlighted variable
-            ToggleScopeSelection();
-            e.Handled = true;
-        }
-        else if (e == Key.W)
-        {
-            var selected = SelectedVariable;
-            if (selected != null)
-            {
-                WriteRequested?.Invoke(selected);
-                e.Handled = true;
-            }
-        }
-        else if (e == Key.T)
-        {
-            var selected = SelectedVariable;
-            if (selected != null)
-            {
-                TrendPlotRequested?.Invoke(selected);
-                e.Handled = true;
-            }
-        }
-    }
-
     /// <summary>
     /// Updates the recording status indicator in the title bar area.
     /// </summary>
@@ -465,6 +488,7 @@ public class MonitoredVariablesView : FrameView
         {
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _recordButton.Accepting -= OnRecordButtonClicked;
+            _tableView.MouseClick -= HandleMouseClick;
         }
         base.Dispose(disposing);
     }
