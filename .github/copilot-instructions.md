@@ -6,6 +6,18 @@ Opcilloscope is a terminal-based OPC UA client/monitor application built with:
 - **Terminal.Gui v2** for the UI
 - **OPC Foundation Client SDK** (`OPCFoundation.NetStandard.Opc.Ua.Client`)
 
+## Naming Convention
+
+The project name is **opcilloscope** (lowercase "o") in all contexts except where .NET naming conventions require PascalCase:
+
+| Context | Name | Example |
+|---------|------|---------|
+| User-facing text, CLI, URLs | `opcilloscope` | `opcilloscope --help` |
+| C# namespaces, classes, projects | `Opcilloscope` | `namespace Opcilloscope.App` |
+| File/folder names (code) | `Opcilloscope` | `Opcilloscope.csproj` |
+| Config directories (all platforms) | `opcilloscope` | `~/.config/opcilloscope/` |
+| Release artifacts | `opcilloscope` | `opcilloscope-linux-x64.tar.gz` |
+
 ## Build Commands
 ```bash
 dotnet build      # Build project
@@ -198,15 +210,9 @@ monitoredItem.Notification += (item, e) => {
 };
 ```
 
-## NuGet Configuration
+## NuGet Packages
 
-The project uses a **local package source** (`./packages/`) due to network restrictions.
-
-To add new packages:
-1. Download `.nupkg` files to `packages/` directory
-2. Run `dotnet restore`
-
-### Required Packages
+Required packages:
 - `OPCFoundation.NetStandard.Opc.Ua.Client` - Client session and subscription
 - `OPCFoundation.NetStandard.Opc.Ua.Core` - Core types
 - `OPCFoundation.NetStandard.Opc.Ua.Configuration` - Application configuration
@@ -215,11 +221,10 @@ To add new packages:
 
 ## Common Pitfalls
 
-1. **NuGet restore fails** - Use local package source at `./packages/`
-2. **Tests fail with Xunit errors in main project** - Ensure `tests/**` is excluded in Opcilloscope.csproj
-3. **UI thread exceptions** - Always use `Application.Invoke()` for UI updates from background threads
-4. **Ambiguous NodeBrowser reference** - OPC Foundation has its own `Browser` class; use fully qualified names
-5. **Certificate validation errors** - Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
+1. **Tests fail with Xunit errors in main project** - Ensure `tests/**` is excluded in Opcilloscope.csproj
+2. **UI thread exceptions** - Always use `Application.Invoke()` for UI updates from background threads
+3. **Ambiguous NodeBrowser reference** - OPC Foundation has its own `Browser` class; use fully qualified names
+4. **Certificate validation errors** - Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
 
 ## Security Notes
 

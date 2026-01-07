@@ -1111,8 +1111,8 @@ License: MIT
             Title = "Open Configuration",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("OpcScope Config", ConfigurationService.ConfigFileExtension),
-                new AllowedType("Legacy Opcilloscope Config", ".opcilloscope"),
+                new AllowedType("opcilloscope Config", ConfigurationService.ConfigFileExtension),
+                new AllowedType("Legacy opcilloscope Config", ".opcilloscope"),
                 new AllowedType("JSON Files", ".json")
             },
             Path = defaultDir
@@ -1156,7 +1156,7 @@ License: MIT
             Title = "Save Configuration",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("OpcScope Config", ConfigurationService.ConfigFileExtension)
+                new AllowedType("opcilloscope Config", ConfigurationService.ConfigFileExtension)
             },
             Path = defaultPath
         };
