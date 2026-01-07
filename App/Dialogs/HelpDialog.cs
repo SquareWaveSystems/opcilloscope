@@ -14,7 +14,7 @@ public class HelpDialog : Dialog
     {
         Title = " opcilloscope - Help ";
         Width = 64;
-        Height = 36;
+        Height = 34;
 
         var theme = ThemeManager.Current;
 
@@ -42,16 +42,13 @@ public class HelpDialog : Dialog
         };
 
         contentView.Text = @"
-PANE NAVIGATION
-  Alt+1            Focus Address Space
-  Alt+2            Focus Monitored Variables
-  Ctrl+Tab         Cycle between panes
-  Ctrl+Shift+Tab   Cycle backwards
+NAVIGATION
+  Tab              Switch between panes
+  Arrow Keys       Navigate within pane
 
 ADDRESS SPACE
   Enter            Subscribe to selected node
   Space            Expand/collapse tree node
-  Arrow Keys       Navigate tree
   F5               Refresh
 
 MONITORED VARIABLES

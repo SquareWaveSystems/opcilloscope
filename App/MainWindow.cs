@@ -593,10 +593,9 @@ public class MainWindow : Toplevel
             _statusBar.Remove(item);
         }
 
-        var theme = ThemeManager.Current;
-
         // Always add global shortcuts first
         _statusBar.Add(new Shortcut(Key.F1, "Help", ShowHelp));
+        _statusBar.Add(new Shortcut(Key.Tab, "Switch", () => _focusManager?.FocusNext()));
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
         // Add context-specific shortcuts based on focused panel
@@ -607,21 +606,11 @@ public class MainWindow : Toplevel
         }
         else if (_focusedPanel == _monitoredVariablesView)
         {
-            _statusBar.Add(new Shortcut(Key.Delete, "Unsubscribe", UnsubscribeSelected));
-            _statusBar.Add(new Shortcut(Key.Space, "Select", () => { })); // Handled by view
+            _statusBar.Add(new Shortcut(Key.Delete, "Unsub", UnsubscribeSelected));
+            _statusBar.Add(new Shortcut(Key.Space, "Rec", () => { })); // Handled by view
             _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
             _statusBar.Add(new Shortcut(Key.T, "Trend", ShowTrendForSelected));
             _statusBar.Add(new Shortcut(Key.G.WithCtrl, "Scope", LaunchScope));
-        }
-        else if (_focusedPanel == _logView)
-        {
-            // Log view has minimal shortcuts - just global ones
-            _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
-        }
-        else if (_focusedPanel == _nodeDetailsView)
-        {
-            // Node details is read-only - just global shortcuts
-            _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
         }
         else
         {
@@ -653,31 +642,10 @@ public class MainWindow : Toplevel
     /// </summary>
     protected override bool OnKeyDown(Key key)
     {
-        // Alt+1: Focus AddressSpaceView
-        if (key == Key.D1.WithAlt)
-        {
-            _focusManager?.FocusPane(0);
-            return true;
-        }
-
-        // Alt+2: Focus MonitoredVariablesView
-        if (key == Key.D2.WithAlt)
-        {
-            _focusManager?.FocusPane(1);
-            return true;
-        }
-
-        // Ctrl+Tab: Cycle to next pane
-        if (key == Key.Tab.WithCtrl)
+        // Tab: Cycle between panes
+        if (key == Key.Tab)
         {
             _focusManager?.FocusNext();
-            return true;
-        }
-
-        // Ctrl+Shift+Tab: Cycle to previous pane
-        if (key == Key.Tab.WithCtrl.WithShift)
-        {
-            _focusManager?.FocusPrevious();
             return true;
         }
 
