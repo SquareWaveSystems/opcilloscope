@@ -21,13 +21,14 @@ class Program
 
             for (int i = 0; i < args.Length; i++)
             {
-                // Config file options: --config <path> or direct path ending with .opcilloscope/.json
+                // Config file options: --config <path> or direct path ending with .cfg/.opcilloscope/.json
                 if ((args[i] == "--config" || args[i] == "-f") && i + 1 < args.Length)
                 {
                     configPath = args[i + 1];
                     i++; // Skip the next argument
                 }
-                else if (args[i].EndsWith(".opcilloscope", StringComparison.OrdinalIgnoreCase) ||
+                else if (args[i].EndsWith(".cfg", StringComparison.OrdinalIgnoreCase) ||
+                         args[i].EndsWith(".opcilloscope", StringComparison.OrdinalIgnoreCase) ||
                          (args[i].EndsWith(".json", StringComparison.OrdinalIgnoreCase) && File.Exists(args[i])))
                 {
                     configPath = args[i];
@@ -95,7 +96,7 @@ class Program
         Console.WriteLine("Usage: opcilloscope [options] [file]");
         Console.WriteLine();
         Console.WriteLine("Options:");
-        Console.WriteLine("  -f, --config <file>   Load configuration file (.opcilloscope or .json)");
+        Console.WriteLine("  -f, --config <file>   Load configuration file (.cfg, .opcilloscope, or .json)");
         Console.WriteLine("  -h, --help            Show this help message");
         Console.WriteLine();
         Console.WriteLine("Note: Direct server connection via --connect or opc.tcp:// URLs is not yet");
@@ -103,7 +104,7 @@ class Program
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  opcilloscope                           Start with empty configuration");
-        Console.WriteLine("  opcilloscope production.opcilloscope   Load configuration file");
+        Console.WriteLine("  opcilloscope production.cfg            Load configuration file");
         Console.WriteLine("  opcilloscope --config config.json      Load configuration file");
         Console.WriteLine();
     }

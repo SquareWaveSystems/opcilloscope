@@ -1067,14 +1067,19 @@ License: MIT
         if (_configService.HasUnsavedChanges && !ConfirmDiscardChanges())
             return;
 
+        // Start in the default config directory
+        var defaultDir = ConfigurationService.GetDefaultConfigDirectory();
+
         using var dialog = new OpenDialog
         {
             Title = "Open Configuration",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("Opcilloscope Config", ".opcilloscope"),
+                new AllowedType("OpcScope Config", ConfigurationService.ConfigFileExtension),
+                new AllowedType("Legacy Opcilloscope Config", ".opcilloscope"),
                 new AllowedType("JSON Files", ".json")
-            }
+            },
+            Path = defaultDir
         };
 
         Application.Run(dialog);
@@ -1101,26 +1106,30 @@ License: MIT
 
     /// <summary>
     /// Saves the current configuration to a new file path.
+    /// Uses cross-platform default directory and generates filename from connection URL.
     /// </summary>
     private void SaveConfigAs()
     {
+        // Get the default directory and generate a default filename
+        var defaultDir = ConfigurationService.GetDefaultConfigDirectory();
+        var defaultFilename = ConfigurationService.GenerateDefaultFilename(_connectionManager.CurrentEndpoint);
+        var defaultPath = Path.Combine(defaultDir, defaultFilename);
+
         using var dialog = new SaveDialog
         {
             Title = "Save Configuration",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("Opcilloscope Config", ".opcilloscope")
-            }
+                new AllowedType("OpcScope Config", ConfigurationService.ConfigFileExtension)
+            },
+            Path = defaultPath
         };
 
         Application.Run(dialog);
 
         if (!dialog.Canceled && dialog.Path != null)
         {
-            var filePath = dialog.Path.ToString()!;
-            if (!filePath.EndsWith(".opcilloscope", StringComparison.OrdinalIgnoreCase))
-                filePath += ".opcilloscope";
-
+            var filePath = ConfigurationService.EnsureConfigExtension(dialog.Path.ToString()!);
             SaveConfigurationAsync(filePath).FireAndForget(_logger);
         }
     }
