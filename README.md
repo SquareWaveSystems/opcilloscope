@@ -20,7 +20,7 @@ Browse, monitor, and subscribe to industrial automation data — right from your
 | Minutes to install and configure | `curl | bash` and you're running |
 | Resource-hungry GUIs | ~50MB RAM, runs anywhere |
 | Windows-only | Windows, Linux, macOS (x64 & ARM) |
-| Click-heavy workflows | Keyboard-driven, SSH-friendly |
+| Click-heavy workflows | Keyboard-driven, terminal-native |
 
 **Built for automation engineers who live in the terminal.**
 
@@ -171,7 +171,7 @@ opcilloscope --help
 - **Troubleshooting**: Monitor live values during fault diagnosis
 - **Integration Testing**: Validate OPC UA server configurations
 - **Documentation**: Export snapshots for handover reports
-- **Remote Access**: SSH into a server and monitor without VNC/RDP
+- **Remote Monitoring**: Run on headless servers without GUI dependencies
 
 ---
 
