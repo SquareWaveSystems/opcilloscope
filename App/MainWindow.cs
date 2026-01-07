@@ -58,6 +58,7 @@ public class MainWindow : Toplevel
         _connectionManager.StateChanged += OnConnectionStateChanged;
         _connectionManager.ConnectionError += OnConnectionError;
         _connectionManager.ValueChanged += OnValueChanged;
+        _connectionManager.AutoReconnectTriggered += OnAutoReconnectTriggered;
         _connectionManager.VariableAdded += variable =>
         {
             UiThread.Run(() => _monitoredVariablesView?.AddVariable(variable));
@@ -485,6 +486,11 @@ public class MainWindow : Toplevel
             if (success)
             {
                 _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+                _logger.Info("Reconnected successfully - subscriptions restored");
+            }
+            else
+            {
+                _logger.Error("Reconnection failed");
             }
         }
         finally
@@ -791,6 +797,19 @@ public class MainWindow : Toplevel
         UiThread.Run(() =>
         {
             MessageBox.ErrorQuery("Connection Error", message, "OK");
+        });
+    }
+
+    private void OnAutoReconnectTriggered()
+    {
+        UiThread.Run(() =>
+        {
+            _logger.Warning("Connection lost - attempting automatic reconnection...");
+            ShowActivity("Reconnecting...");
+            StartConnectingAnimation();
+
+            // Start reconnection asynchronously
+            ReconnectAsync().FireAndForget(_logger);
         });
     }
 

@@ -4,7 +4,7 @@ namespace Opcilloscope.OpcUa;
 
 /// <summary>
 /// Manages OPC UA connection lifecycle including connect, disconnect, and reconnect operations.
-/// Extracts connection orchestration from the UI layer for better separation of concerns.
+/// Supports proper subscription preservation during reconnection.
 /// </summary>
 public sealed class ConnectionManager : IDisposable
 {
@@ -14,6 +14,7 @@ public sealed class ConnectionManager : IDisposable
     private SubscriptionManager? _subscriptionManager;
     private string? _lastEndpoint;
     private bool _disposed;
+    private bool _isReconnecting;
 
     /// <summary>
     /// Gets whether there is an active connection.
@@ -70,6 +71,11 @@ public sealed class ConnectionManager : IDisposable
     /// </summary>
     public event Action<uint>? VariableRemoved;
 
+    /// <summary>
+    /// Raised when automatic reconnection is triggered due to connection loss.
+    /// </summary>
+    public event Action? AutoReconnectTriggered;
+
     public ConnectionManager(Logger logger)
     {
         _logger = logger;
@@ -79,6 +85,7 @@ public sealed class ConnectionManager : IDisposable
         _client.Connected += OnClientConnected;
         _client.Disconnected += OnClientDisconnected;
         _client.ConnectionError += OnClientConnectionError;
+        _client.ReconnectRequired += OnReconnectRequired;
     }
 
     /// <summary>
@@ -128,7 +135,8 @@ public sealed class ConnectionManager : IDisposable
     }
 
     /// <summary>
-    /// Attempts to reconnect to the last endpoint with exponential backoff.
+    /// Attempts to reconnect to the last endpoint preserving subscriptions.
+    /// Uses OPC UA session reconnect/transfer to maintain monitored variables.
     /// </summary>
     /// <returns>True if reconnection succeeded, false otherwise.</returns>
     public async Task<bool> ReconnectAsync()
@@ -139,7 +147,17 @@ public sealed class ConnectionManager : IDisposable
             return false;
         }
 
+        if (_isReconnecting)
+        {
+            _logger.Warning("Reconnection already in progress");
+            return false;
+        }
+
+        _isReconnecting = true;
         StateChanged?.Invoke(ConnectionState.Reconnecting);
+
+        // Mark all monitored variables as stale during reconnection
+        _subscriptionManager?.MarkAllAsStale();
 
         try
         {
@@ -147,7 +165,8 @@ public sealed class ConnectionManager : IDisposable
 
             if (success)
             {
-                await InitializeSubscriptionAsync();
+                // Try to restore subscriptions
+                await RestoreSubscriptionsAsync();
                 StateChanged?.Invoke(ConnectionState.Connected);
             }
             else
@@ -162,6 +181,47 @@ public sealed class ConnectionManager : IDisposable
             _logger.Error($"Reconnection failed: {ex.Message}");
             StateChanged?.Invoke(ConnectionState.Disconnected);
             return false;
+        }
+        finally
+        {
+            _isReconnecting = false;
+        }
+    }
+
+    /// <summary>
+    /// Restores subscriptions after successful reconnection.
+    /// First checks if subscriptions were transferred, otherwise recreates them.
+    /// </summary>
+    private async Task RestoreSubscriptionsAsync()
+    {
+        if (_subscriptionManager == null)
+        {
+            // No subscriptions existed - create fresh subscription manager
+            await InitializeSubscriptionAsync();
+            return;
+        }
+
+        // Try to reattach to transferred subscriptions
+        if (_subscriptionManager.IsSubscriptionValid())
+        {
+            var reattached = await _subscriptionManager.ReattachAfterReconnectAsync();
+            if (reattached)
+            {
+                _logger.Info("Subscriptions preserved successfully");
+                return;
+            }
+        }
+
+        // Subscription transfer failed - recreate them
+        _logger.Info("Recreating subscriptions after reconnection...");
+        var recreated = await _subscriptionManager.RecreateSubscriptionsAsync();
+
+        if (!recreated)
+        {
+            _logger.Warning("Failed to recreate subscriptions - initializing fresh");
+            // Last resort: start fresh (will lose monitored nodes)
+            DisposeSubscription();
+            await InitializeSubscriptionAsync();
         }
     }
 
@@ -216,7 +276,10 @@ public sealed class ConnectionManager : IDisposable
 
     private void OnClientDisconnected()
     {
-        StateChanged?.Invoke(ConnectionState.Disconnected);
+        if (!_isReconnecting)
+        {
+            StateChanged?.Invoke(ConnectionState.Disconnected);
+        }
     }
 
     private void OnClientConnectionError(string message)
@@ -224,10 +287,27 @@ public sealed class ConnectionManager : IDisposable
         ConnectionError?.Invoke(message);
     }
 
+    private void OnReconnectRequired()
+    {
+        if (_isReconnecting)
+            return;
+
+        _logger.Warning("Connection lost - automatic reconnection triggered");
+        AutoReconnectTriggered?.Invoke();
+
+        // Note: The UI layer should call ReconnectAsync() when it receives AutoReconnectTriggered
+        // This allows the UI to show appropriate feedback during reconnection
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+
+        _client.Connected -= OnClientConnected;
+        _client.Disconnected -= OnClientDisconnected;
+        _client.ConnectionError -= OnClientConnectionError;
+        _client.ReconnectRequired -= OnReconnectRequired;
 
         DisposeSubscription();
         _client.Dispose();

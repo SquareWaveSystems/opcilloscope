@@ -6,6 +6,7 @@ namespace Opcilloscope.OpcUa;
 
 /// <summary>
 /// Wrapper around OPC Foundation Client Session providing async connection management.
+/// Supports proper OPC UA reconnection with subscription preservation.
 /// </summary>
 public class OpcUaClientWrapper : IDisposable
 {
@@ -15,14 +16,31 @@ public class OpcUaClientWrapper : IDisposable
     private CancellationTokenSource? _reconnectCts;
     private bool _disposed;
     private ApplicationConfiguration? _appConfig;
+    private ConfiguredEndpoint? _lastConfiguredEndpoint;
 
     public bool IsConnected => _session?.Connected ?? false;
     public string? CurrentEndpoint => _currentEndpoint;
     public ISession? Session => _session;
 
+    /// <summary>
+    /// Raised when connection is established (initial or after reconnect).
+    /// </summary>
     public event Action? Connected;
+
+    /// <summary>
+    /// Raised when connection is lost or closed.
+    /// </summary>
     public event Action? Disconnected;
+
+    /// <summary>
+    /// Raised when a connection error occurs.
+    /// </summary>
     public event Action<string>? ConnectionError;
+
+    /// <summary>
+    /// Raised when keep-alive detects connection loss and automatic reconnection should be attempted.
+    /// </summary>
+    public event Action? ReconnectRequired;
 
     public OpcUaClientWrapper(Logger? logger = null)
     {
@@ -104,6 +122,7 @@ public class OpcUaClientWrapper : IDisposable
             // Create session
             var endpointConfig = EndpointConfiguration.Create(config);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
+            _lastConfiguredEndpoint = endpoint;
 
 #pragma warning disable CS0618 // Session.Create is obsolete but ISessionFactory.CreateAsync requires additional setup
             _session = await Opc.Ua.Client.Session.Create(
@@ -116,6 +135,10 @@ public class OpcUaClientWrapper : IDisposable
                 null
             );
 #pragma warning restore CS0618
+
+            // Configure session for subscription preservation during reconnection
+            _session.DeleteSubscriptionsOnClose = false;
+            _session.TransferSubscriptionsOnReconnect = true;
 
             _session.KeepAlive += Session_KeepAlive;
 
@@ -140,7 +163,8 @@ public class OpcUaClientWrapper : IDisposable
             _logger.Warning($"Keep alive error: {e.Status}");
             if (!session.Connected)
             {
-                Disconnected?.Invoke();
+                _logger.Warning("Connection lost - reconnection required");
+                ReconnectRequired?.Invoke();
             }
         }
     }
@@ -169,31 +193,64 @@ public class OpcUaClientWrapper : IDisposable
         }
     }
 
+    /// <summary>
+    /// Attempts to reconnect preserving the existing session and subscriptions.
+    /// Uses OPC UA Session.Reconnect first, then falls back to recreating the session
+    /// with subscription transfer.
+    /// </summary>
+    /// <returns>True if reconnection succeeded, false otherwise.</returns>
     public async Task<bool> ReconnectAsync()
     {
-        if (string.IsNullOrEmpty(_currentEndpoint))
+        if (_session == null && string.IsNullOrEmpty(_currentEndpoint))
+        {
+            _logger.Warning("No session or endpoint to reconnect");
             return false;
+        }
 
-        var endpoint = _currentEndpoint;
-        Disconnect();
+        _reconnectCts = new CancellationTokenSource();
 
         // Exponential backoff: 1s, 2s, 4s, 8s
         int[] delays = { 1000, 2000, 4000, 8000 };
-        _reconnectCts = new CancellationTokenSource();
 
-        for (int i = 0; i < delays.Length; i++)
+        for (int attempt = 0; attempt < delays.Length; attempt++)
         {
             if (_reconnectCts.Token.IsCancellationRequested)
                 return false;
 
-            _logger.Info($"Reconnection attempt {i + 1}/{delays.Length}...");
-
-            if (await ConnectAsync(endpoint))
-                return true;
+            _logger.Info($"Reconnection attempt {attempt + 1}/{delays.Length}...");
 
             try
             {
-                await Task.Delay(delays[i], _reconnectCts.Token);
+                // Strategy 1: Try to reconnect the existing session (preserves subscriptions automatically)
+                if (_session != null)
+                {
+                    var reconnectResult = await TrySessionReconnectAsync();
+                    if (reconnectResult)
+                    {
+                        _logger.Info("Session reconnected successfully (subscriptions preserved)");
+                        Connected?.Invoke();
+                        return true;
+                    }
+                }
+
+                // Strategy 2: Recreate session and transfer subscriptions
+                var recreateResult = await TryRecreateSessionAsync();
+                if (recreateResult)
+                {
+                    _logger.Info("Session recreated successfully (subscriptions transferred)");
+                    Connected?.Invoke();
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Reconnection attempt {attempt + 1} failed: {ex.Message}");
+            }
+
+            // Wait before next attempt
+            try
+            {
+                await Task.Delay(delays[attempt], _reconnectCts.Token);
             }
             catch (OperationCanceledException)
             {
@@ -202,7 +259,150 @@ public class OpcUaClientWrapper : IDisposable
         }
 
         _logger.Error("Reconnection failed after all attempts");
+        Disconnected?.Invoke();
         return false;
+    }
+
+    /// <summary>
+    /// Tries to reconnect the existing session using OPC UA Reconnect service.
+    /// This preserves the session ID and all subscriptions automatically.
+    /// </summary>
+    private async Task<bool> TrySessionReconnectAsync()
+    {
+        if (_session == null)
+            return false;
+
+        try
+        {
+            _logger.Info("Attempting session reconnect...");
+            await _session.ReconnectAsync(_reconnectCts?.Token ?? CancellationToken.None);
+            return _session.Connected;
+        }
+        catch (ServiceResultException ex)
+        {
+            _logger.Warning($"Session reconnect failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Recreates the session and transfers existing subscriptions to it.
+    /// Used when direct reconnect fails (e.g., session timed out on server).
+    /// </summary>
+    private async Task<bool> TryRecreateSessionAsync()
+    {
+        if (_lastConfiguredEndpoint == null || string.IsNullOrEmpty(_currentEndpoint))
+            return false;
+
+        try
+        {
+            _logger.Info("Recreating session...");
+
+            var config = await GetApplicationConfigAsync();
+
+            // Capture existing subscriptions before closing old session
+            SubscriptionCollection? subscriptionsToTransfer = null;
+            if (_session?.Subscriptions != null && _session.Subscriptions.Any())
+            {
+                subscriptionsToTransfer = new SubscriptionCollection(_session.Subscriptions);
+                _logger.Info($"Captured {subscriptionsToTransfer.Count} subscription(s) for transfer");
+            }
+
+            // Clean up old session without deleting subscriptions on server
+            if (_session != null)
+            {
+                _session.KeepAlive -= Session_KeepAlive;
+                try
+                {
+                    // Don't close gracefully - we want to preserve server-side subscriptions
+                    _session.Dispose();
+                }
+                catch { /* Ignore cleanup errors */ }
+                _session = null;
+            }
+
+            // Rediscover endpoint in case server configuration changed
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, _currentEndpoint, useSecurity: false);
+            var endpointConfig = EndpointConfiguration.Create(config);
+            var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
+            _lastConfiguredEndpoint = endpoint;
+
+            // Create new session
+#pragma warning disable CS0618
+            _session = await Opc.Ua.Client.Session.Create(
+                config,
+                endpoint,
+                false,
+                "Opcilloscope Session",
+                60000,
+                new UserIdentity(new AnonymousIdentityToken()),
+                null
+            );
+#pragma warning restore CS0618
+
+            _session.DeleteSubscriptionsOnClose = false;
+            _session.TransferSubscriptionsOnReconnect = true;
+            _session.KeepAlive += Session_KeepAlive;
+
+            // Transfer subscriptions to new session
+            if (subscriptionsToTransfer != null && subscriptionsToTransfer.Count > 0)
+            {
+                var transferred = await TransferSubscriptionsAsync(subscriptionsToTransfer);
+                _logger.Info($"Transferred {transferred} of {subscriptionsToTransfer.Count} subscription(s)");
+            }
+
+            return _session.Connected;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Session recreation failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Transfers subscriptions from a previous session to the current session.
+    /// </summary>
+    private async Task<int> TransferSubscriptionsAsync(SubscriptionCollection subscriptions)
+    {
+        if (_session == null || subscriptions == null)
+            return 0;
+
+        int transferred = 0;
+
+        try
+        {
+            // Use the OPC UA TransferSubscriptions service
+            var success = await _session.TransferSubscriptionsAsync(
+                subscriptions,
+                sendInitialValues: true,
+                _reconnectCts?.Token ?? CancellationToken.None);
+
+            if (success)
+            {
+                transferred = subscriptions.Count;
+            }
+            else
+            {
+                _logger.Warning("TransferSubscriptions returned false - subscriptions may need to be recreated");
+            }
+        }
+        catch (ServiceResultException ex) when (ex.StatusCode == StatusCodes.BadNothingToDo)
+        {
+            // No subscriptions to transfer - this is OK
+            _logger.Info("No subscriptions to transfer (BadNothingToDo)");
+        }
+        catch (ServiceResultException ex) when (ex.StatusCode == StatusCodes.BadSubscriptionIdInvalid)
+        {
+            // Server doesn't have these subscriptions anymore - they need to be recreated
+            _logger.Warning("Server subscriptions expired - subscriptions will need to be recreated");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Subscription transfer failed: {ex.Message}");
+        }
+
+        return transferred;
     }
 
     public async Task<ReferenceDescriptionCollection> BrowseAsync(NodeId nodeId)
