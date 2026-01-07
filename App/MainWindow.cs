@@ -905,8 +905,7 @@ public class MainWindow : Toplevel
 
     private void ShowAbout()
     {
-        var theme = ThemeManager.Current;
-        var about = $@"╔══════════════════════════════════════╗
+        var about = @"╔══════════════════════════════════════╗
 ║           OPC Scope v1.0.0           ║
 ║      by Square Wave Systems          ║
 ╚══════════════════════════════════════╝
@@ -919,9 +918,6 @@ Features:
   - Multi-signal Scope view (up to 5 signals)
   - Time-based plotting with auto-scale
   - CSV recording of monitored values
-
-Current Theme: {theme.Name}
-  {theme.Description}
 
 Built with:
   - .NET 10
