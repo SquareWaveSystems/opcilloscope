@@ -192,23 +192,152 @@ public class ConfigurationService
 
     /// <summary>
     /// Gets the default directory for configuration files.
+    /// Uses cross-platform appropriate locations:
+    /// - Windows: %APPDATA%/OpcScope/configs/
+    /// - macOS: ~/Library/Application Support/OpcScope/configs/
+    /// - Linux: ~/.config/opcscope/configs/
     /// </summary>
     /// <returns>Path to the default configuration directory.</returns>
     public static string GetDefaultConfigDirectory()
     {
-        // Try MyDocuments first, fall back to LocalApplicationData if not available
-        var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(Path.GetDirectoryName(baseDir) ?? baseDir))
+        string baseDir;
+        string appFolder;
+
+        if (OperatingSystem.IsWindows())
         {
-            baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            // Windows: %APPDATA%/OpcScope/configs/
+            baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            appFolder = "OpcScope";
         }
+        else if (OperatingSystem.IsMacOS())
+        {
+            // macOS: ~/Library/Application Support/OpcScope/configs/
+            baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            appFolder = "OpcScope";
+        }
+        else
+        {
+            // Linux: ~/.config/opcscope/configs/
+            var configHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+            if (string.IsNullOrEmpty(configHome))
+            {
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                configHome = Path.Combine(home, ".config");
+            }
+            baseDir = configHome;
+            appFolder = "opcscope"; // lowercase for Linux convention
+        }
+
+        // Fallback if base directory is empty
         if (string.IsNullOrEmpty(baseDir))
         {
             baseDir = Path.GetTempPath();
         }
 
-        var dir = Path.Combine(baseDir, "Opcilloscope", "Configurations");
+        var dir = Path.Combine(baseDir, appFolder, "configs");
         Directory.CreateDirectory(dir);
         return dir;
+    }
+
+    /// <summary>
+    /// The file extension used for configuration files.
+    /// </summary>
+    public const string ConfigFileExtension = ".cfg";
+
+    /// <summary>
+    /// Generates a default filename for saving a configuration.
+    /// Format: {sanitized_connection_url}_{timestamp}.cfg
+    /// </summary>
+    /// <param name="connectionUrl">The OPC UA connection URL, or null if not connected.</param>
+    /// <returns>A sanitized filename with .cfg extension.</returns>
+    public static string GenerateDefaultFilename(string? connectionUrl)
+    {
+        var timestamp = DateTime.Now.ToString("yyyyMMddHHmm");
+        string baseName;
+
+        if (!string.IsNullOrEmpty(connectionUrl))
+        {
+            baseName = SanitizeUrlForFilename(connectionUrl);
+        }
+        else
+        {
+            baseName = "config";
+        }
+
+        return $"{baseName}_{timestamp}{ConfigFileExtension}";
+    }
+
+    /// <summary>
+    /// Sanitizes a URL to be used as part of a filename.
+    /// Replaces invalid filename characters with underscores.
+    /// </summary>
+    /// <param name="url">The URL to sanitize.</param>
+    /// <returns>A filename-safe string derived from the URL.</returns>
+    public static string SanitizeUrlForFilename(string url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return "unknown";
+
+        // Remove protocol prefix
+        var sanitized = url;
+        if (sanitized.StartsWith("opc.tcp://", StringComparison.OrdinalIgnoreCase))
+            sanitized = sanitized.Substring(10);
+        else if (sanitized.StartsWith("opc.https://", StringComparison.OrdinalIgnoreCase))
+            sanitized = sanitized.Substring(12);
+        else if (sanitized.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            sanitized = sanitized.Substring(8);
+        else if (sanitized.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            sanitized = sanitized.Substring(7);
+
+        // Replace invalid filename characters with underscores
+        var invalidChars = Path.GetInvalidFileNameChars();
+        foreach (var c in invalidChars)
+        {
+            sanitized = sanitized.Replace(c, '_');
+        }
+
+        // Also replace common URL special characters
+        sanitized = sanitized
+            .Replace(':', '_')
+            .Replace('/', '_')
+            .Replace('\\', '_')
+            .Replace('?', '_')
+            .Replace('&', '_')
+            .Replace('=', '_');
+
+        // Remove consecutive underscores
+        while (sanitized.Contains("__"))
+        {
+            sanitized = sanitized.Replace("__", "_");
+        }
+
+        // Trim underscores from start and end
+        sanitized = sanitized.Trim('_');
+
+        // Limit length to avoid overly long filenames
+        if (sanitized.Length > 50)
+        {
+            sanitized = sanitized.Substring(0, 50).TrimEnd('_');
+        }
+
+        return string.IsNullOrEmpty(sanitized) ? "unknown" : sanitized;
+    }
+
+    /// <summary>
+    /// Ensures a filename has the correct .cfg extension.
+    /// </summary>
+    /// <param name="filename">The filename to check.</param>
+    /// <returns>The filename with .cfg extension.</returns>
+    public static string EnsureConfigExtension(string filename)
+    {
+        if (string.IsNullOrEmpty(filename))
+            return filename;
+
+        if (!filename.EndsWith(ConfigFileExtension, StringComparison.OrdinalIgnoreCase))
+        {
+            return filename + ConfigFileExtension;
+        }
+
+        return filename;
     }
 }

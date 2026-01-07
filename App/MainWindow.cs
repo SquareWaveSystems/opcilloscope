@@ -59,6 +59,7 @@ public class MainWindow : Toplevel
         _connectionManager.StateChanged += OnConnectionStateChanged;
         _connectionManager.ConnectionError += OnConnectionError;
         _connectionManager.ValueChanged += OnValueChanged;
+        _connectionManager.AutoReconnectTriggered += OnAutoReconnectTriggered;
         _connectionManager.VariableAdded += variable =>
         {
             UiThread.Run(() => _monitoredVariablesView?.AddVariable(variable));
@@ -419,7 +420,7 @@ public class MainWindow : Toplevel
 
     private void ShowConnectDialog()
     {
-        var dialog = new ConnectDialog(_connectionManager.LastEndpoint);
+        var dialog = new ConnectDialog();
         Application.Run(dialog);
 
         if (dialog.Confirmed)
@@ -488,6 +489,11 @@ public class MainWindow : Toplevel
             if (success)
             {
                 _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+                _logger.Info("Reconnected successfully - subscriptions restored");
+            }
+            else
+            {
+                _logger.Error("Reconnection failed");
             }
         }
         finally
@@ -806,6 +812,19 @@ public class MainWindow : Toplevel
         });
     }
 
+    private void OnAutoReconnectTriggered()
+    {
+        UiThread.Run(() =>
+        {
+            _logger.Warning("Connection lost - attempting automatic reconnection...");
+            ShowActivity("Reconnecting...");
+            StartConnectingAnimation();
+
+            // Start reconnection asynchronously
+            ReconnectAsync().FireAndForget(_logger);
+        });
+    }
+
     private void UpdateConnectionStatus(bool isConnected)
     {
         _isConnected = isConnected;
@@ -1079,14 +1098,19 @@ License: MIT
         if (_configService.HasUnsavedChanges && !ConfirmDiscardChanges())
             return;
 
+        // Start in the default config directory
+        var defaultDir = ConfigurationService.GetDefaultConfigDirectory();
+
         using var dialog = new OpenDialog
         {
             Title = "Open Configuration",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("Opcilloscope Config", ".opcilloscope"),
+                new AllowedType("OpcScope Config", ConfigurationService.ConfigFileExtension),
+                new AllowedType("Legacy Opcilloscope Config", ".opcilloscope"),
                 new AllowedType("JSON Files", ".json")
-            }
+            },
+            Path = defaultDir
         };
 
         Application.Run(dialog);
@@ -1113,26 +1137,30 @@ License: MIT
 
     /// <summary>
     /// Saves the current configuration to a new file path.
+    /// Uses cross-platform default directory and generates filename from connection URL.
     /// </summary>
     private void SaveConfigAs()
     {
+        // Get the default directory and generate a default filename
+        var defaultDir = ConfigurationService.GetDefaultConfigDirectory();
+        var defaultFilename = ConfigurationService.GenerateDefaultFilename(_connectionManager.CurrentEndpoint);
+        var defaultPath = Path.Combine(defaultDir, defaultFilename);
+
         using var dialog = new SaveDialog
         {
             Title = "Save Configuration",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("Opcilloscope Config", ".opcilloscope")
-            }
+                new AllowedType("OpcScope Config", ConfigurationService.ConfigFileExtension)
+            },
+            Path = defaultPath
         };
 
         Application.Run(dialog);
 
         if (!dialog.Canceled && dialog.Path != null)
         {
-            var filePath = dialog.Path.ToString()!;
-            if (!filePath.EndsWith(".opcilloscope", StringComparison.OrdinalIgnoreCase))
-                filePath += ".opcilloscope";
-
+            var filePath = ConfigurationService.EnsureConfigExtension(dialog.Path.ToString()!);
             SaveConfigurationAsync(filePath).FireAndForget(_logger);
         }
     }

@@ -17,7 +17,7 @@ public class ConnectDialog : Dialog
     public string EndpointUrl => _endpointField.Text ?? string.Empty;
     public bool Confirmed => _confirmed;
 
-    public ConnectDialog(string? lastEndpoint = null)
+    public ConnectDialog()
     {
         var theme = AppThemeManager.Current;
 
@@ -40,14 +40,12 @@ public class ConnectDialog : Dialog
             Text = "Endpoint URL:"
         };
 
-        string defaultText = lastEndpoint ?? "opc.tcp://localhost:4840";
-
         _endpointField = new TextField
         {
             X = 1,
             Y = 2,
             Width = Dim.Fill(1),
-            Text = defaultText
+            Text = string.Empty
         };
 
         var hintLabel = new Label

@@ -421,8 +421,10 @@ public class ConfigurationServiceTests : IDisposable
 
         // Assert
         Assert.NotNull(dir);
-        Assert.Contains("Opcilloscope", dir);
-        Assert.Contains("Configurations", dir);
+        Assert.Contains("configs", dir);
+        // Should contain either OpcScope (Windows/macOS) or opcscope (Linux)
+        Assert.True(dir.Contains("OpcScope") || dir.Contains("opcscope"),
+            $"Path should contain OpcScope or opcscope: {dir}");
     }
 
     [Fact]
@@ -434,6 +436,175 @@ public class ConfigurationServiceTests : IDisposable
         // Assert
         Assert.True(Directory.Exists(dir));
     }
+
+    #region Filename Generation Tests
+
+    [Fact]
+    public void SanitizeUrlForFilename_RemovesOpcTcpProtocol()
+    {
+        // Act
+        var result = ConfigurationService.SanitizeUrlForFilename("opc.tcp://localhost:4840");
+
+        // Assert
+        Assert.Equal("localhost_4840", result);
+    }
+
+    [Fact]
+    public void SanitizeUrlForFilename_HandlesIpAddress()
+    {
+        // Act
+        var result = ConfigurationService.SanitizeUrlForFilename("opc.tcp://192.168.1.100:4840");
+
+        // Assert
+        Assert.Equal("192.168.1.100_4840", result);
+    }
+
+    [Fact]
+    public void SanitizeUrlForFilename_RemovesHttpsProtocol()
+    {
+        // Act
+        var result = ConfigurationService.SanitizeUrlForFilename("opc.https://server.example.com:443");
+
+        // Assert
+        Assert.Equal("server.example.com_443", result);
+    }
+
+    [Fact]
+    public void SanitizeUrlForFilename_HandlesPathComponents()
+    {
+        // Act
+        var result = ConfigurationService.SanitizeUrlForFilename("opc.tcp://server:4840/UA/MyServer");
+
+        // Assert
+        Assert.Equal("server_4840_UA_MyServer", result);
+    }
+
+    [Fact]
+    public void SanitizeUrlForFilename_RemovesConsecutiveUnderscores()
+    {
+        // Act
+        var result = ConfigurationService.SanitizeUrlForFilename("opc.tcp://server:4840//path");
+
+        // Assert
+        Assert.DoesNotContain("__", result);
+    }
+
+    [Fact]
+    public void SanitizeUrlForFilename_TruncatesLongUrls()
+    {
+        // Arrange
+        var longUrl = "opc.tcp://" + new string('a', 100) + ".example.com:4840";
+
+        // Act
+        var result = ConfigurationService.SanitizeUrlForFilename(longUrl);
+
+        // Assert
+        Assert.True(result.Length <= 50, $"Result should be <= 50 chars, was {result.Length}");
+    }
+
+    [Fact]
+    public void SanitizeUrlForFilename_HandlesEmptyString()
+    {
+        // Act
+        var result = ConfigurationService.SanitizeUrlForFilename("");
+
+        // Assert
+        Assert.Equal("unknown", result);
+    }
+
+    [Fact]
+    public void SanitizeUrlForFilename_HandlesNull()
+    {
+        // Act
+        var result = ConfigurationService.SanitizeUrlForFilename(null!);
+
+        // Assert
+        Assert.Equal("unknown", result);
+    }
+
+    [Fact]
+    public void GenerateDefaultFilename_WithConnectionUrl_ContainsUrlAndTimestamp()
+    {
+        // Act
+        var result = ConfigurationService.GenerateDefaultFilename("opc.tcp://192.168.1.100:4840");
+
+        // Assert
+        Assert.Contains("192.168.1.100_4840", result);
+        Assert.EndsWith(ConfigurationService.ConfigFileExtension, result);
+        // Should contain a timestamp pattern (yyyyMMddHHmm)
+        Assert.Matches(@"\d{12}\.cfg$", result);
+    }
+
+    [Fact]
+    public void GenerateDefaultFilename_WithNullUrl_UsesDefaultName()
+    {
+        // Act
+        var result = ConfigurationService.GenerateDefaultFilename(null);
+
+        // Assert
+        Assert.StartsWith("config_", result);
+        Assert.EndsWith(ConfigurationService.ConfigFileExtension, result);
+    }
+
+    [Fact]
+    public void GenerateDefaultFilename_WithEmptyUrl_UsesDefaultName()
+    {
+        // Act
+        var result = ConfigurationService.GenerateDefaultFilename("");
+
+        // Assert
+        Assert.StartsWith("config_", result);
+        Assert.EndsWith(ConfigurationService.ConfigFileExtension, result);
+    }
+
+    [Fact]
+    public void EnsureConfigExtension_AddsExtensionWhenMissing()
+    {
+        // Act
+        var result = ConfigurationService.EnsureConfigExtension("myconfig");
+
+        // Assert
+        Assert.Equal("myconfig.cfg", result);
+    }
+
+    [Fact]
+    public void EnsureConfigExtension_DoesNotDuplicateExtension()
+    {
+        // Act
+        var result = ConfigurationService.EnsureConfigExtension("myconfig.cfg");
+
+        // Assert
+        Assert.Equal("myconfig.cfg", result);
+    }
+
+    [Fact]
+    public void EnsureConfigExtension_IsCaseInsensitive()
+    {
+        // Act
+        var result = ConfigurationService.EnsureConfigExtension("myconfig.CFG");
+
+        // Assert
+        Assert.Equal("myconfig.CFG", result);
+    }
+
+    [Fact]
+    public void EnsureConfigExtension_HandlesEmptyString()
+    {
+        // Act
+        var result = ConfigurationService.EnsureConfigExtension("");
+
+        // Assert
+        Assert.Equal("", result);
+    }
+
+    [Fact]
+    public void ConfigFileExtension_IsCfg()
+    {
+        // Assert
+        Assert.Equal(".cfg", ConfigurationService.ConfigFileExtension);
+    }
+
+    #endregion
 
     private static OpcilloscopeConfig CreateTestConfig()
     {
