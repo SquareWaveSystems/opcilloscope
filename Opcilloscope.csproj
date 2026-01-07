@@ -8,8 +8,7 @@
     <RootNamespace>Opcilloscope</RootNamespace>
     <AssemblyName>Opcilloscope</AssemblyName>
 
-    <!-- Package metadata -->
-    <Version>1.0.0</Version>
+    <!-- Package metadata (Version is driven by MinVer from Git tags) -->
     <Authors>Brett Kinny</Authors>
     <Description>A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data.</Description>
     <PackageProjectUrl>https://github.com/BrettKinny/Opcilloscope</PackageProjectUrl>
@@ -33,6 +32,7 @@
   <ItemGroup>
     <PackageReference Include="Terminal.Gui" Version="2.*" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.378.65" />
+    <PackageReference Include="MinVer" Version="6.*" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

@@ -41,6 +41,7 @@ public class MonitoredVariablesView : FrameView
     public event Action? RecordToggleRequested;
     public event Action<MonitoredNode>? WriteRequested;
     public event Action<MonitoredNode>? TrendPlotRequested;
+    public event Action? ScopeRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
 
     public MonitoredNode? SelectedVariable
@@ -99,7 +100,7 @@ public class MonitoredVariablesView : FrameView
         };
 
         _dataTable = new DataTable();
-        _dataTable.Columns.Add("Rec", typeof(string));  // Recording selection (◉ = record this variable)
+        _dataTable.Columns.Add("Sel", typeof(string));  // Selection for Scope/Recording (◉ = selected)
         _dataTable.Columns.Add("Name", typeof(string));
         _dataTable.Columns.Add("NodeId", typeof(string));
         _dataTable.Columns.Add("Access", typeof(string));
@@ -249,7 +250,7 @@ public class MonitoredVariablesView : FrameView
             return;
 
         var row = _dataTable.NewRow();
-        row["Rec"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
+        row["Sel"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Name"] = variable.DisplayName;
         row["NodeId"] = variable.NodeId.ToString();
         row["Access"] = variable.AccessString;
@@ -277,7 +278,7 @@ public class MonitoredVariablesView : FrameView
             return;
 
         row["Access"] = variable.AccessString;
-        row["Rec"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
+        row["Sel"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
         row["Value"] = variable.Value;
         row["Time"] = variable.TimestampString;
         row["Status"] = FormatStatusWithIcon(variable);
@@ -385,6 +386,11 @@ public class MonitoredVariablesView : FrameView
                 e.Handled = true;
             }
         }
+        else if (e == Key.S)
+        {
+            ScopeRequested?.Invoke();
+            e.Handled = true;
+        }
     }
 
     private void HandleMouseClick(object? sender, MouseEventArgs e)
@@ -392,7 +398,7 @@ public class MonitoredVariablesView : FrameView
         // Convert screen position to table cell
         var cellPoint = _tableView.ScreenToCell(e.Position.X, e.Position.Y, out int? columnIndex, out int? rowIndex);
 
-        // Check if click is on the "Rec" column (index 0) and on a valid row
+        // Check if click is on the "Sel" column (index 0) and on a valid row
         if (columnIndex == 0 && rowIndex.HasValue && rowIndex.Value >= 0 && rowIndex.Value < _dataTable.Rows.Count)
         {
             var row = _dataTable.Rows[rowIndex.Value];
@@ -419,7 +425,7 @@ public class MonitoredVariablesView : FrameView
             {
                 // Show feedback that max is reached
                 var theme = ThemeManager.Current;
-                _selectionFeedback.Text = $"Max {MaxScopeSelections} variables for Rec/Scope";
+                _selectionFeedback.Text = $"Max {MaxScopeSelections} variables for Scope/Recording";
                 _selectionFeedback.ColorScheme = new ColorScheme
                 {
                     Normal = new Attribute(theme.Warning, theme.Background),
@@ -447,7 +453,7 @@ public class MonitoredVariablesView : FrameView
         // Update the row display
         if (_rowsByHandle.TryGetValue(variable.ClientHandle, out var row))
         {
-            row["Rec"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
+            row["Sel"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
             _tableView.Update();
         }
 

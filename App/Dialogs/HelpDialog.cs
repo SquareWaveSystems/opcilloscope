@@ -14,7 +14,7 @@ public class HelpDialog : Dialog
     {
         Title = " opcilloscope - Help ";
         Width = 64;
-        Height = 32;
+        Height = 34;
 
         var theme = ThemeManager.Current;
 
@@ -43,19 +43,20 @@ public class HelpDialog : Dialog
 
         contentView.Text = @"
 NAVIGATION
-  Tab              Move between panels
-  Arrow Keys       Navigate within panel
-  Space            Expand/collapse tree node
+  Tab              Switch between panes
+  Arrow Keys       Navigate within pane
 
-MONITORING
+ADDRESS SPACE
   Enter            Subscribe to selected node
-  Delete           Unsubscribe from item
-  W                Write value to node
+  Space            Expand/collapse tree node
+  F5               Refresh
 
-RECORDING & SCOPE
-  Space            Toggle recording selection (in variables)
-  Ctrl+R           Start/stop recording
-  Ctrl+G           Open Scope with selected variables
+MONITORED VARIABLES
+  Delete           Unsubscribe from item
+  Space            Toggle selection (for Scope/Recording)
+  W                Write value to node
+  T                Show trend plot
+  S                Open Scope with selected
 
 SCOPE VIEW CONTROLS
   Space            Pause/resume plotting
@@ -63,16 +64,18 @@ SCOPE VIEW CONTROLS
   R                Reset to auto-scale
 
 APPLICATION
-  F5               Refresh address space
+  F1               Help
   F10              Open menu
   Ctrl+O           Open configuration
   Ctrl+S           Save configuration
+  Ctrl+Shift+S     Save As
+  Ctrl+R           Start/stop recording
   Ctrl+Q           Quit
 
 TIPS
   - Only Variable nodes can be subscribed
   - Select up to 5 variables for Scope/Recording
-  - Press Space on variables to toggle selection
+  - Status bar shows context-specific shortcuts
 ";
 
         // OK button
