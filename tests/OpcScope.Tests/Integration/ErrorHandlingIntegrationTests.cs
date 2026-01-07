@@ -60,7 +60,7 @@ public class ErrorHandlingIntegrationTests : IntegrationTestBase
     public async Task NodeBrowser_GetChildrenAsync_InvalidNode_ReturnsEmptyList()
     {
         // Arrange
-        var nodeBrowser = new NodeBrowser(Client!, _logger);
+        var nodeBrowser = new OpcScope.OpcUa.NodeBrowser(Client!, _logger);
         var invalidNode = new OpcScope.OpcUa.Models.BrowsedNode
         {
             NodeId = new NodeId("NonExistentNode", (ushort)GetNamespaceIndex()),
@@ -78,7 +78,7 @@ public class ErrorHandlingIntegrationTests : IntegrationTestBase
     public async Task NodeBrowser_GetNodeAttributesAsync_InvalidNode_ReturnsNull()
     {
         // Arrange
-        var nodeBrowser = new NodeBrowser(Client!, _logger);
+        var nodeBrowser = new OpcScope.OpcUa.NodeBrowser(Client!, _logger);
         var invalidNodeId = new NodeId("NonExistentNode", (ushort)GetNamespaceIndex());
 
         // Act
@@ -266,7 +266,7 @@ public class ErrorHandlingIntegrationTests : IntegrationTestBase
     {
         // Arrange
         var disconnectedClient = new OpcUaClientWrapper(_logger);
-        var nodeBrowser = new NodeBrowser(disconnectedClient, _logger);
+        var nodeBrowser = new OpcScope.OpcUa.NodeBrowser(disconnectedClient, _logger);
         var root = nodeBrowser.GetRootNode();
 
         // Act
@@ -281,7 +281,7 @@ public class ErrorHandlingIntegrationTests : IntegrationTestBase
     {
         // Arrange
         var disconnectedClient = new OpcUaClientWrapper(_logger);
-        var nodeBrowser = new NodeBrowser(disconnectedClient, _logger);
+        var nodeBrowser = new OpcScope.OpcUa.NodeBrowser(disconnectedClient, _logger);
 
         // Act
         var attrs = await nodeBrowser.GetNodeAttributesAsync(ObjectIds.RootFolder);

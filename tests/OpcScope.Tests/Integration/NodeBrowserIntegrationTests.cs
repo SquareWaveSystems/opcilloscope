@@ -12,7 +12,7 @@ namespace OpcScope.Tests.Integration;
 public class NodeBrowserIntegrationTests : IntegrationTestBase
 {
     private readonly Logger _logger = new();
-    private NodeBrowser _nodeBrowser = null!;
+    private OpcScope.OpcUa.NodeBrowser _nodeBrowser = null!;
 
     public NodeBrowserIntegrationTests(TestServerFixture fixture) : base(fixture)
     {
@@ -21,7 +21,7 @@ public class NodeBrowserIntegrationTests : IntegrationTestBase
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        _nodeBrowser = new NodeBrowser(Client!, _logger);
+        _nodeBrowser = new OpcScope.OpcUa.NodeBrowser(Client!, _logger);
     }
 
     [Fact]
