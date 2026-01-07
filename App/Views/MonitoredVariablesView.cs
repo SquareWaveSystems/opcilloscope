@@ -353,7 +353,10 @@ public class MonitoredVariablesView : FrameView
 
     private void HandleKeyDown(object? _, Key e)
     {
-        if (e == Key.Delete || e == Key.Backspace)
+        // Use KeyCode for comparisons - Terminal.Gui v2 pattern
+        var keyCode = e.KeyCode;
+
+        if (keyCode == KeyCode.Delete || keyCode == KeyCode.Backspace)
         {
             var selected = SelectedVariable;
             if (selected != null)
@@ -362,13 +365,13 @@ public class MonitoredVariablesView : FrameView
                 e.Handled = true;
             }
         }
-        else if (e == Key.Space)
+        else if (keyCode == KeyCode.Space)
         {
             // Toggle scope selection for the highlighted variable
             ToggleScopeSelection();
             e.Handled = true;
         }
-        else if (e == Key.W)
+        else if (keyCode == (KeyCode)'w' || keyCode == (KeyCode)'W')
         {
             var selected = SelectedVariable;
             if (selected != null)
@@ -377,7 +380,7 @@ public class MonitoredVariablesView : FrameView
                 e.Handled = true;
             }
         }
-        else if (e == Key.T)
+        else if (keyCode == (KeyCode)'t' || keyCode == (KeyCode)'T')
         {
             var selected = SelectedVariable;
             if (selected != null)
@@ -386,7 +389,7 @@ public class MonitoredVariablesView : FrameView
                 e.Handled = true;
             }
         }
-        else if (e == Key.S)
+        else if (keyCode == (KeyCode)'s' || keyCode == (KeyCode)'S')
         {
             ScopeRequested?.Invoke();
             e.Handled = true;
