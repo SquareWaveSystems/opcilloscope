@@ -236,7 +236,9 @@ public class OpcValueConverterTests
         Assert.False(success);
         Assert.Null(value);
         Assert.NotNull(error);
-        Assert.Contains("out of range", error);
+        // Error message varies by culture: "out of range" if parsed, "valid decimal" if not
+        Assert.True(error.Contains("out of range") || error.Contains("valid decimal"),
+            $"Expected error about 'out of range' or 'valid decimal', got: {error}");
     }
 
     [Theory]
@@ -267,7 +269,9 @@ public class OpcValueConverterTests
         Assert.False(success);
         Assert.Null(value);
         Assert.NotNull(error);
-        Assert.Contains("out of range", error);
+        // Error message varies by culture: "out of range" if parsed, "valid decimal" if not
+        Assert.True(error.Contains("out of range") || error.Contains("valid decimal"),
+            $"Expected error about 'out of range' or 'valid decimal', got: {error}");
     }
 
     #endregion
