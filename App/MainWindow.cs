@@ -210,10 +210,7 @@ public class MainWindow : Toplevel
         ApplyTheme();
 
         // Handle window resize to update connection status label position
-        Initialized += (s, e) =>
-        {
-            LayoutComplete += (s2, e2) => UpdateConnectionStatusLabelPosition();
-        };
+        LayoutComplete += (s, e) => UpdateConnectionStatusLabelPosition();
 
         // Run startup sequence
         _ = RunStartupSequenceAsync();
