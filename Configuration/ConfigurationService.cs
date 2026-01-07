@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Opcilloscope.Configuration.Models;
 using Opcilloscope.OpcUa.Models;
+using Opcilloscope.Utilities;
 
 namespace Opcilloscope.Configuration;
 
@@ -246,25 +247,14 @@ public class ConfigurationService
 
     /// <summary>
     /// Generates a default filename for saving a configuration.
-    /// Format: {sanitized_connection_url}_{timestamp}.cfg
+    /// Format: {host}_{port}_{timestamp}.cfg
     /// </summary>
     /// <param name="connectionUrl">The OPC UA connection URL, or null if not connected.</param>
     /// <returns>A sanitized filename with .cfg extension.</returns>
     public static string GenerateDefaultFilename(string? connectionUrl)
     {
-        var timestamp = DateTime.Now.ToString("yyyyMMddHHmm");
-        string baseName;
-
-        if (!string.IsNullOrEmpty(connectionUrl))
-        {
-            baseName = SanitizeUrlForFilename(connectionUrl);
-        }
-        else
-        {
-            baseName = "config";
-        }
-
-        return $"{baseName}_{timestamp}{ConfigFileExtension}";
+        var identifier = ConnectionIdentifier.Generate(connectionUrl);
+        return $"{identifier}{ConfigFileExtension}";
     }
 
     /// <summary>
