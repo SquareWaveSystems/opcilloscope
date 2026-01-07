@@ -13,7 +13,7 @@ namespace OpcScope.Tests.Infrastructure;
 public class TestServerFixture : IAsyncLifetime
 {
     private static readonly object _portLock = new();
-    private static int _nextPort = 4840;
+    private static int _nextPort = 48400; // Use higher port range to avoid conflicts with existing OPC UA servers
 
     private OpcScope.TestServer.TestServer? _server;
     private int _port;

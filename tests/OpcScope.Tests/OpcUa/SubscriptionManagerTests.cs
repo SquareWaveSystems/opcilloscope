@@ -215,7 +215,7 @@ public class SubscriptionManagerTests
     [InlineData(-1.5f, "-1.50")]
     [InlineData(999.999f, "1000.00")]
     [InlineData(0.001f, "0.00")]
-    [InlineData(0.005f, "0.01")]
+    [InlineData(0.006f, "0.01")] // 0.005f is not exactly representable in IEEE754 (becomes 0.00499999989)
     public void FormatValue_FloatFormatting_VariousValues(float input, string expected)
     {
         // Act
