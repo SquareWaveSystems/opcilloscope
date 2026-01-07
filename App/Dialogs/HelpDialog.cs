@@ -53,7 +53,7 @@ ADDRESS SPACE
 
 MONITORED VARIABLES
   Delete           Unsubscribe from item
-  Space            Toggle recording selection
+  Space            Toggle selection (for Scope/Recording)
   W                Write value to node
   T                Show trend plot
   S                Open Scope with selected

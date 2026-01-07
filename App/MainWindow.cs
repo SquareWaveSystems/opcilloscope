@@ -608,7 +608,7 @@ public class MainWindow : Toplevel
         else if (_focusedPanel == _monitoredVariablesView)
         {
             _statusBar.Add(new Shortcut(Key.Delete, "Unsub", UnsubscribeSelected));
-            _statusBar.Add(new Shortcut(Key.Space, "Rec", () => { })); // Handled by view
+            _statusBar.Add(new Shortcut(Key.Space, "Sel", () => { })); // Handled by view
             _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
             _statusBar.Add(new Shortcut(Key.T, "Trend", ShowTrendForSelected));
             _statusBar.Add(new Shortcut(Key.S, "Scope", LaunchScope));
@@ -965,7 +965,7 @@ public class MainWindow : Toplevel
         {
             MessageBox.Query("Record",
                 "No variables selected for recording.\n\n" +
-                "Use Space to select variables in the Rec column (◉).\n" +
+                "Use Space to select variables in the Sel column (◉).\n" +
                 "Selected variables will be recorded and shown in Scope.", "OK");
             return;
         }
