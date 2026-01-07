@@ -45,6 +45,7 @@ public class MainWindow : Toplevel
 
     // Focus tracking for context-aware UI
     private View? _focusedPanel;
+    private FocusManager? _focusManager;
 
     public MainWindow()
     {
@@ -191,12 +192,10 @@ public class MainWindow : Toplevel
         _monitoredVariablesView.TrendPlotRequested += OnTrendPlotRequested;
         _monitoredVariablesView.RecordToggleRequested += ToggleRecording;
 
-        // Focus tracking disabled due to Terminal.Gui v2 API instability
-        // TODO: Re-enable when Terminal.Gui v2 stabilizes with compatible Enter event
-        // _addressSpaceView.Enter += OnPanelFocused;
-        // _monitoredVariablesView.Enter += OnPanelFocused;
-        // _nodeDetailsView.Enter += OnPanelFocused;
-        // _logView.Enter += OnPanelFocused;
+        // Focus tracking using polling-based FocusManager (workaround for Terminal.Gui v2 Enter event instability)
+        // Only track the two interactive panes (AddressSpace and MonitoredVariables)
+        _focusManager = new FocusManager(_addressSpaceView, _monitoredVariablesView);
+        _focusManager.FocusChanged += OnPanelFocusChanged;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -219,6 +218,9 @@ public class MainWindow : Toplevel
 
         // Run status bar startup sequence
         RunStatusBarStartup();
+
+        // Start focus tracking after UI is initialized
+        _focusManager.StartTracking();
     }
 
     /// <summary>
@@ -539,12 +541,10 @@ public class MainWindow : Toplevel
 
     /// <summary>
     /// Handles focus changes to update border highlighting and status bar shortcuts.
-    /// NOTE: Currently disabled due to Terminal.Gui v2 API instability.
+    /// Called by FocusManager when the focused pane changes.
     /// </summary>
-    private void OnPanelFocused(object? sender, EventArgs e)
+    private void OnPanelFocusChanged(View? panel)
     {
-        if (sender is not View panel) return;
-
         // Update border styling for previous panel (remove highlight)
         if (_focusedPanel != null && _focusedPanel != panel)
         {
@@ -553,7 +553,10 @@ public class MainWindow : Toplevel
 
         // Update border styling for new panel (add highlight)
         _focusedPanel = panel;
-        UpdatePanelBorder(panel, isFocused: true);
+        if (panel != null)
+        {
+            UpdatePanelBorder(panel, isFocused: true);
+        }
 
         // Update status bar shortcuts based on focused panel
         UpdateStatusBarShortcuts();
@@ -639,6 +642,46 @@ public class MainWindow : Toplevel
         {
             OnTrendPlotRequested(variable);
         }
+    }
+
+    #endregion
+
+    #region Global Keyboard Shortcuts
+
+    /// <summary>
+    /// Handles global keyboard shortcuts for pane navigation.
+    /// </summary>
+    protected override bool OnKeyDown(Key key)
+    {
+        // Alt+1: Focus AddressSpaceView
+        if (key == Key.D1.WithAlt)
+        {
+            _focusManager?.FocusPane(0);
+            return true;
+        }
+
+        // Alt+2: Focus MonitoredVariablesView
+        if (key == Key.D2.WithAlt)
+        {
+            _focusManager?.FocusPane(1);
+            return true;
+        }
+
+        // Ctrl+Tab: Cycle to next pane
+        if (key == Key.Tab.WithCtrl)
+        {
+            _focusManager?.FocusNext();
+            return true;
+        }
+
+        // Ctrl+Shift+Tab: Cycle to previous pane
+        if (key == Key.Tab.WithCtrl.WithShift)
+        {
+            _focusManager?.FocusPrevious();
+            return true;
+        }
+
+        return base.OnKeyDown(key);
     }
 
     #endregion
@@ -1317,11 +1360,12 @@ License: MIT
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _monitoredVariablesView.RecordToggleRequested -= ToggleRecording;
 
-            // Focus tracking disabled - see comment in constructor
-            // _addressSpaceView.Enter -= OnPanelFocused;
-            // _monitoredVariablesView.Enter -= OnPanelFocused;
-            // _nodeDetailsView.Enter -= OnPanelFocused;
-            // _logView.Enter -= OnPanelFocused;
+            // Stop focus tracking
+            if (_focusManager != null)
+            {
+                _focusManager.StopTracking();
+                _focusManager.FocusChanged -= OnPanelFocusChanged;
+            }
 
             _connectionManager.Dispose();
         }
