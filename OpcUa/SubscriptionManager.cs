@@ -36,11 +36,6 @@ public class SubscriptionManager : IDisposable
     /// </summary>
     public event Action<uint>? VariableRemoved;
 
-    /// <summary>
-    /// Raised when subscriptions need to be recreated after failed transfer.
-    /// </summary>
-    public event Action? SubscriptionsNeedRecreation;
-
     public int PublishingInterval
     {
         get => _publishingInterval;
@@ -444,14 +439,15 @@ public class SubscriptionManager : IDisposable
         // Check if our subscription was transferred successfully
         if (_subscription != null && _clientWrapper.Session.Subscriptions.Contains(_subscription))
         {
-            // Subscription was transferred - just need to re-wire the notifications
-            _logger.Info("Subscription was preserved - reattaching notification handlers");
+            // Subscription was transferred - refresh notification handlers as defensive programming.
+            // While handlers should persist through transfer, explicitly re-wiring ensures they're
+            // correctly attached to the MonitoredItem instances in the new session context.
+            _logger.Info("Subscription was preserved - refreshing notification handlers");
 
             lock (_lock)
             {
                 foreach (var item in _opcMonitoredItems.Values)
                 {
-                    // Reattach notification handler
                     item.Notification -= MonitoredItem_Notification;
                     item.Notification += MonitoredItem_Notification;
                 }
@@ -499,7 +495,7 @@ public class SubscriptionManager : IDisposable
         _logger.Info($"Recreating {nodesToRestore.Count} subscription(s)...");
 
         // Clean up old OPC UA objects (but keep our MonitoredNode models)
-        CleanupOpcSubscription();
+        await CleanupOpcSubscriptionAsync();
 
         // Create new subscription
         if (!await InitializeAsync())
@@ -581,7 +577,7 @@ public class SubscriptionManager : IDisposable
     /// <summary>
     /// Cleans up the OPC UA subscription objects without clearing our MonitoredNode models.
     /// </summary>
-    private void CleanupOpcSubscription()
+    private async Task CleanupOpcSubscriptionAsync()
     {
         lock (_lock)
         {
@@ -598,7 +594,7 @@ public class SubscriptionManager : IDisposable
             {
                 if (_clientWrapper.Session != null && _clientWrapper.Session.Subscriptions.Contains(_subscription))
                 {
-                    _clientWrapper.Session.RemoveSubscription(_subscription);
+                    await _clientWrapper.Session.RemoveSubscriptionAsync(_subscription);
                 }
                 _subscription.Dispose();
             }

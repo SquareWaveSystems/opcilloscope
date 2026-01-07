@@ -16,6 +16,11 @@ public sealed class ConnectionManager : IDisposable
     private bool _disposed;
     private bool _isReconnecting;
 
+    // Stored event handler references for proper unsubscription
+    private Action<Models.MonitoredNode>? _valueChangedHandler;
+    private Action<Models.MonitoredNode>? _variableAddedHandler;
+    private Action<uint>? _variableRemovedHandler;
+
     /// <summary>
     /// Gets whether there is an active connection.
     /// </summary>
@@ -252,21 +257,34 @@ public sealed class ConnectionManager : IDisposable
         _subscriptionManager = new SubscriptionManager(_client, _logger);
         await _subscriptionManager.InitializeAsync();
 
-        _subscriptionManager.ValueChanged += node => ValueChanged?.Invoke(node);
-        _subscriptionManager.VariableAdded += node => VariableAdded?.Invoke(node);
-        _subscriptionManager.VariableRemoved += handle => VariableRemoved?.Invoke(handle);
+        // Store handler references for proper unsubscription
+        _valueChangedHandler = node => ValueChanged?.Invoke(node);
+        _variableAddedHandler = node => VariableAdded?.Invoke(node);
+        _variableRemovedHandler = handle => VariableRemoved?.Invoke(handle);
+
+        _subscriptionManager.ValueChanged += _valueChangedHandler;
+        _subscriptionManager.VariableAdded += _variableAddedHandler;
+        _subscriptionManager.VariableRemoved += _variableRemovedHandler;
     }
 
     private void DisposeSubscription()
     {
         if (_subscriptionManager != null)
         {
-            _subscriptionManager.ValueChanged -= node => ValueChanged?.Invoke(node);
-            _subscriptionManager.VariableAdded -= node => VariableAdded?.Invoke(node);
-            _subscriptionManager.VariableRemoved -= handle => VariableRemoved?.Invoke(handle);
+            if (_valueChangedHandler != null)
+                _subscriptionManager.ValueChanged -= _valueChangedHandler;
+            if (_variableAddedHandler != null)
+                _subscriptionManager.VariableAdded -= _variableAddedHandler;
+            if (_variableRemovedHandler != null)
+                _subscriptionManager.VariableRemoved -= _variableRemovedHandler;
+
             _subscriptionManager.Dispose();
             _subscriptionManager = null;
         }
+
+        _valueChangedHandler = null;
+        _variableAddedHandler = null;
+        _variableRemovedHandler = null;
     }
 
     private void OnClientConnected()

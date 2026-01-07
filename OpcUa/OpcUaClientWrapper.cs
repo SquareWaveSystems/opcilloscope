@@ -314,10 +314,13 @@ public class OpcUaClientWrapper : IDisposable
                 _session.KeepAlive -= Session_KeepAlive;
                 try
                 {
-                    // Don't close gracefully - we want to preserve server-side subscriptions
+                    // Dispose without CloseAsync() - this intentionally skips sending CloseSession
+                    // to the server, allowing server-side subscriptions to remain active for transfer.
+                    // With DeleteSubscriptionsOnClose=false, we want the subscriptions to persist
+                    // on the server so we can transfer them to the new session.
                     _session.Dispose();
                 }
-                catch { /* Ignore cleanup errors */ }
+                catch { /* Ignore cleanup errors during reconnection */ }
                 _session = null;
             }
 
