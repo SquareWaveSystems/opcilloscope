@@ -416,7 +416,7 @@ public class MainWindow : Toplevel
 
     private void ShowConnectDialog()
     {
-        var dialog = new ConnectDialog(_connectionManager.LastEndpoint);
+        var dialog = new ConnectDialog();
         Application.Run(dialog);
 
         if (dialog.Confirmed)
