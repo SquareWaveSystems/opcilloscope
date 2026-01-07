@@ -40,8 +40,8 @@ dotnet build
 dotnet run
 
 # Run with a configuration file
-dotnet run -- config.opcilloscope
-dotnet run -- --config config.opcilloscope
+dotnet run -- config.cfg
+dotnet run -- --config config.cfg
 
 # Run tests
 dotnet test
@@ -53,12 +53,12 @@ dotnet test
 Usage: opcilloscope [options] [file]
 
 Options:
-  -f, --config <file>   Load configuration file (.opcilloscope or .json)
+  -f, --config <file>   Load configuration file (.cfg or .json)
   -h, --help            Show help message
 
 Examples:
   opcilloscope                           Start with empty configuration
-  opcilloscope production.opcilloscope       Load configuration file
+  opcilloscope production.cfg                Load configuration file
   opcilloscope --config config.json      Load configuration file
 ```
 
@@ -94,7 +94,7 @@ Opcilloscope/
 │       └── ThemeStyler.cs          # Theme application helper
 │
 ├── Configuration/
-│   ├── ConfigurationService.cs     # Load/save .opcilloscope configuration files
+│   ├── ConfigurationService.cs     # Load/save .cfg configuration files
 │   ├── RecentFilesManager.cs       # Recently opened files tracking
 │   └── Models/
 │       └── OpcilloscopeConfig.cs       # Configuration data models (ServerConfig, SubscriptionSettings, etc.)
@@ -152,8 +152,8 @@ Opcilloscope/
 
 ## Key Features
 
-### Configuration Files (.opcilloscope)
-Opcilloscope uses JSON-based configuration files with the `.opcilloscope` extension:
+### Configuration Files (.cfg)
+Opcilloscope uses JSON-based configuration files with the `.cfg` extension:
 
 ```json
 {
