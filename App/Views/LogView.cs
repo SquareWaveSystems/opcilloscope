@@ -22,6 +22,7 @@ public class LogView : FrameView
     public LogView()
     {
         Title = " Log ";
+        CanFocus = true;
 
         // Apply theme styling
         var theme = ThemeManager.Current;

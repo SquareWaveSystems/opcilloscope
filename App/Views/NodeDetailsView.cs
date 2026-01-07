@@ -18,6 +18,7 @@ public class NodeDetailsView : FrameView
     public NodeDetailsView()
     {
         Title = " Node Details ";
+        CanFocus = true;
 
         // Apply theme styling
         var theme = ThemeManager.Current;

@@ -122,6 +122,7 @@ public abstract class AppTheme
     private ColorScheme? _buttonColorScheme;
     private ColorScheme? _frameColorScheme;
     private ColorScheme? _borderColorScheme;
+    private ColorScheme? _focusedBorderColorScheme;
 
     public virtual ColorScheme MainColorScheme => _mainColorScheme ??= new()
     {
@@ -178,6 +179,19 @@ public abstract class AppTheme
         Focus = BorderAttr,
         HotNormal = AccentAttr,  // Title text uses accent color
         HotFocus = AccentAttr,
+        Disabled = BorderAttr
+    };
+
+    /// <summary>
+    /// Color scheme for focused view borders - uses accent color to highlight
+    /// which panel currently has keyboard focus.
+    /// </summary>
+    public virtual ColorScheme FocusedBorderColorScheme => _focusedBorderColorScheme ??= new()
+    {
+        Normal = AccentAttr,
+        Focus = AccentAttr,
+        HotNormal = AccentBrightAttr,  // Title text uses bright accent
+        HotFocus = AccentBrightAttr,
         Disabled = BorderAttr
     };
 
