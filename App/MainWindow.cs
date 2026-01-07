@@ -60,13 +60,13 @@ public class MainWindow : Toplevel
         _connectionManager.ValueChanged += OnValueChanged;
         _connectionManager.VariableAdded += variable =>
         {
-            UiThread.Run(() => _monitoredVariablesView.AddVariable(variable));
+            UiThread.Run(() => _monitoredVariablesView?.AddVariable(variable));
             _configService.MarkDirty();
             UiThread.Run(UpdateWindowTitle);
         };
         _connectionManager.VariableRemoved += handle =>
         {
-            UiThread.Run(() => _monitoredVariablesView.RemoveVariable(handle));
+            UiThread.Run(() => _monitoredVariablesView?.RemoveVariable(handle));
             _configService.MarkDirty();
             UiThread.Run(UpdateWindowTitle);
         };
@@ -439,6 +439,7 @@ public class MainWindow : Toplevel
 
             if (success)
             {
+                _lastEndpoint = endpoint;
                 _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
             }
         }
@@ -1146,11 +1147,13 @@ License: MIT
 
                 if (connected)
                 {
+                    _lastEndpoint = config.Server.EndpointUrl;
+
                     // Only after successful connection, disconnect old and clear views
                     _addressSpaceView.Clear();
                     _monitoredVariablesView.Clear();
                     _nodeDetailsView.Clear();
-                    
+
                     _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
 
                     // Apply publishing interval to the newly created subscription manager

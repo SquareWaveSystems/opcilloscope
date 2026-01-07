@@ -196,11 +196,18 @@ public class ConfigurationService
     /// <returns>Path to the default configuration directory.</returns>
     public static string GetDefaultConfigDirectory()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "OpcScope",
-            "Configurations"
-        );
+        // Try MyDocuments first, fall back to LocalApplicationData if not available
+        var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        if (string.IsNullOrEmpty(baseDir) || !Directory.Exists(Path.GetDirectoryName(baseDir) ?? baseDir))
+        {
+            baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        }
+        if (string.IsNullOrEmpty(baseDir))
+        {
+            baseDir = Path.GetTempPath();
+        }
+
+        var dir = Path.Combine(baseDir, "OpcScope", "Configurations");
         Directory.CreateDirectory(dir);
         return dir;
     }

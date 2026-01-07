@@ -9,7 +9,8 @@
       "Bash(dotnet test:*)",
       "WebSearch",
       "WebFetch(domain:gui-cs.github.io)",
-      "Bash(dotnet restore:*)"
+      "Bash(dotnet restore:*)",
+      "Bash(gh run view:*)"
     ]
   },
   "remote": {
