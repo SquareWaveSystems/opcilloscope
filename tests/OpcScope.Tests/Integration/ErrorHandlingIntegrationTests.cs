@@ -18,29 +18,25 @@ public class ErrorHandlingIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task ReadValueAsync_InvalidNodeId_ReturnsNull()
+    public async Task ReadValueAsync_InvalidNodeId_ThrowsServiceResultException()
     {
         // Arrange
         var invalidNodeId = new NodeId("NonExistentNode", (ushort)GetNamespaceIndex());
 
-        // Act
-        var value = await Client!.ReadValueAsync(invalidNodeId);
-
-        // Assert
-        Assert.Null(value);
+        // Act & Assert - OPC UA SDK throws ServiceResultException for invalid nodes
+        await Assert.ThrowsAsync<ServiceResultException>(
+            () => Client!.ReadValueAsync(invalidNodeId));
     }
 
     [Fact]
-    public async Task WriteValueAsync_InvalidNodeId_ReturnsBadStatus()
+    public async Task WriteValueAsync_InvalidNodeId_ThrowsServiceResultException()
     {
         // Arrange
         var invalidNodeId = new NodeId("NonExistentNode", (ushort)GetNamespaceIndex());
 
-        // Act
-        var result = await Client!.WriteValueAsync(invalidNodeId, "test");
-
-        // Assert
-        Assert.True(StatusCode.IsBad(result));
+        // Act & Assert - OPC UA SDK throws ServiceResultException for invalid nodes
+        await Assert.ThrowsAsync<ServiceResultException>(
+            () => Client!.WriteValueAsync(invalidNodeId, "test"));
     }
 
     [Fact]
@@ -49,7 +45,7 @@ public class ErrorHandlingIntegrationTests : IntegrationTestBase
         // Arrange
         var invalidNodeId = new NodeId("NonExistentNode", (ushort)GetNamespaceIndex());
 
-        // Act
+        // Act - Browse returns empty for non-existent nodes (doesn't throw)
         var children = await Client!.BrowseAsync(invalidNodeId);
 
         // Assert
@@ -206,16 +202,18 @@ public class ErrorHandlingIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task ReadAttributesAsync_InvalidNodeId_ReturnsEmptyResults()
+    public async Task ReadAttributesAsync_InvalidNodeId_ReturnsBadStatus()
     {
         // Arrange
         var invalidNodeId = new NodeId("NonExistentNode", (ushort)GetNamespaceIndex());
 
-        // Act
+        // Act - ReadAttributes returns results with bad status for invalid nodes
         var results = await Client!.ReadAttributesAsync(invalidNodeId, Attributes.Value);
 
-        // Assert - should return results but with bad status
+        // Assert - results exist but have bad status codes
         Assert.NotNull(results);
+        Assert.NotEmpty(results);
+        Assert.True(StatusCode.IsBad(results[0].StatusCode));
     }
 
     [Fact]
