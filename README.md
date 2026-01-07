@@ -175,12 +175,62 @@ opcilloscope --help
 
 ---
 
-## Test Servers
+## OPC UA Test Servers
 
-Don't have an OPC UA server handy? Try these:
+Don't have an OPC UA server handy? Here are several options to get started:
 
-- [Prosys OPC UA Simulation Server](https://prosysopc.com/products/opc-ua-simulation-server/) (free)
-- [Node-OPCUA sample server](https://github.com/node-opcua/node-opcua)
+### Public Servers (No Setup Required)
+
+These servers are available on the internet for testing — just connect and go:
+
+| Server | Endpoint URL | Notes |
+|--------|--------------|-------|
+| OPC UA Server | `opc.tcp://opcuaserver.com:48010` | Great for beginners, no authentication required |
+| Eclipse Milo | `opc.tcp://milo.digitalpetri.com:62541/milo` | Supports secured & unsecured connections |
+| N3uron Demo | `opc.tcp://89.117.59.81:4840` | Username: `certTest`, Password: `n3uron` |
+
+> **Note:** For secured connections to Milo, upload your client certificate at [milo.digitalpetri.com](http://milo.digitalpetri.com).
+
+### Built-in Test Server
+
+opcilloscope includes an in-process OPC UA test server for development and testing:
+
+```bash
+# Run the standalone test server
+dotnet run --project src/Opcilloscope.TestServer
+
+# Server starts at opc.tcp://localhost:4840
+```
+
+The test server provides simulation nodes (Counter, SineWave, RandomValue) and writable nodes for testing write operations.
+
+### Run Your Own Server
+
+**Option 1: Microsoft OPC PLC (Docker)**
+
+Microsoft's OPC PLC container is a full-featured simulation server:
+
+```bash
+docker run -p 50000:50000 mcr.microsoft.com/iotedge/opc-plc:latest \
+  --autoaccept --unsecuretransport
+```
+
+Connect to `opc.tcp://localhost:50000`.
+
+**Option 2: Node-OPCUA (npm)**
+
+Spin up a quick server with Node.js:
+
+```bash
+npm install -g node-opcua-samples
+simple_server
+```
+
+Connect to `opc.tcp://localhost:26543`.
+
+**Option 3: Desktop Simulators**
+
+- [Prosys OPC UA Simulation Server](https://prosysopc.com/products/opc-ua-simulation-server/) — Free, feature-rich, Windows/Linux/macOS
 
 ---
 
