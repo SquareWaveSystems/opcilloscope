@@ -125,7 +125,16 @@ public abstract class IntegrationTestBase : IClassFixture<TestServerFixture>, IA
             throw new InvalidOperationException("Client not connected");
         }
 
-        return Client.Session.NamespaceUris.GetIndex(OpcScope.TestServer.TestNodeManager.NamespaceUri);
+        var index = Client.Session.NamespaceUris.GetIndex(OpcScope.TestServer.TestNodeManager.NamespaceUri);
+        if (index < 0)
+        {
+            // Namespace not found - list available namespaces for debugging
+            var available = string.Join(", ", Client.Session.NamespaceUris.ToArray());
+            throw new InvalidOperationException(
+                $"Test server namespace '{OpcScope.TestServer.TestNodeManager.NamespaceUri}' not found. " +
+                $"Available namespaces: [{available}]");
+        }
+        return index;
     }
 }
 
