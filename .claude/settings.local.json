@@ -7,7 +7,8 @@
       "mcp__context7__resolve-library-id",
       "WebFetch(domain:github.com)",
       "Bash(dotnet test:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:gui-cs.github.io)"
     ]
   },
   "remote": {
