@@ -191,11 +191,12 @@ public class MainWindow : Toplevel
         _monitoredVariablesView.TrendPlotRequested += OnTrendPlotRequested;
         _monitoredVariablesView.RecordToggleRequested += ToggleRecording;
 
-        // Wire up focus tracking for border highlighting and context-aware shortcuts
-        _addressSpaceView.Enter += OnPanelFocused;
-        _monitoredVariablesView.Enter += OnPanelFocused;
-        _nodeDetailsView.Enter += OnPanelFocused;
-        _logView.Enter += OnPanelFocused;
+        // Focus tracking disabled due to Terminal.Gui v2 API instability
+        // TODO: Re-enable when Terminal.Gui v2 stabilizes with compatible Enter event
+        // _addressSpaceView.Enter += OnPanelFocused;
+        // _monitoredVariablesView.Enter += OnPanelFocused;
+        // _nodeDetailsView.Enter += OnPanelFocused;
+        // _logView.Enter += OnPanelFocused;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -537,8 +538,9 @@ public class MainWindow : Toplevel
 
     /// <summary>
     /// Handles focus changes to update border highlighting and status bar shortcuts.
+    /// NOTE: Currently disabled due to Terminal.Gui v2 API instability.
     /// </summary>
-    private void OnPanelFocused(object? sender, FocusEventArgs e)
+    private void OnPanelFocused(object? sender, EventArgs e)
     {
         if (sender is not View panel) return;
 
@@ -1312,11 +1314,11 @@ License: MIT
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _monitoredVariablesView.RecordToggleRequested -= ToggleRecording;
 
-            // Unsubscribe from focus events
-            _addressSpaceView.Enter -= OnPanelFocused;
-            _monitoredVariablesView.Enter -= OnPanelFocused;
-            _nodeDetailsView.Enter -= OnPanelFocused;
-            _logView.Enter -= OnPanelFocused;
+            // Focus tracking disabled - see comment in constructor
+            // _addressSpaceView.Enter -= OnPanelFocused;
+            // _monitoredVariablesView.Enter -= OnPanelFocused;
+            // _nodeDetailsView.Enter -= OnPanelFocused;
+            // _logView.Enter -= OnPanelFocused;
 
             _connectionManager.Dispose();
         }
