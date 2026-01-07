@@ -60,13 +60,13 @@ public class MainWindow : Toplevel
         _connectionManager.ValueChanged += OnValueChanged;
         _connectionManager.VariableAdded += variable =>
         {
-            UiThread.Run(() => _monitoredVariablesView.AddVariable(variable));
+            UiThread.Run(() => _monitoredVariablesView?.AddVariable(variable));
             _configService.MarkDirty();
             UiThread.Run(UpdateWindowTitle);
         };
         _connectionManager.VariableRemoved += handle =>
         {
-            UiThread.Run(() => _monitoredVariablesView.RemoveVariable(handle));
+            UiThread.Run(() => _monitoredVariablesView?.RemoveVariable(handle));
             _configService.MarkDirty();
             UiThread.Run(UpdateWindowTitle);
         };
@@ -191,11 +191,12 @@ public class MainWindow : Toplevel
         _monitoredVariablesView.TrendPlotRequested += OnTrendPlotRequested;
         _monitoredVariablesView.RecordToggleRequested += ToggleRecording;
 
-        // Wire up focus tracking for border highlighting and context-aware shortcuts
-        _addressSpaceView.Enter += OnPanelFocused;
-        _monitoredVariablesView.Enter += OnPanelFocused;
-        _nodeDetailsView.Enter += OnPanelFocused;
-        _logView.Enter += OnPanelFocused;
+        // Focus tracking disabled due to Terminal.Gui v2 API instability
+        // TODO: Re-enable when Terminal.Gui v2 stabilizes with compatible Enter event
+        // _addressSpaceView.Enter += OnPanelFocused;
+        // _monitoredVariablesView.Enter += OnPanelFocused;
+        // _nodeDetailsView.Enter += OnPanelFocused;
+        // _logView.Enter += OnPanelFocused;
 
         // Initialize views
         _logView.Initialize(_logger);
@@ -438,6 +439,7 @@ public class MainWindow : Toplevel
 
             if (success)
             {
+                _lastEndpoint = endpoint;
                 _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
             }
         }
@@ -537,8 +539,9 @@ public class MainWindow : Toplevel
 
     /// <summary>
     /// Handles focus changes to update border highlighting and status bar shortcuts.
+    /// NOTE: Currently disabled due to Terminal.Gui v2 API instability.
     /// </summary>
-    private void OnPanelFocused(object? sender, FocusEventArgs e)
+    private void OnPanelFocused(object? sender, EventArgs e)
     {
         if (sender is not View panel) return;
 
@@ -1144,11 +1147,13 @@ License: MIT
 
                 if (connected)
                 {
+                    _lastEndpoint = config.Server.EndpointUrl;
+
                     // Only after successful connection, disconnect old and clear views
                     _addressSpaceView.Clear();
                     _monitoredVariablesView.Clear();
                     _nodeDetailsView.Clear();
-                    
+
                     _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
 
                     // Apply publishing interval to the newly created subscription manager
@@ -1312,11 +1317,11 @@ License: MIT
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _monitoredVariablesView.RecordToggleRequested -= ToggleRecording;
 
-            // Unsubscribe from focus events
-            _addressSpaceView.Enter -= OnPanelFocused;
-            _monitoredVariablesView.Enter -= OnPanelFocused;
-            _nodeDetailsView.Enter -= OnPanelFocused;
-            _logView.Enter -= OnPanelFocused;
+            // Focus tracking disabled - see comment in constructor
+            // _addressSpaceView.Enter -= OnPanelFocused;
+            // _monitoredVariablesView.Enter -= OnPanelFocused;
+            // _nodeDetailsView.Enter -= OnPanelFocused;
+            // _logView.Enter -= OnPanelFocused;
 
             _connectionManager.Dispose();
         }

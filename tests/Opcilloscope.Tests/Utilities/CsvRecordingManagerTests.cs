@@ -39,6 +39,10 @@ public class CsvRecordingManagerTests : IDisposable
         // Assert
         Assert.True(result);
         Assert.True(File.Exists(filePath));
+
+        // Stop recording to release the file handle before reading
+        _manager.StopRecording();
+
         var content = File.ReadAllText(filePath);
         Assert.Contains("Timestamp,DisplayName,NodeId,Value,Status", content);
     }

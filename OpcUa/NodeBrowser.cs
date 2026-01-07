@@ -200,6 +200,12 @@ public class NodeBrowser
                 Attributes.UserAccessLevel
             );
 
+            // Check if the node exists by verifying the NodeId attribute read was successful
+            if (attrs.Count == 0 || StatusCode.IsBad(attrs[0].StatusCode))
+            {
+                return null;
+            }
+
             return new NodeAttributes
             {
                 NodeId = nodeId,

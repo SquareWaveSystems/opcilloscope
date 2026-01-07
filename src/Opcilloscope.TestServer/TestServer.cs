@@ -226,7 +226,8 @@ internal class TestOpcUaServer : StandardServer
             new TestNodeManager(server, configuration)
         };
 
-        return new MasterNodeManager(server, configuration, null, nodeManagers.ToArray());
+        // Pass the test server namespace as the dynamic namespace
+        return new MasterNodeManager(server, configuration, TestNodeManager.NamespaceUri, nodeManagers.ToArray());
     }
 
     protected override ServerProperties LoadServerProperties()

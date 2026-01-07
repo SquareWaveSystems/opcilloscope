@@ -13,7 +13,7 @@ namespace Opcilloscope.Tests.Infrastructure;
 public class TestServerFixture : IAsyncLifetime
 {
     private static readonly object _portLock = new();
-    private static int _nextPort = 4840;
+    private static int _nextPort = 48400; // Use higher port range to avoid conflicts with existing OPC UA servers
 
     private Opcilloscope.TestServer.TestServer? _server;
     private int _port;
@@ -125,7 +125,16 @@ public abstract class IntegrationTestBase : IClassFixture<TestServerFixture>, IA
             throw new InvalidOperationException("Client not connected");
         }
 
-        return Client.Session.NamespaceUris.GetIndex(Opcilloscope.TestServer.TestNodeManager.NamespaceUri);
+        var index = Client.Session.NamespaceUris.GetIndex(Opcilloscope.TestServer.TestNodeManager.NamespaceUri);
+        if (index < 0)
+        {
+            // Namespace not found - list available namespaces for debugging
+            var available = string.Join(", ", Client.Session.NamespaceUris.ToArray());
+            throw new InvalidOperationException(
+                $"Test server namespace '{Opcilloscope.TestServer.TestNodeManager.NamespaceUri}' not found. " +
+                $"Available namespaces: [{available}]");
+        }
+        return index;
     }
 }
 

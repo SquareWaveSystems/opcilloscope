@@ -43,26 +43,58 @@ public class TestNodeManager : CustomNodeManager2
         {
             base.CreateAddressSpace(externalReferences);
 
-            var objectsFolder = FindPredefinedNode(
-                ExpandedNodeId.ToNodeId(ObjectIds.ObjectsFolder, Server.NamespaceUris),
-                typeof(FolderState)) as FolderState;
+            // Get reference to ObjectsFolder - we'll add references to it
+            var objectsFolderId = ObjectIds.ObjectsFolder;
 
-            if (objectsFolder == null)
-            {
-                return;
-            }
-
-            var simulationFolder = CreateFolder(objectsFolder, "Simulation", "Simulation");
+            // Create Simulation folder
+            var simulationFolder = CreateFolderUnderObjects(
+                externalReferences, objectsFolderId, "Simulation", "Simulation");
             CreateSimulationNodes(simulationFolder);
-
-            var staticDataFolder = CreateFolder(objectsFolder, "StaticData", "StaticData");
-            CreateStaticDataNodes(staticDataFolder);
-
             AddPredefinedNode(SystemContext, simulationFolder);
+
+            // Create StaticData folder
+            var staticDataFolder = CreateFolderUnderObjects(
+                externalReferences, objectsFolderId, "StaticData", "StaticData");
+            CreateStaticDataNodes(staticDataFolder);
             AddPredefinedNode(SystemContext, staticDataFolder);
 
             StartSimulation();
         }
+    }
+
+    private FolderState CreateFolderUnderObjects(
+        IDictionary<NodeId, IList<IReference>> externalReferences,
+        NodeId parentId,
+        string path,
+        string name)
+    {
+        var folder = new FolderState(null)
+        {
+            SymbolicName = name,
+            ReferenceTypeId = ReferenceTypeIds.Organizes,
+            TypeDefinitionId = ObjectTypeIds.FolderType,
+            NodeId = new NodeId(path, NamespaceIndex),
+            BrowseName = new QualifiedName(name, NamespaceIndex),
+            DisplayName = new LocalizedText("en", name),
+            WriteMask = AttributeWriteMask.None,
+            UserWriteMask = AttributeWriteMask.None,
+            EventNotifier = EventNotifiers.None
+        };
+
+        // Add reference from Objects folder to our folder
+        if (externalReferences != null)
+        {
+            if (!externalReferences.TryGetValue(parentId, out var references))
+            {
+                references = new List<IReference>();
+                externalReferences[parentId] = references;
+            }
+
+            folder.AddReference(ReferenceTypeIds.Organizes, true, parentId);
+            references.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, folder.NodeId));
+        }
+
+        return folder;
     }
 
     private void CreateSimulationNodes(FolderState folder)
