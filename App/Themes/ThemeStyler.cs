@@ -1,6 +1,6 @@
 using Terminal.Gui;
 
-namespace OpcScope.App.Themes;
+namespace Opcilloscope.App.Themes;
 
 /// <summary>
 /// Helper class to apply Terminal.Gui v2 styling based on the current theme.

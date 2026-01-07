@@ -1,11 +1,11 @@
-# Contributing to OpcScope
+# Contributing to Opcilloscope
 
-Thank you for your interest in contributing to OpcScope!
+Thank you for your interest in contributing to Opcilloscope!
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR-USERNAME/OpcScope.git`
+2. Clone your fork: `git clone https://github.com/YOUR-USERNAME/Opcilloscope.git`
 3. Create a branch: `git checkout -b feature/your-feature-name`
 4. Make your changes
 5. Run tests: `dotnet test`
@@ -53,7 +53,7 @@ When reporting issues, please include:
 ## Architecture Overview
 
 ```
-OpcScope/
+Opcilloscope/
 ├── App/           # UI components (Terminal.Gui)
 │   ├── Views/     # View panels
 │   └── Dialogs/   # Modal dialogs

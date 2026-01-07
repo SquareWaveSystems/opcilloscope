@@ -1,4 +1,4 @@
-namespace OpcScope.TestServer;
+namespace Opcilloscope.TestServer;
 
 class Program
 {
@@ -47,7 +47,7 @@ class Program
             return 0;
         }
 
-        Console.WriteLine("OpcScope Test Server");
+        Console.WriteLine("Opcilloscope Test Server");
         Console.WriteLine("====================");
         Console.WriteLine();
 
@@ -113,15 +113,15 @@ class Program
 
     static void PrintHelp()
     {
-        Console.WriteLine("OpcScope Test Server - A standalone OPC UA test server");
+        Console.WriteLine("Opcilloscope Test Server - A standalone OPC UA test server");
         Console.WriteLine();
-        Console.WriteLine("Usage: OpcScope.TestServer [options]");
+        Console.WriteLine("Usage: Opcilloscope.TestServer [options]");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  -p, --port <port>  Port to listen on (default: 4840)");
         Console.WriteLine("  -h, --help         Show this help message");
         Console.WriteLine();
         Console.WriteLine("Example:");
-        Console.WriteLine("  OpcScope.TestServer --port 4841");
+        Console.WriteLine("  Opcilloscope.TestServer --port 4841");
     }
 }

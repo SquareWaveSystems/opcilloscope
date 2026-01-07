@@ -1,7 +1,7 @@
 using Opc.Ua;
 using Opc.Ua.Server;
 
-namespace OpcScope.TestServer;
+namespace Opcilloscope.TestServer;
 
 /// <summary>
 /// Custom NodeManager that exposes test nodes for demonstration and testing.
@@ -9,12 +9,12 @@ namespace OpcScope.TestServer;
 /// </summary>
 public class TestNodeManager : CustomNodeManager2
 {
-    public const string NamespaceUri = "urn:opcscope:testserver";
+    public const string NamespaceUri = "urn:opcilloscope:testserver";
 
     private int _counterValue;
     private double _randomValue;
     private double _sineValue;
-    private string _writableString = "Hello OpcScope";
+    private string _writableString = "Hello Opcilloscope";
     private bool _toggleBoolean;
     private int _writableNumber = 42;
 
@@ -104,7 +104,7 @@ public class TestNodeManager : CustomNodeManager2
     private void CreateStaticDataNodes(FolderState folder)
     {
         var serverName = CreateVariable(folder, "ServerName", "ServerName", DataTypeIds.String, ValueRanks.Scalar);
-        serverName.Value = "OpcScope Test Server";
+        serverName.Value = "Opcilloscope Test Server";
         serverName.AccessLevel = AccessLevels.CurrentRead;
         serverName.UserAccessLevel = AccessLevels.CurrentRead;
 

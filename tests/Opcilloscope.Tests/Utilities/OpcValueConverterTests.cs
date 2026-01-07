@@ -1,7 +1,7 @@
 using Opc.Ua;
-using OpcScope.Utilities;
+using Opcilloscope.Utilities;
 
-namespace OpcScope.Tests.Utilities;
+namespace Opcilloscope.Tests.Utilities;
 
 public class OpcValueConverterTests
 {

@@ -1,7 +1,7 @@
 using Opc.Ua;
-using OpcScope.Tests.Infrastructure;
+using Opcilloscope.Tests.Infrastructure;
 
-namespace OpcScope.Tests.Integration;
+namespace Opcilloscope.Tests.Integration;
 
 /// <summary>
 /// Integration tests demonstrating the in-process OPC UA test server.
@@ -52,7 +52,7 @@ public class OpcUaIntegrationTests : IntegrationTestBase
         var value = await Client!.ReadValueAsync(nodeId);
 
         Assert.NotNull(value);
-        Assert.Equal("OpcScope Test Server", value.Value);
+        Assert.Equal("Opcilloscope Test Server", value.Value);
     }
 
     [Fact]

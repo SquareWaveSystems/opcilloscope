@@ -1,7 +1,7 @@
 using Opc.Ua;
-using OpcScope.OpcUa;
+using Opcilloscope.OpcUa;
 
-namespace OpcScope.Tests.OpcUa;
+namespace Opcilloscope.Tests.OpcUa;
 
 public class SubscriptionManagerTests
 {

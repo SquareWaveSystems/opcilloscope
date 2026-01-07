@@ -1,6 +1,6 @@
 using Opc.Ua;
 
-namespace OpcScope.Utilities;
+namespace Opcilloscope.Utilities;
 
 /// <summary>
 /// Utility class for converting string input to OPC UA data types.

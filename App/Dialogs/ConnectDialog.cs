@@ -1,9 +1,9 @@
 using Terminal.Gui;
-using OpcScope.App.Themes;
+using Opcilloscope.App.Themes;
 using System.Collections.ObjectModel;
-using AppThemeManager = OpcScope.App.Themes.ThemeManager;
+using AppThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Dialogs;
+namespace Opcilloscope.App.Dialogs;
 
 /// <summary>
 /// Dialog for entering OPC UA server connection details.

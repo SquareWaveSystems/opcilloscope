@@ -1,7 +1,7 @@
-# OpcScope Project Guide
+# Opcilloscope Project Guide
 
 ## Overview
-OpcScope is a terminal-based OPC UA client/monitor application built with .NET 10, Terminal.Gui v2, and OPC Foundation Client SDK (`OPCFoundation.NetStandard.Opc.Ua.Client`). It provides real-time browsing, monitoring, and visualization of industrial automation data.
+Opcilloscope is a terminal-based OPC UA client/monitor application built with .NET 10, Terminal.Gui v2, and OPC Foundation Client SDK (`OPCFoundation.NetStandard.Opc.Ua.Client`). It provides real-time browsing, monitoring, and visualization of industrial automation data.
 
 ## Environment Setup
 
@@ -50,8 +50,8 @@ dotnet build
 dotnet run
 
 # Run with a configuration file
-dotnet run -- config.opcscope
-dotnet run -- --config config.opcscope
+dotnet run -- config.opcilloscope
+dotnet run -- --config config.opcilloscope
 
 # Run tests
 dotnet test
@@ -60,24 +60,24 @@ dotnet test
 ## Command-Line Interface
 
 ```
-Usage: opcscope [options] [file]
+Usage: opcilloscope [options] [file]
 
 Options:
-  -f, --config <file>   Load configuration file (.opcscope or .json)
+  -f, --config <file>   Load configuration file (.opcilloscope or .json)
   -h, --help            Show help message
 
 Examples:
-  opcscope                           Start with empty configuration
-  opcscope production.opcscope       Load configuration file
-  opcscope --config config.json      Load configuration file
+  opcilloscope                           Start with empty configuration
+  opcilloscope production.opcilloscope       Load configuration file
+  opcilloscope --config config.json      Load configuration file
 ```
 
 ## Project Structure
 
 ```
-OpcScope/
-├── OpcScope.csproj                 # Main application project
-├── OpcScope.sln                    # Solution file
+Opcilloscope/
+├── Opcilloscope.csproj                 # Main application project
+├── Opcilloscope.sln                    # Solution file
 ├── Program.cs                      # Application entry point with CLI argument parsing
 ├── CLAUDE.md                       # This file - AI assistant guide
 │
@@ -104,10 +104,10 @@ OpcScope/
 │       └── ThemeStyler.cs          # Theme application helper
 │
 ├── Configuration/
-│   ├── ConfigurationService.cs     # Load/save .opcscope configuration files
+│   ├── ConfigurationService.cs     # Load/save .opcilloscope configuration files
 │   ├── RecentFilesManager.cs       # Recently opened files tracking
 │   └── Models/
-│       └── OpcScopeConfig.cs       # Configuration data models (ServerConfig, SubscriptionSettings, etc.)
+│       └── OpcilloscopeConfig.cs       # Configuration data models (ServerConfig, SubscriptionSettings, etc.)
 │
 ├── OpcUa/
 │   ├── OpcUaClientWrapper.cs       # OPC Foundation Session wrapper with connection management
@@ -126,15 +126,15 @@ OpcScope/
 │   └── TaskExtensions.cs           # Async task helper extensions (FireAndForget)
 │
 ├── src/
-│   └── OpcScope.TestServer/        # In-process OPC UA test server library
-│       ├── OpcScope.TestServer.csproj
+│   └── Opcilloscope.TestServer/        # In-process OPC UA test server library
+│       ├── Opcilloscope.TestServer.csproj
 │       ├── Program.cs              # Standalone test server entry point
 │       ├── TestServer.cs           # Server with ApplicationConfiguration
 │       └── TestNodeManager.cs      # Custom NodeManager with test nodes
 │
 ├── tests/
-│   └── OpcScope.Tests/             # Unit and integration tests (xUnit)
-│       ├── OpcScope.Tests.csproj
+│   └── Opcilloscope.Tests/             # Unit and integration tests (xUnit)
+│       ├── Opcilloscope.Tests.csproj
 │       ├── Infrastructure/
 │       │   └── TestServerFixture.cs # xUnit fixture with IAsyncLifetime
 │       ├── Integration/
@@ -167,8 +167,8 @@ OpcScope/
 
 ## Key Features
 
-### Configuration Files (.opcscope)
-OpcScope uses JSON-based configuration files with the `.opcscope` extension:
+### Configuration Files (.opcilloscope)
+Opcilloscope uses JSON-based configuration files with the `.opcilloscope` extension:
 
 ```json
 {
@@ -366,7 +366,7 @@ public class OtherTests
 
 Key classes:
 - `TestServer` - Server with start/stop methods and ApplicationConfiguration
-- `TestNodeManager` - Custom NodeManager exposing test nodes in `urn:opcscope:testserver` namespace
+- `TestNodeManager` - Custom NodeManager exposing test nodes in `urn:opcilloscope:testserver` namespace
 - `TestServerFixture` - xUnit fixture implementing `IAsyncLifetime`
 - `IntegrationTestBase` - Base class with auto-connected client
 
@@ -382,7 +382,7 @@ Available test nodes:
 - `WritableNumber` - Int32, writable
 
 **StaticData folder** (read-only):
-- `ServerName` - String ("OpcScope Test Server")
+- `ServerName` - String ("Opcilloscope Test Server")
 - `StartTime` - DateTime
 - `Version` - String ("1.0.0")
 - `ArrayOfInts` - Int32[] ([1, 2, 3, 4, 5])
@@ -433,7 +433,7 @@ Automates release builds and publishing.
 
 1. **`dotnet` command not found**: Install .NET SDK using the install script (see Environment Setup above)
 2. **NuGet restore fails with proxy/401 errors**: Run `./scripts/download-packages.sh` to download packages via curl, then re-run `dotnet restore`
-3. **Tests fail with Xunit errors in main project**: Ensure `tests/**` is excluded in OpcScope.csproj
+3. **Tests fail with Xunit errors in main project**: Ensure `tests/**` is excluded in Opcilloscope.csproj
 4. **UI thread exceptions**: Always use `Application.Invoke()` or `UiThread.Run()` for UI updates from background threads
 5. **Ambiguous NodeBrowser reference**: OPC Foundation has its own `Browser` class - use fully qualified names if needed
 6. **Certificate validation errors**: Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development

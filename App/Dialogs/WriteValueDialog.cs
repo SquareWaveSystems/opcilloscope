@@ -1,10 +1,10 @@
 using Terminal.Gui;
 using Opc.Ua;
-using OpcScope.App.Themes;
-using OpcScope.Utilities;
-using AppThemeManager = OpcScope.App.Themes.ThemeManager;
+using Opcilloscope.App.Themes;
+using Opcilloscope.Utilities;
+using AppThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Dialogs;
+namespace Opcilloscope.App.Dialogs;
 
 /// <summary>
 /// Dialog for writing a value to an OPC UA node.

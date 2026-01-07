@@ -15,22 +15,22 @@ jobs:
         include:
           - os: ubuntu-latest
             rid: linux-x64
-            artifact: opcscope-linux-x64
+            artifact: opcilloscope-linux-x64
           - os: ubuntu-latest
             rid: linux-arm64
-            artifact: opcscope-linux-arm64
+            artifact: opcilloscope-linux-arm64
           - os: windows-latest
             rid: win-x64
-            artifact: opcscope-win-x64
+            artifact: opcilloscope-win-x64
           - os: windows-latest
             rid: win-arm64
-            artifact: opcscope-win-arm64
+            artifact: opcilloscope-win-arm64
           - os: macos-latest
             rid: osx-x64
-            artifact: opcscope-osx-x64
+            artifact: opcilloscope-osx-x64
           - os: macos-latest
             rid: osx-arm64
-            artifact: opcscope-osx-arm64
+            artifact: opcilloscope-osx-arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -48,13 +48,13 @@ jobs:
 
       - name: Publish
         run: |
-          dotnet publish OpcScope.csproj -c Release -r ${{ matrix.rid }} -o ./publish
+          dotnet publish Opcilloscope.csproj -c Release -r ${{ matrix.rid }} -o ./publish
 
       - name: Create archive (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           cd publish
-          chmod +x opcscope || true
+          chmod +x opcilloscope || true
           tar -czvf ../${{ matrix.artifact }}.tar.gz *
 
       - name: Create archive (Windows)

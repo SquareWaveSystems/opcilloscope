@@ -18,8 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\OpcScope.csproj" />
-    <ProjectReference Include="..\..\src\OpcScope.TestServer\OpcScope.TestServer.csproj" />
+    <ProjectReference Include="..\..\Opcilloscope.csproj" />
+    <ProjectReference Include="..\..\src\Opcilloscope.TestServer\Opcilloscope.TestServer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

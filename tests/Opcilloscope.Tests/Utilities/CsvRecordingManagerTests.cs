@@ -1,8 +1,8 @@
 using Opc.Ua;
-using OpcScope.OpcUa.Models;
-using OpcScope.Utilities;
+using Opcilloscope.OpcUa.Models;
+using Opcilloscope.Utilities;
 
-namespace OpcScope.Tests.Utilities;
+namespace Opcilloscope.Tests.Utilities;
 
 public class CsvRecordingManagerTests : IDisposable
 {
@@ -14,7 +14,7 @@ public class CsvRecordingManagerTests : IDisposable
     {
         _logger = new Logger();
         _manager = new CsvRecordingManager(_logger);
-        _testDirectory = Path.Combine(Path.GetTempPath(), $"OpcScope_Test_{Guid.NewGuid()}");
+        _testDirectory = Path.Combine(Path.GetTempPath(), $"Opcilloscope_Test_{Guid.NewGuid()}");
         Directory.CreateDirectory(_testDirectory);
     }
 

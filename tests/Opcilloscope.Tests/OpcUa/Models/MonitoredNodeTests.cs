@@ -1,7 +1,7 @@
 using Opc.Ua;
-using OpcScope.OpcUa.Models;
+using Opcilloscope.OpcUa.Models;
 
-namespace OpcScope.Tests.OpcUa.Models;
+namespace Opcilloscope.Tests.OpcUa.Models;
 
 public class MonitoredNodeTests
 {

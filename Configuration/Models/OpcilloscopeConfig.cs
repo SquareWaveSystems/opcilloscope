@@ -1,9 +1,9 @@
-namespace OpcScope.Configuration.Models;
+namespace Opcilloscope.Configuration.Models;
 
 /// <summary>
-/// Root configuration model for OpcScope configuration files (.opcscope).
+/// Root configuration model for Opcilloscope configuration files (.opcilloscope).
 /// </summary>
-public class OpcScopeConfig
+public class OpcilloscopeConfig
 {
     public string Version { get; set; } = "1.0";
     public ServerConfig Server { get; set; } = new();
@@ -28,7 +28,7 @@ public class ServerConfig
     /// Warning: As of version 1.0, this value is not currently used by the
     /// connection logic. It is included in the configuration model to
     /// document intended security settings and to support future versions
-    /// of OpcScope that negotiate security based on this value.
+    /// of Opcilloscope that negotiate security based on this value.
     /// </para>
     /// </summary>
     public string SecurityMode { get; set; } = "None";
@@ -78,7 +78,7 @@ public class AuthenticationConfig
 public class SubscriptionSettings
 {
     /// <summary>
-    /// Default publishing interval (in milliseconds) for OPC UA subscriptions created by OpcScope.
+    /// Default publishing interval (in milliseconds) for OPC UA subscriptions created by Opcilloscope.
     /// This value is applied when configurations are loaded.
     /// Valid range: 100-10000ms (values outside this range will be clamped by SubscriptionManager).
     /// </summary>

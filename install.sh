@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-# OpcScope installer for Linux and macOS
-# Usage: curl -fsSL https://raw.githubusercontent.com/BrettKinny/OpcScope/main/install.sh | bash
+# Opcilloscope installer for Linux and macOS
+# Usage: curl -fsSL https://raw.githubusercontent.com/BrettKinny/Opcilloscope/main/install.sh | bash
 
-REPO="BrettKinny/OpcScope"
-INSTALL_DIR="${OPCSCOPE_INSTALL_DIR:-$HOME/.local/bin}"
+REPO="BrettKinny/Opcilloscope"
+INSTALL_DIR="${OPCILLOSCOPE_INSTALL_DIR:-$HOME/.local/bin}"
 
 # Colors
 RED='\033[0;31m'
@@ -58,27 +58,27 @@ install() {
     fi
     info "Version: ${version}"
 
-    download_url="https://github.com/${REPO}/releases/download/${version}/opcscope-${platform}.tar.gz"
+    download_url="https://github.com/${REPO}/releases/download/${version}/opcilloscope-${platform}.tar.gz"
     info "Downloading from: ${download_url}"
 
     tmp_dir=$(mktemp -d)
     trap "rm -rf ${tmp_dir}" EXIT
 
-    if ! curl -fsSL "$download_url" -o "${tmp_dir}/opcscope.tar.gz"; then
+    if ! curl -fsSL "$download_url" -o "${tmp_dir}/opcilloscope.tar.gz"; then
         error "Download failed. Check if the release exists for platform: ${platform}"
     fi
 
     info "Extracting..."
-    tar -xzf "${tmp_dir}/opcscope.tar.gz" -C "${tmp_dir}"
+    tar -xzf "${tmp_dir}/opcilloscope.tar.gz" -C "${tmp_dir}"
 
     info "Installing to ${INSTALL_DIR}..."
     mkdir -p "${INSTALL_DIR}"
-    mv "${tmp_dir}/opcscope" "${INSTALL_DIR}/opcscope"
-    chmod +x "${INSTALL_DIR}/opcscope"
+    mv "${tmp_dir}/opcilloscope" "${INSTALL_DIR}/opcilloscope"
+    chmod +x "${INSTALL_DIR}/opcilloscope"
 
     # Verify installation
-    if [ -x "${INSTALL_DIR}/opcscope" ]; then
-        info "OpcScope ${version} installed successfully!"
+    if [ -x "${INSTALL_DIR}/opcilloscope" ]; then
+        info "Opcilloscope ${version} installed successfully!"
         echo ""
 
         # Check if install dir is in PATH
@@ -92,7 +92,7 @@ install() {
             echo ""
         fi
 
-        echo "Run 'opcscope' to start the application."
+        echo "Run 'opcilloscope' to start the application."
     else
         error "Installation failed"
     fi
@@ -102,7 +102,7 @@ install() {
 main() {
     echo ""
     echo "  ╔═══════════════════════════════════╗"
-    echo "  ║       OpcScope Installer          ║"
+    echo "  ║     Opcilloscope Installer        ║"
     echo "  ║   Terminal OPC UA Client          ║"
     echo "  ╚═══════════════════════════════════╝"
     echo ""

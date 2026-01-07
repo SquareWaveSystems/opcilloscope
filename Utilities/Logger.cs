@@ -1,4 +1,4 @@
-namespace OpcScope.Utilities;
+namespace Opcilloscope.Utilities;
 
 /// <summary>
 /// Simple in-app logger with severity levels.

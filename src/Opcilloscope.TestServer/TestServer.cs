@@ -2,10 +2,10 @@ using Opc.Ua;
 using Opc.Ua.Configuration;
 using Opc.Ua.Server;
 
-namespace OpcScope.TestServer;
+namespace Opcilloscope.TestServer;
 
 /// <summary>
-/// Standalone OPC UA test server for OpcScope testing and development.
+/// Standalone OPC UA test server for Opcilloscope testing and development.
 /// </summary>
 public class TestServer : IAsyncDisposable, IDisposable
 {
@@ -13,8 +13,8 @@ public class TestServer : IAsyncDisposable, IDisposable
     private ApplicationInstance? _application;
     private bool _disposed;
 
-    public const string ApplicationName = "OpcScope Test Server";
-    public const string ApplicationUri = "urn:opcscope:testserver";
+    public const string ApplicationName = "Opcilloscope Test Server";
+    public const string ApplicationUri = "urn:opcilloscope:testserver";
 
     public string EndpointUrl { get; private set; } = string.Empty;
     public bool IsRunning => _server != null;
@@ -29,7 +29,7 @@ public class TestServer : IAsyncDisposable, IDisposable
             throw new InvalidOperationException("Server is already running");
         }
 
-        EndpointUrl = $"opc.tcp://localhost:{port}/UA/OpcScopeTest";
+        EndpointUrl = $"opc.tcp://localhost:{port}/UA/OpcilloscopeTest";
 
         var config = CreateApplicationConfiguration(port);
         await config.ValidateAsync(ApplicationType.Server);
@@ -70,7 +70,7 @@ public class TestServer : IAsyncDisposable, IDisposable
     {
         var pkiPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "OpcScope",
+            "Opcilloscope",
             "TestServer",
             "pki");
 
@@ -78,7 +78,7 @@ public class TestServer : IAsyncDisposable, IDisposable
         {
             ApplicationName = ApplicationName,
             ApplicationUri = ApplicationUri,
-            ProductUri = "urn:opcscope:testserver:product",
+            ProductUri = "urn:opcilloscope:testserver:product",
             ApplicationType = ApplicationType.Server,
 
             SecurityConfiguration = new SecurityConfiguration
@@ -87,7 +87,7 @@ public class TestServer : IAsyncDisposable, IDisposable
                 {
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(pkiPath, "own"),
-                    SubjectName = $"CN={ApplicationName}, O=OpcScope, DC=localhost"
+                    SubjectName = $"CN={ApplicationName}, O=Opcilloscope, DC=localhost"
                 },
                 TrustedIssuerCertificates = new CertificateTrustList
                 {
@@ -126,7 +126,7 @@ public class TestServer : IAsyncDisposable, IDisposable
 
             ServerConfiguration = new ServerConfiguration
             {
-                BaseAddresses = { $"opc.tcp://localhost:{port}/UA/OpcScopeTest" },
+                BaseAddresses = { $"opc.tcp://localhost:{port}/UA/OpcilloscopeTest" },
                 MinRequestThreadCount = 5,
                 MaxRequestThreadCount = 100,
                 MaxQueuedRequestCount = 2000,
@@ -233,9 +233,9 @@ internal class TestOpcUaServer : StandardServer
     {
         return new ServerProperties
         {
-            ManufacturerName = "OpcScope",
-            ProductName = "OpcScope Test Server",
-            ProductUri = "urn:opcscope:testserver:product",
+            ManufacturerName = "Opcilloscope",
+            ProductName = "Opcilloscope Test Server",
+            ProductUri = "urn:opcilloscope:testserver:product",
             SoftwareVersion = Utils.GetAssemblySoftwareVersion(),
             BuildNumber = Utils.GetAssemblyBuildNumber(),
             BuildDate = Utils.GetAssemblyTimestamp()

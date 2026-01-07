@@ -1,18 +1,18 @@
 using System.Text.Json.Serialization;
-using OpcScope.Configuration.Models;
+using Opcilloscope.Configuration.Models;
 
-namespace OpcScope.Configuration;
+namespace Opcilloscope.Configuration;
 
 /// <summary>
-/// Source-generated JSON serialization context for OpcScope configuration types.
+/// Source-generated JSON serialization context for Opcilloscope configuration types.
 /// This enables AOT/trimming-compatible JSON serialization without reflection.
 /// </summary>
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
-[JsonSerializable(typeof(OpcScopeConfig))]
+[JsonSerializable(typeof(OpcilloscopeConfig))]
 [JsonSerializable(typeof(List<string>))]
-internal partial class OpcScopeJsonContext : JsonSerializerContext
+internal partial class OpcilloscopeJsonContext : JsonSerializerContext
 {
 }

@@ -1,7 +1,7 @@
-using OpcScope.App.Themes;
+using Opcilloscope.App.Themes;
 using Terminal.Gui;
 
-namespace OpcScope.Tests.App;
+namespace Opcilloscope.Tests.App;
 
 public class AppThemeTests
 {

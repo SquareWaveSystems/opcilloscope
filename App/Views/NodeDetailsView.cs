@@ -1,10 +1,10 @@
 using Terminal.Gui;
 using Opc.Ua;
-using OpcScope.OpcUa.Models;
-using OpcScope.App.Themes;
-using ThemeManager = OpcScope.App.Themes.ThemeManager;
+using Opcilloscope.OpcUa.Models;
+using Opcilloscope.App.Themes;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Views;
+namespace Opcilloscope.App.Views;
 
 /// <summary>
 /// Panel showing detailed attributes of the selected node.
@@ -13,7 +13,7 @@ namespace OpcScope.App.Views;
 public class NodeDetailsView : FrameView
 {
     private readonly Label _detailsLabel;
-    private OpcScope.OpcUa.NodeBrowser? _nodeBrowser;
+    private Opcilloscope.OpcUa.NodeBrowser? _nodeBrowser;
 
     public NodeDetailsView()
     {
@@ -68,7 +68,7 @@ public class NodeDetailsView : FrameView
         });
     }
 
-    public void Initialize(OpcScope.OpcUa.NodeBrowser nodeBrowser)
+    public void Initialize(Opcilloscope.OpcUa.NodeBrowser nodeBrowser)
     {
         _nodeBrowser = nodeBrowser;
     }

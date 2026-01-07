@@ -1,11 +1,11 @@
 using System.Text;
 using Terminal.Gui;
-using OpcScope.OpcUa;
-using OpcScope.OpcUa.Models;
-using OpcScope.App.Themes;
-using ThemeManager = OpcScope.App.Themes.ThemeManager;
+using Opcilloscope.OpcUa;
+using Opcilloscope.OpcUa.Models;
+using Opcilloscope.App.Themes;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Views;
+namespace Opcilloscope.App.Views;
 
 /// <summary>
 /// TreeView for browsing the OPC UA address space with lazy loading.

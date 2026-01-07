@@ -1,4 +1,4 @@
-namespace OpcScope.App.Themes;
+namespace Opcilloscope.App.Themes;
 
 /// <summary>
 /// Manages application themes and provides global access to the current theme.

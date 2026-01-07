@@ -1,9 +1,9 @@
 using Opc.Ua;
 using Opc.Ua.Client;
-using OpcScope.OpcUa;
-using OpcScope.TestServer;
+using Opcilloscope.OpcUa;
+using Opcilloscope.TestServer;
 
-namespace OpcScope.Tests.Infrastructure;
+namespace Opcilloscope.Tests.Infrastructure;
 
 /// <summary>
 /// xUnit fixture that manages the in-process OPC UA test server lifecycle.
@@ -15,18 +15,18 @@ public class TestServerFixture : IAsyncLifetime
     private static readonly object _portLock = new();
     private static int _nextPort = 4840;
 
-    private OpcScope.TestServer.TestServer? _server;
+    private Opcilloscope.TestServer.TestServer? _server;
     private int _port;
 
     /// <summary>
     /// The endpoint URL for connecting to the test server.
     /// </summary>
-    public string EndpointUrl => $"opc.tcp://localhost:{_port}/UA/OpcScopeTest";
+    public string EndpointUrl => $"opc.tcp://localhost:{_port}/UA/OpcilloscopeTest";
 
     /// <summary>
     /// The test server instance.
     /// </summary>
-    public OpcScope.TestServer.TestServer Server => _server ?? throw new InvalidOperationException("Server not started");
+    public Opcilloscope.TestServer.TestServer Server => _server ?? throw new InvalidOperationException("Server not started");
 
     /// <summary>
     /// Indicates whether the server is running.
@@ -46,7 +46,7 @@ public class TestServerFixture : IAsyncLifetime
     {
         _port = AllocatePort();
 
-        _server = new OpcScope.TestServer.TestServer();
+        _server = new Opcilloscope.TestServer.TestServer();
         await _server.StartAsync(_port);
     }
 
@@ -125,7 +125,7 @@ public abstract class IntegrationTestBase : IClassFixture<TestServerFixture>, IA
             throw new InvalidOperationException("Client not connected");
         }
 
-        return Client.Session.NamespaceUris.GetIndex(OpcScope.TestServer.TestNodeManager.NamespaceUri);
+        return Client.Session.NamespaceUris.GetIndex(Opcilloscope.TestServer.TestNodeManager.NamespaceUri);
     }
 }
 

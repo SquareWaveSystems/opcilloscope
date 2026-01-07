@@ -5,8 +5,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>OpcScope.TestServer</RootNamespace>
-    <AssemblyName>OpcScope.TestServer</AssemblyName>
+    <RootNamespace>Opcilloscope.TestServer</RootNamespace>
+    <AssemblyName>Opcilloscope.TestServer</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

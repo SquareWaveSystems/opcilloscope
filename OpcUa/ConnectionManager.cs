@@ -1,6 +1,6 @@
-using OpcScope.Utilities;
+using Opcilloscope.Utilities;
 
-namespace OpcScope.OpcUa;
+namespace Opcilloscope.OpcUa;
 
 /// <summary>
 /// Manages OPC UA connection lifecycle including connect, disconnect, and reconnect operations.

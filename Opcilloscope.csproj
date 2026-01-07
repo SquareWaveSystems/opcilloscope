@@ -5,15 +5,15 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>OpcScope</RootNamespace>
-    <AssemblyName>OpcScope</AssemblyName>
+    <RootNamespace>Opcilloscope</RootNamespace>
+    <AssemblyName>Opcilloscope</AssemblyName>
 
     <!-- Package metadata -->
     <Version>1.0.0</Version>
     <Authors>Brett Kinny</Authors>
     <Description>A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data.</Description>
-    <PackageProjectUrl>https://github.com/BrettKinny/OpcScope</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/BrettKinny/OpcScope.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/BrettKinny/Opcilloscope</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/BrettKinny/Opcilloscope.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>opcua;opc-ua;terminal;tui;industrial;automation;scada</PackageTags>
@@ -27,7 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="OpcScope.Tests" />
+    <InternalsVisibleTo Include="Opcilloscope.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,6 +1,6 @@
-using OpcScope.App.Themes;
+using Opcilloscope.App.Themes;
 
-namespace OpcScope.Tests.App;
+namespace Opcilloscope.Tests.App;
 
 public class ThemeManagerTests
 {

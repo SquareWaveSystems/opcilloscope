@@ -2,13 +2,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpcScope", "OpcScope.csproj", "{4E2A8F99-A9A5-3CCC-02A4-8A18F90CE74A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Opcilloscope", "Opcilloscope.csproj", "{4E2A8F99-A9A5-3CCC-02A4-8A18F90CE74A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpcScope.TestServer", "src\OpcScope.TestServer\OpcScope.TestServer.csproj", "{7B3E5A12-F8C4-4D9E-A6B1-2C8D9E0F1234}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Opcilloscope.TestServer", "src\Opcilloscope.TestServer\Opcilloscope.TestServer.csproj", "{7B3E5A12-F8C4-4D9E-A6B1-2C8D9E0F1234}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpcScope.Tests", "tests\OpcScope.Tests\OpcScope.Tests.csproj", "{CCFD0A5B-8983-5414-07B9-728A32ED6185}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Opcilloscope.Tests", "tests\Opcilloscope.Tests\Opcilloscope.Tests.csproj", "{CCFD0A5B-8983-5414-07B9-728A32ED6185}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
