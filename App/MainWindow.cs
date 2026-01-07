@@ -1126,30 +1126,21 @@ License: MIT
     /// <summary>
     /// Saves the current configuration to a new file path.
     /// Uses cross-platform default directory and generates filename from connection URL.
+    /// The filename is preserved when navigating to different directories.
     /// </summary>
     private void SaveConfigAs()
     {
         // Get the default directory and generate a default filename
         var defaultDir = ConfigurationService.GetDefaultConfigDirectory();
         var defaultFilename = ConfigurationService.GenerateDefaultFilename(_connectionManager.CurrentEndpoint);
-        var defaultPath = Path.Combine(defaultDir, defaultFilename);
 
-        using var dialog = new SaveDialog
-        {
-            Title = "Save Configuration",
-            AllowedTypes = new List<IAllowedType>
-            {
-                new AllowedType("OpcScope Config", ConfigurationService.ConfigFileExtension)
-            },
-            Path = defaultPath
-        };
+        using var dialog = new Dialogs.SaveConfigDialog(defaultDir, defaultFilename);
 
         Application.Run(dialog);
 
-        if (!dialog.Canceled && dialog.Path != null)
+        if (dialog.Confirmed)
         {
-            var filePath = ConfigurationService.EnsureConfigExtension(dialog.Path.ToString()!);
-            SaveConfigurationAsync(filePath).FireAndForget(_logger);
+            SaveConfigurationAsync(dialog.FilePath).FireAndForget(_logger);
         }
     }
 
