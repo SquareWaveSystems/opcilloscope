@@ -1,13 +1,13 @@
 using Terminal.Gui;
-using OpcScope.OpcUa;
-using OpcScope.OpcUa.Models;
-using OpcScope.App.Themes;
-using OpcScope.Utilities;
+using Opcilloscope.OpcUa;
+using Opcilloscope.OpcUa.Models;
+using Opcilloscope.App.Themes;
+using Opcilloscope.Utilities;
 using System.Drawing;
 using Attribute = Terminal.Gui.Attribute;
-using ThemeManager = OpcScope.App.Themes.ThemeManager;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Views;
+namespace Opcilloscope.App.Views;
 
 /// <summary>
 /// Real-time Scope view supporting multiple signals with time-based x-axis.

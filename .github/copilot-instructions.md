@@ -1,7 +1,7 @@
-# OpcScope - GitHub Copilot Instructions
+# Opcilloscope - GitHub Copilot Instructions
 
 ## Project Overview
-OpcScope is a terminal-based OPC UA client/monitor application built with:
+Opcilloscope is a terminal-based OPC UA client/monitor application built with:
 - **.NET 10**
 - **Terminal.Gui v2** for the UI
 - **OPC Foundation Client SDK** (`OPCFoundation.NetStandard.Opc.Ua.Client`)
@@ -216,7 +216,7 @@ To add new packages:
 ## Common Pitfalls
 
 1. **NuGet restore fails** - Use local package source at `./packages/`
-2. **Tests fail with Xunit errors in main project** - Ensure `tests/**` is excluded in OpcScope.csproj
+2. **Tests fail with Xunit errors in main project** - Ensure `tests/**` is excluded in Opcilloscope.csproj
 3. **UI thread exceptions** - Always use `Application.Invoke()` for UI updates from background threads
 4. **Ambiguous NodeBrowser reference** - OPC Foundation has its own `Browser` class; use fully qualified names
 5. **Certificate validation errors** - Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development

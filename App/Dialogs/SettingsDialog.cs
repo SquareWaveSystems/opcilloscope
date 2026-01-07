@@ -1,8 +1,8 @@
 using Terminal.Gui;
-using OpcScope.App.Themes;
-using ThemeManager = OpcScope.App.Themes.ThemeManager;
+using Opcilloscope.App.Themes;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Dialogs;
+namespace Opcilloscope.App.Dialogs;
 
 /// <summary>
 /// Dialog for configuring subscription settings.

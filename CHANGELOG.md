@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to OpcScope will be documented in this file.
+All notable changes to Opcilloscope will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CSV recording of monitored values
 - Write value support for writable nodes
 - Node details panel showing attributes
-- Configuration file support (.opcscope JSON format)
+- Configuration file support (.opcilloscope JSON format)
 - Dark and Light themes
 - Cross-platform support (Windows, Linux, macOS)
 

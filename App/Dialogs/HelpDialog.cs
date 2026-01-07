@@ -1,9 +1,9 @@
 using Terminal.Gui;
-using OpcScope.App.Themes;
+using Opcilloscope.App.Themes;
 using Attribute = Terminal.Gui.Attribute;
-using ThemeManager = OpcScope.App.Themes.ThemeManager;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Dialogs;
+namespace Opcilloscope.App.Dialogs;
 
 /// <summary>
 /// Help dialog displaying all keyboard shortcuts in a formatted layout.
@@ -12,7 +12,7 @@ public class HelpDialog : Dialog
 {
     public HelpDialog()
     {
-        Title = " OPC Scope - Help ";
+        Title = " opcilloscope - Help ";
         Width = 64;
         Height = 32;
 

@@ -1,11 +1,11 @@
 using System.Text.Json;
-using OpcScope.Configuration.Models;
-using OpcScope.OpcUa.Models;
+using Opcilloscope.Configuration.Models;
+using Opcilloscope.OpcUa.Models;
 
-namespace OpcScope.Configuration;
+namespace Opcilloscope.Configuration;
 
 /// <summary>
-/// Service for loading, saving, and managing OpcScope configuration files.
+/// Service for loading, saving, and managing Opcilloscope configuration files.
 /// </summary>
 public class ConfigurationService
 {
@@ -55,10 +55,10 @@ public class ConfigurationService
     /// <param name="filePath">Path to the configuration file.</param>
     /// <returns>The loaded configuration.</returns>
     /// <exception cref="InvalidDataException">Thrown if the file contains invalid data.</exception>
-    public async Task<OpcScopeConfig> LoadAsync(string filePath)
+    public async Task<OpcilloscopeConfig> LoadAsync(string filePath)
     {
         var json = await File.ReadAllTextAsync(filePath);
-        var config = JsonSerializer.Deserialize(json, OpcScopeJsonContext.Default.OpcScopeConfig)
+        var config = JsonSerializer.Deserialize(json, OpcilloscopeJsonContext.Default.OpcilloscopeConfig)
             ?? throw new InvalidDataException("Invalid configuration file");
 
         // Handle version migrations if needed
@@ -79,7 +79,7 @@ public class ConfigurationService
     /// </summary>
     /// <param name="config">The configuration to validate.</param>
     /// <exception cref="InvalidDataException">Thrown if validation fails.</exception>
-    private void ValidateConfiguration(OpcScopeConfig config)
+    private void ValidateConfiguration(OpcilloscopeConfig config)
     {
         // Validate publishing interval
         if (config.Settings.PublishingIntervalMs < 0)
@@ -108,11 +108,11 @@ public class ConfigurationService
     /// </summary>
     /// <param name="config">The configuration to save.</param>
     /// <param name="filePath">Path to save the configuration to.</param>
-    public async Task SaveAsync(OpcScopeConfig config, string filePath)
+    public async Task SaveAsync(OpcilloscopeConfig config, string filePath)
     {
         config.Metadata.LastModified = DateTime.UtcNow;
 
-        var json = JsonSerializer.Serialize(config, OpcScopeJsonContext.Default.OpcScopeConfig);
+        var json = JsonSerializer.Serialize(config, OpcilloscopeJsonContext.Default.OpcilloscopeConfig);
         await File.WriteAllTextAsync(filePath, json);
 
         CurrentFilePath = filePath;
@@ -128,13 +128,13 @@ public class ConfigurationService
     /// <param name="monitoredVariables">The current monitored variables.</param>
     /// <param name="existingMetadata">Optional existing metadata to preserve.</param>
     /// <returns>A new configuration object representing the current state.</returns>
-    public OpcScopeConfig CaptureCurrentState(
+    public OpcilloscopeConfig CaptureCurrentState(
         string? endpointUrl,
         int publishingInterval,
         IEnumerable<MonitoredNode> monitoredVariables,
         ConfigMetadata? existingMetadata = null)
     {
-        return new OpcScopeConfig
+        return new OpcilloscopeConfig
         {
             Server = new ServerConfig
             {
@@ -183,7 +183,7 @@ public class ConfigurationService
     /// <summary>
     /// Handles version migrations for configuration files.
     /// </summary>
-    private OpcScopeConfig MigrateIfNeeded(OpcScopeConfig config)
+    private OpcilloscopeConfig MigrateIfNeeded(OpcilloscopeConfig config)
     {
         // Future: handle "1.0" -> "1.1" migrations, etc.
         // For now, just return the config as-is
@@ -207,7 +207,7 @@ public class ConfigurationService
             baseDir = Path.GetTempPath();
         }
 
-        var dir = Path.Combine(baseDir, "OpcScope", "Configurations");
+        var dir = Path.Combine(baseDir, "Opcilloscope", "Configurations");
         Directory.CreateDirectory(dir);
         return dir;
     }

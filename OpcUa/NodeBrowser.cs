@@ -1,8 +1,8 @@
 using Opc.Ua;
-using OpcScope.OpcUa.Models;
-using OpcScope.Utilities;
+using Opcilloscope.OpcUa.Models;
+using Opcilloscope.Utilities;
 
-namespace OpcScope.OpcUa;
+namespace Opcilloscope.OpcUa;
 
 /// <summary>
 /// Address space navigation logic with lazy loading.

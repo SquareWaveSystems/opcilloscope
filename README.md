@@ -1,4 +1,4 @@
-# OpcScope
+# Opcilloscope
 
 A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data. Built with .NET 10, Terminal.Gui, and OPC Foundation UA-.NETStandard.
 
@@ -39,7 +39,7 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 │ Select a node to view details                                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Log                                                                         │
-│ [12:30:01] INFO  OPC Scope started - Square Wave Systems                    │
+│ [12:30:01] INFO  opcilloscope started - Square Wave Systems                    │
 │ [12:30:01] INFO  Press F10 for menu, or use Connection -> Connect           │
 │ [12:30:15] INFO  Connected to opc.tcp://localhost:4840                      │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -53,34 +53,34 @@ A lightweight terminal-based OPC UA client for browsing, monitoring, and subscri
 
 **Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BrettKinny/OpcScope/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/BrettKinny/Opcilloscope/main/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/BrettKinny/OpcScope/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/BrettKinny/Opcilloscope/main/install.ps1 | iex
 ```
 
 ### Download Binary
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/BrettKinny/OpcScope/releases):
+Download the latest release for your platform from [GitHub Releases](https://github.com/BrettKinny/Opcilloscope/releases):
 
 | Platform | Download |
 |----------|----------|
-| Windows x64 | `opcscope-win-x64.zip` |
-| Windows ARM64 | `opcscope-win-arm64.zip` |
-| Linux x64 | `opcscope-linux-x64.tar.gz` |
-| Linux ARM64 | `opcscope-linux-arm64.tar.gz` |
-| macOS x64 (Intel) | `opcscope-osx-x64.tar.gz` |
-| macOS ARM64 (Apple Silicon) | `opcscope-osx-arm64.tar.gz` |
+| Windows x64 | `opcilloscope-win-x64.zip` |
+| Windows ARM64 | `opcilloscope-win-arm64.zip` |
+| Linux x64 | `opcilloscope-linux-x64.tar.gz` |
+| Linux ARM64 | `opcilloscope-linux-arm64.tar.gz` |
+| macOS x64 (Intel) | `opcilloscope-osx-x64.tar.gz` |
+| macOS ARM64 (Apple Silicon) | `opcilloscope-osx-arm64.tar.gz` |
 
 ### Build from Source
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ```bash
 # Clone the repository
-git clone https://github.com/BrettKinny/OpcScope.git
-cd OpcScope
+git clone https://github.com/BrettKinny/Opcilloscope.git
+cd Opcilloscope
 
 # Restore packages and build
 dotnet restore
@@ -113,7 +113,7 @@ This setup ensures builds work in GitHub Actions CI (uses nuget.org) and in rest
 
 ```bash
 # Load a configuration file
-dotnet run -- config.opcscope
+dotnet run -- config.opcilloscope
 dotnet run -- --config production.json
 
 # Show help
@@ -138,8 +138,8 @@ dotnet run -- --help
 ## Project Structure
 
 ```
-OpcScope/
-├── OpcScope.csproj              # Project file with dependencies
+Opcilloscope/
+├── Opcilloscope.csproj              # Project file with dependencies
 ├── Program.cs                   # Entry point
 ├── App/
 │   ├── MainWindow.cs           # Main window layout and orchestration

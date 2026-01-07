@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace OpcScope.Configuration;
+namespace Opcilloscope.Configuration;
 
 /// <summary>
 /// Manages the list of recently opened configuration files.
@@ -20,7 +20,7 @@ public class RecentFilesManager
     {
         _settingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "OpcScope",
+            "Opcilloscope",
             "recent-files.json"
         );
         Load();
@@ -113,7 +113,7 @@ public class RecentFilesManager
             if (File.Exists(_settingsPath))
             {
                 var json = File.ReadAllText(_settingsPath);
-                _recentFiles = JsonSerializer.Deserialize(json, OpcScopeJsonContext.Default.ListString) ?? new();
+                _recentFiles = JsonSerializer.Deserialize(json, OpcilloscopeJsonContext.Default.ListString) ?? new();
             }
         }
         catch
@@ -132,7 +132,7 @@ public class RecentFilesManager
             {
                 Directory.CreateDirectory(directory);
             }
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(_recentFiles, OpcScopeJsonContext.Default.ListString));
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(_recentFiles, OpcilloscopeJsonContext.Default.ListString));
         }
         catch
         {

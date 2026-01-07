@@ -1,6 +1,6 @@
 using Opc.Ua;
 
-namespace OpcScope.OpcUa.Models;
+namespace Opcilloscope.OpcUa.Models;
 
 /// <summary>
 /// View model for monitored variables displayed in the table.

@@ -1,15 +1,15 @@
 using Terminal.Gui;
-using OpcScope.App.Views;
-using OpcScope.App.Dialogs;
-using OpcScope.App.Themes;
-using OpcScope.Configuration;
-using OpcScope.Configuration.Models;
-using OpcScope.OpcUa;
-using OpcScope.OpcUa.Models;
-using OpcScope.Utilities;
-using ThemeManager = OpcScope.App.Themes.ThemeManager;
+using Opcilloscope.App.Views;
+using Opcilloscope.App.Dialogs;
+using Opcilloscope.App.Themes;
+using Opcilloscope.Configuration;
+using Opcilloscope.Configuration.Models;
+using Opcilloscope.OpcUa;
+using Opcilloscope.OpcUa.Models;
+using Opcilloscope.Utilities;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App;
+namespace Opcilloscope.App;
 
 /// <summary>
 /// Main application window with layout orchestration.
@@ -92,7 +92,7 @@ public class MainWindow : Toplevel
         ThemeManager.ThemeChanged += OnThemeChanged;
 
         // Set initial window title (status shown in status bar)
-        Title = "OPC Scope";
+        Title = "opcilloscope";
 
         // Create menu bar
         _menuBar = CreateMenuBar();
@@ -800,7 +800,7 @@ public class MainWindow : Toplevel
         var theme = ThemeManager.Current;
 
         // Update title (plain text)
-        Title = "OPC Scope";
+        Title = "opcilloscope";
 
         // Update colored status label in status bar
         _connectionStatusLabel.Text = isConnected
@@ -1033,7 +1033,7 @@ public class MainWindow : Toplevel
     private void ShowAbout()
     {
         var about = @"╔══════════════════════════════════════╗
-║           OPC Scope v1.0.0           ║
+║        opcilloscope v1.0.0           ║
 ║      by Square Wave Systems          ║
 ╚══════════════════════════════════════╝
 
@@ -1054,7 +1054,7 @@ Built with:
 © 2026 Square Wave Systems
 License: MIT
 ";
-        MessageBox.Query("About OPC Scope", about, "OK");
+        MessageBox.Query("About opcilloscope", about, "OK");
     }
 
     #region Configuration File Handling
@@ -1072,7 +1072,7 @@ License: MIT
             Title = "Open Configuration",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("OpcScope Config", ".opcscope"),
+                new AllowedType("Opcilloscope Config", ".opcilloscope"),
                 new AllowedType("JSON Files", ".json")
             }
         };
@@ -1109,7 +1109,7 @@ License: MIT
             Title = "Save Configuration",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("OpcScope Config", ".opcscope")
+                new AllowedType("Opcilloscope Config", ".opcilloscope")
             }
         };
 
@@ -1118,8 +1118,8 @@ License: MIT
         if (!dialog.Canceled && dialog.Path != null)
         {
             var filePath = dialog.Path.ToString()!;
-            if (!filePath.EndsWith(".opcscope", StringComparison.OrdinalIgnoreCase))
-                filePath += ".opcscope";
+            if (!filePath.EndsWith(".opcilloscope", StringComparison.OrdinalIgnoreCase))
+                filePath += ".opcilloscope";
 
             SaveConfigurationAsync(filePath).FireAndForget(_logger);
         }
@@ -1271,8 +1271,8 @@ License: MIT
         var unsavedMarker = _configService.HasUnsavedChanges ? "*" : "";
 
         Title = string.IsNullOrEmpty(_configService.CurrentFilePath) && !_configService.HasUnsavedChanges
-            ? "OPC Scope"
-            : $"OPC Scope - {configName}{unsavedMarker}";
+            ? "opcilloscope"
+            : $"opcilloscope - {configName}{unsavedMarker}";
 
         SetNeedsLayout();
     }

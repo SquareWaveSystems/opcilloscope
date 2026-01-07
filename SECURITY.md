@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in OpcScope, please report it responsibly:
+If you discover a security vulnerability in Opcilloscope, please report it responsibly:
 
 1. **Do not** open a public GitHub issue
 2. Email the maintainers directly or use GitHub's private vulnerability reporting
@@ -26,11 +26,11 @@ If you discover a security vulnerability in OpcScope, please report it responsib
 
 ## Security Considerations
 
-OpcScope is an OPC UA client application. When using it:
+Opcilloscope is an OPC UA client application. When using it:
 
 - **Certificate validation**: By default, development mode auto-accepts certificates. In production environments, configure proper certificate validation.
 - **Authentication**: Currently supports anonymous authentication. Use appropriate network security measures.
-- **Network exposure**: OpcScope connects to OPC UA servers. Ensure you trust the servers you connect to.
+- **Network exposure**: Opcilloscope connects to OPC UA servers. Ensure you trust the servers you connect to.
 
 ## Acknowledgments
 

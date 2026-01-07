@@ -1,7 +1,7 @@
 using Terminal.Gui;
-using OpcScope.App;
+using Opcilloscope.App;
 
-namespace OpcScope;
+namespace Opcilloscope;
 
 class Program
 {
@@ -21,13 +21,13 @@ class Program
 
             for (int i = 0; i < args.Length; i++)
             {
-                // Config file options: --config <path> or direct path ending with .opcscope/.json
+                // Config file options: --config <path> or direct path ending with .opcilloscope/.json
                 if ((args[i] == "--config" || args[i] == "-f") && i + 1 < args.Length)
                 {
                     configPath = args[i + 1];
                     i++; // Skip the next argument
                 }
-                else if (args[i].EndsWith(".opcscope", StringComparison.OrdinalIgnoreCase) ||
+                else if (args[i].EndsWith(".opcilloscope", StringComparison.OrdinalIgnoreCase) ||
                          (args[i].EndsWith(".json", StringComparison.OrdinalIgnoreCase) && File.Exists(args[i])))
                 {
                     configPath = args[i];
@@ -90,21 +90,21 @@ class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("OPC Scope - Terminal-based OPC UA Client");
+        Console.WriteLine("opcilloscope - Terminal-based OPC UA Client");
         Console.WriteLine();
-        Console.WriteLine("Usage: opcscope [options] [file]");
+        Console.WriteLine("Usage: opcilloscope [options] [file]");
         Console.WriteLine();
         Console.WriteLine("Options:");
-        Console.WriteLine("  -f, --config <file>   Load configuration file (.opcscope or .json)");
+        Console.WriteLine("  -f, --config <file>   Load configuration file (.opcilloscope or .json)");
         Console.WriteLine("  -h, --help            Show this help message");
         Console.WriteLine();
         Console.WriteLine("Note: Direct server connection via --connect or opc.tcp:// URLs is not yet");
         Console.WriteLine("      implemented. Please create a configuration file with the server URL.");
         Console.WriteLine();
         Console.WriteLine("Examples:");
-        Console.WriteLine("  opcscope                           Start with empty configuration");
-        Console.WriteLine("  opcscope production.opcscope       Load configuration file");
-        Console.WriteLine("  opcscope --config config.json      Load configuration file");
+        Console.WriteLine("  opcilloscope                           Start with empty configuration");
+        Console.WriteLine("  opcilloscope production.opcilloscope   Load configuration file");
+        Console.WriteLine("  opcilloscope --config config.json      Load configuration file");
         Console.WriteLine();
     }
 }

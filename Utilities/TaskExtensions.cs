@@ -1,4 +1,4 @@
-namespace OpcScope.Utilities;
+namespace Opcilloscope.Utilities;
 
 /// <summary>
 /// Extension methods for Task handling, providing safe fire-and-forget patterns.

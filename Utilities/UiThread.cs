@@ -1,6 +1,6 @@
 using Terminal.Gui;
 
-namespace OpcScope.Utilities;
+namespace Opcilloscope.Utilities;
 
 /// <summary>
 /// Helper for marshalling calls to the UI thread.

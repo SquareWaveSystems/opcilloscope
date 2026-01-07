@@ -1,9 +1,9 @@
 using Opc.Ua;
 using Opc.Ua.Client;
-using OpcScope.OpcUa.Models;
-using OpcScope.Utilities;
+using Opcilloscope.OpcUa.Models;
+using Opcilloscope.Utilities;
 
-namespace OpcScope.OpcUa;
+namespace Opcilloscope.OpcUa;
 
 /// <summary>
 /// Manages OPC UA subscriptions and monitored variables using proper Publish/Subscribe.
@@ -60,7 +60,7 @@ public class SubscriptionManager : IDisposable
             // Create subscription
             _subscription = new Subscription(_clientWrapper.Session.DefaultSubscription)
             {
-                DisplayName = "OpcScope Subscription",
+                DisplayName = "Opcilloscope Subscription",
                 PublishingEnabled = true,
                 PublishingInterval = _publishingInterval,
                 KeepAliveCount = 10,

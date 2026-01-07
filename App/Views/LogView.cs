@@ -1,11 +1,11 @@
 using Terminal.Gui;
-using OpcScope.Utilities;
-using OpcScope.App.Themes;
+using Opcilloscope.Utilities;
+using Opcilloscope.App.Themes;
 using System.Collections.ObjectModel;
 using Attribute = Terminal.Gui.Attribute;
-using ThemeManager = OpcScope.App.Themes.ThemeManager;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Views;
+namespace Opcilloscope.App.Views;
 
 /// <summary>
 /// Scrolling event log panel with color-coded severity.

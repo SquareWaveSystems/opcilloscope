@@ -1,11 +1,11 @@
 using Terminal.Gui;
-using OpcScope.OpcUa.Models;
-using OpcScope.App.Themes;
+using Opcilloscope.OpcUa.Models;
+using Opcilloscope.App.Themes;
 using System.Data;
 using Attribute = Terminal.Gui.Attribute;
-using ThemeManager = OpcScope.App.Themes.ThemeManager;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Views;
+namespace Opcilloscope.App.Views;
 
 /// <summary>
 /// TableView for displaying subscribed/monitored variables with real-time updates.

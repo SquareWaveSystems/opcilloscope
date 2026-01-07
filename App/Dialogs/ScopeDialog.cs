@@ -1,11 +1,11 @@
 using Terminal.Gui;
-using OpcScope.App.Views;
-using OpcScope.App.Themes;
-using OpcScope.OpcUa;
-using OpcScope.OpcUa.Models;
-using ThemeManager = OpcScope.App.Themes.ThemeManager;
+using Opcilloscope.App.Views;
+using Opcilloscope.App.Themes;
+using Opcilloscope.OpcUa;
+using Opcilloscope.OpcUa.Models;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
-namespace OpcScope.App.Dialogs;
+namespace Opcilloscope.App.Dialogs;
 
 /// <summary>
 /// Simplified dialog for displaying a real-time Scope view with multiple signals.

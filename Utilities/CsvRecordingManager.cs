@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using OpcScope.OpcUa.Models;
+using Opcilloscope.OpcUa.Models;
 
-namespace OpcScope.Utilities;
+namespace Opcilloscope.Utilities;
 
 /// <summary>
 /// Manages CSV recording of monitored variable value changes.

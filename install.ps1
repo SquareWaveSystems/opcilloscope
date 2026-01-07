@@ -1,10 +1,10 @@
-# OpcScope installer for Windows
-# Usage: irm https://raw.githubusercontent.com/BrettKinny/OpcScope/main/install.ps1 | iex
+# Opcilloscope installer for Windows
+# Usage: irm https://raw.githubusercontent.com/BrettKinny/Opcilloscope/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
-$Repo = "BrettKinny/OpcScope"
-$InstallDir = if ($env:OPCSCOPE_INSTALL_DIR) { $env:OPCSCOPE_INSTALL_DIR } else { "$env:LOCALAPPDATA\OpcScope" }
+$Repo = "BrettKinny/Opcilloscope"
+$InstallDir = if ($env:OPCILLOSCOPE_INSTALL_DIR) { $env:OPCILLOSCOPE_INSTALL_DIR } else { "$env:LOCALAPPDATA\Opcilloscope" }
 
 function Write-Info { param($Message) Write-Host "[INFO] $Message" -ForegroundColor Green }
 function Write-Warn { param($Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
@@ -28,10 +28,10 @@ function Get-LatestVersion {
     }
 }
 
-function Install-OpcScope {
+function Install-Opcilloscope {
     Write-Host ""
     Write-Host "  +===================================+" -ForegroundColor Cyan
-    Write-Host "  |       OpcScope Installer          |" -ForegroundColor Cyan
+    Write-Host "  |     Opcilloscope Installer        |" -ForegroundColor Cyan
     Write-Host "  |   Terminal OPC UA Client          |" -ForegroundColor Cyan
     Write-Host "  +===================================+" -ForegroundColor Cyan
     Write-Host ""
@@ -44,11 +44,11 @@ function Install-OpcScope {
     $version = Get-LatestVersion
     Write-Info "Version: $version"
 
-    $downloadUrl = "https://github.com/$Repo/releases/download/$version/opcscope-$platform.zip"
+    $downloadUrl = "https://github.com/$Repo/releases/download/$version/opcilloscope-$platform.zip"
     Write-Info "Downloading from: $downloadUrl"
 
-    $tempDir = Join-Path $env:TEMP "opcscope-install"
-    $zipPath = Join-Path $tempDir "opcscope.zip"
+    $tempDir = Join-Path $env:TEMP "opcilloscope-install"
+    $zipPath = Join-Path $tempDir "opcilloscope.zip"
 
     # Cleanup and create temp directory
     if (Test-Path $tempDir) { Remove-Item -Recurse -Force $tempDir }
@@ -69,7 +69,7 @@ function Install-OpcScope {
         # Move executable
         $exePath = Get-ChildItem -Path $tempDir -Filter "*.exe" -Recurse | Select-Object -First 1
         if ($exePath) {
-            Copy-Item -Path $exePath.FullName -Destination (Join-Path $InstallDir "opcscope.exe") -Force
+            Copy-Item -Path $exePath.FullName -Destination (Join-Path $InstallDir "opcilloscope.exe") -Force
         } else {
             Write-Err "Could not find executable in archive"
         }
@@ -82,9 +82,9 @@ function Install-OpcScope {
             $env:Path = "$env:Path;$InstallDir"
         }
 
-        Write-Info "OpcScope $version installed successfully!"
+        Write-Info "Opcilloscope $version installed successfully!"
         Write-Host ""
-        Write-Host "Run 'opcscope' to start the application." -ForegroundColor White
+        Write-Host "Run 'opcilloscope' to start the application." -ForegroundColor White
         Write-Host "(You may need to restart your terminal for PATH changes to take effect)" -ForegroundColor Gray
 
     } finally {
@@ -93,4 +93,4 @@ function Install-OpcScope {
     }
 }
 
-Install-OpcScope
+Install-Opcilloscope
