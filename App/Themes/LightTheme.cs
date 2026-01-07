@@ -80,12 +80,15 @@ public class LightTheme : AppTheme
     private ColorScheme? _mainColorScheme;
     private ColorScheme? _menuColorScheme;
 
+    // Highlight color for selection - warm tan for visible contrast on light background
+    private Color HighlightBackground => new(232, 212, 184);  // #e8d4b8 warm tan
+
     public override ColorScheme MainColorScheme => _mainColorScheme ??= new()
     {
         Normal = NormalAttr,
-        Focus = new Attribute(Background, new Color(234, 234, 229)),  // #eaeae5 panel background for focus
+        Focus = new Attribute(Foreground, HighlightBackground),  // Dark text on tan background
         HotNormal = AccentAttr,
-        HotFocus = new Attribute(Background, Accent),
+        HotFocus = new Attribute(Accent, HighlightBackground),   // Amber hotkey on tan background
         Disabled = new Attribute(StatusInactive, Background)
     };
 
