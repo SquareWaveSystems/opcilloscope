@@ -17,9 +17,9 @@ public class CsvRecordingManager : IDisposable
     /// <summary>
     /// Gets the default directory for recording files.
     /// Uses cross-platform appropriate locations:
-    /// - Windows: %USERPROFILE%/Documents/OpcScope/recordings/
-    /// - macOS: ~/Documents/OpcScope/recordings/
-    /// - Linux: ~/Documents/opcscope/recordings/ (or $XDG_DOCUMENTS_DIR/opcscope/recordings/)
+    /// - Windows: %USERPROFILE%/Documents/opcilloscope/recordings/
+    /// - macOS: ~/Documents/opcilloscope/recordings/
+    /// - Linux: ~/Documents/opcilloscope/recordings/ (or $XDG_DOCUMENTS_DIR/opcilloscope/recordings/)
     /// </summary>
     /// <returns>Path to the default recordings directory.</returns>
     public static string GetDefaultRecordingsDirectory()
@@ -58,8 +58,8 @@ public class CsvRecordingManager : IDisposable
             documentsDir = Path.GetTempPath();
         }
 
-        // Use lowercase folder name on Linux, PascalCase on Windows/macOS
-        var appFolder = OperatingSystem.IsLinux() ? "opcscope" : "OpcScope";
+        // Use lowercase folder name on all platforms
+        var appFolder = "opcilloscope";
 
         var dir = Path.Combine(documentsDir, appFolder, "recordings");
         return dir;

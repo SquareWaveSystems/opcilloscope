@@ -202,7 +202,7 @@ public class MainWindow : Toplevel
 
         // Initialize views
         _logView.Initialize(_logger);
-        _nodeDetailsView.Initialize(_connectionManager.NodeBrowser);
+        _nodeDetailsView.Initialize(_connectionManager.NodeBrowser, _logger);
 
         // Add all views
         Add(_menuBar);
