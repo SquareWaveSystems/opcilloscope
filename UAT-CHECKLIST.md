@@ -1,4 +1,4 @@
-# OpcScope UAT Checklist
+# UAT Checklist
 
 ## Application Startup
 - [ ] App launches without arguments
