@@ -155,7 +155,7 @@ opcilloscope --help
 │       └─ MotorRunning [Bool]  │                │          │        │        │
 ├───────────────────────────────┴─────────────────────────────────────────────┤
 │ Node Details                                                                │
-│ DisplayName: Temperature  │  DataType: Double  │  AccessLevel: Read/Write  │
+│ DisplayName: Temperature  │  DataType: Double  │  AccessLevel: Read/Write   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Log                                                                         │
 │ [12:30:15] Connected to opc.tcp://localhost:4840                            │

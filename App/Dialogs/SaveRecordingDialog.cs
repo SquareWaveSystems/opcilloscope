@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Terminal.Gui;
 using Opcilloscope.App.Themes;
 using Opcilloscope.Utilities;
@@ -13,7 +14,7 @@ public class SaveRecordingDialog : Dialog
     private readonly TextField _directoryField;
     private readonly TextField _filenameField;
     private readonly ListView _fileListView;
-    private readonly List<string> _fileListItems = new();
+    private readonly ObservableCollection<string> _fileListItems = new();
     private string _currentDirectory;
     private bool _confirmed;
 
@@ -81,7 +82,7 @@ public class SaveRecordingDialog : Dialog
             Y = 5,
             Width = Dim.Fill(1),
             Height = Dim.Fill(6),
-            ColorScheme = theme.TreeColorScheme
+            ColorScheme = theme.MainColorScheme
         };
 
         _fileListView.OpenSelectedItem += OnFileListOpenSelected;
