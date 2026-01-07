@@ -422,9 +422,8 @@ public class ConfigurationServiceTests : IDisposable
         // Assert
         Assert.NotNull(dir);
         Assert.Contains("configs", dir);
-        // Should contain either OpcScope (Windows/macOS) or opcscope (Linux)
-        Assert.True(dir.Contains("OpcScope") || dir.Contains("opcscope"),
-            $"Path should contain OpcScope or opcscope: {dir}");
+        // Should contain opcilloscope (all platforms use lowercase)
+        Assert.Contains("opcilloscope", dir);
     }
 
     [Fact]
