@@ -327,8 +327,16 @@ public class NodeBrowser
                     // Special handling for DataType - resolve to display name
                     if (attrId == Attributes.DataType && value is NodeId dtNodeId)
                     {
-                        var dtName = await GetDataTypeNameByIdAsync(dtNodeId);
-                        value = $"{dtNodeId} ({dtName ?? "Unknown"})";
+                        try
+                        {
+                            var dtName = await GetDataTypeNameByIdAsync(dtNodeId);
+                            value = $"{dtNodeId} ({dtName ?? "Unknown"})";
+                        }
+                        catch
+                        {
+                            // If resolution fails, just use the NodeId string
+                            value = dtNodeId.ToString();
+                        }
                     }
 
                     result[name] = value;

@@ -17,6 +17,8 @@ public class NodeDetailsView : FrameView
     private readonly Button _copyButton;
     private Opcilloscope.OpcUa.NodeBrowser? _nodeBrowser;
     private NodeId? _currentNodeId;
+    private Logger? _logger;
+    private CancellationTokenSource? _copyOperationCts;
 
     public NodeDetailsView()
     {
@@ -88,9 +90,15 @@ public class NodeDetailsView : FrameView
         });
     }
 
-    public void Initialize(Opcilloscope.OpcUa.NodeBrowser nodeBrowser)
+    /// <summary>
+    /// Initializes the view with the node browser for attribute reading.
+    /// </summary>
+    /// <param name="nodeBrowser">The node browser to use for reading attributes.</param>
+    /// <param name="logger">Optional logger for error reporting.</param>
+    public void Initialize(Opcilloscope.OpcUa.NodeBrowser nodeBrowser, Logger? logger = null)
     {
         _nodeBrowser = nodeBrowser;
+        _logger = logger;
     }
 
     public async Task ShowNodeAsync(BrowsedNode? node)
@@ -199,6 +207,11 @@ public class NodeDetailsView : FrameView
         if (_currentNodeId == null || _nodeBrowser == null)
             return;
 
+        // Cancel any previous copy operation to avoid race conditions
+        _copyOperationCts?.Cancel();
+        _copyOperationCts = new CancellationTokenSource();
+        var cancellationToken = _copyOperationCts.Token;
+
         var originalText = _copyButton.Text;
 
         try
@@ -208,52 +221,60 @@ public class NodeDetailsView : FrameView
 
             var attributes = await _nodeBrowser.ReadAllNodeAttributesAsync(_currentNodeId);
 
+            // Check if operation was cancelled
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
             Application.Invoke(() =>
             {
                 if (attributes == null || attributes.Count == 0)
                 {
-                    _copyButton.Text = "Err";
-                    Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
-                    {
-                        _copyButton.Text = originalText;
-                        _copyButton.Enabled = _currentNodeId != null;
-                        return false;
-                    });
+                    _logger?.Warning("Failed to read node attributes for copy");
+                    ShowCopyResult("Err", originalText);
                     return;
                 }
 
                 var formatted = NodeAttributeFormatter.Format(attributes);
-                Clipboard.TrySetClipboardData(formatted);
+                var success = Clipboard.TrySetClipboardData(formatted);
 
-                // Brief visual feedback
-                _copyButton.Text = "OK";
-                Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+                if (success)
                 {
-                    _copyButton.Text = originalText;
-                    _copyButton.Enabled = _currentNodeId != null;
-                    return false;
-                });
+                    ShowCopyResult("OK", originalText);
+                }
+                else
+                {
+                    _logger?.Warning("Failed to copy node attributes to clipboard");
+                    ShowCopyResult("Err", originalText);
+                }
             });
         }
-        catch
+        catch (Exception ex)
         {
-            Application.Invoke(() =>
-            {
-                _copyButton.Text = "Err";
-                Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
-                {
-                    _copyButton.Text = originalText;
-                    _copyButton.Enabled = _currentNodeId != null;
-                    return false;
-                });
-            });
+            _logger?.Error($"Error copying node attributes: {ex.Message}");
+            Application.Invoke(() => ShowCopyResult("Err", originalText));
         }
+    }
+
+    /// <summary>
+    /// Shows a temporary result on the copy button, then reverts to original text.
+    /// </summary>
+    private void ShowCopyResult(string result, string originalText)
+    {
+        _copyButton.Text = result;
+        Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+        {
+            _copyButton.Text = originalText;
+            _copyButton.Enabled = _currentNodeId != null;
+            return false;
+        });
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            _copyOperationCts?.Cancel();
+            _copyOperationCts?.Dispose();
             _copyButton.Accepting -= OnCopyClicked;
             ThemeManager.ThemeChanged -= OnThemeChanged;
         }
