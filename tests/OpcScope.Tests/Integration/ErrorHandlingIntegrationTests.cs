@@ -29,27 +29,27 @@ public class ErrorHandlingIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task WriteValueAsync_InvalidNodeId_ThrowsServiceResultException()
+    public async Task WriteValueAsync_InvalidNodeId_ReturnsBadStatus()
+    {
+        // Arrange
+        var invalidNodeId = new NodeId("NonExistentNode", (ushort)GetNamespaceIndex());
+
+        // Act - WriteValueAsync returns bad status for invalid nodes (doesn't throw)
+        var result = await Client!.WriteValueAsync(invalidNodeId, "test");
+
+        // Assert
+        Assert.True(StatusCode.IsBad(result));
+    }
+
+    [Fact]
+    public async Task BrowseAsync_InvalidNodeId_ThrowsServiceResultException()
     {
         // Arrange
         var invalidNodeId = new NodeId("NonExistentNode", (ushort)GetNamespaceIndex());
 
         // Act & Assert - OPC UA SDK throws ServiceResultException for invalid nodes
         await Assert.ThrowsAsync<ServiceResultException>(
-            () => Client!.WriteValueAsync(invalidNodeId, "test"));
-    }
-
-    [Fact]
-    public async Task BrowseAsync_InvalidNodeId_ReturnsEmptyList()
-    {
-        // Arrange
-        var invalidNodeId = new NodeId("NonExistentNode", (ushort)GetNamespaceIndex());
-
-        // Act - Browse returns empty for non-existent nodes (doesn't throw)
-        var children = await Client!.BrowseAsync(invalidNodeId);
-
-        // Assert
-        Assert.Empty(children);
+            () => Client!.BrowseAsync(invalidNodeId));
     }
 
     [Fact]
