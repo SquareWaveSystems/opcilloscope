@@ -226,6 +226,169 @@ public class NodeBrowser
         }
     }
 
+    /// <summary>
+    /// Reads all OPC UA node attributes based on the node's class.
+    /// Returns a dictionary of attribute name to value for formatting.
+    /// </summary>
+    public async Task<Dictionary<string, object?>?> ReadAllNodeAttributesAsync(NodeId nodeId)
+    {
+        if (!_client.IsConnected)
+            return null;
+
+        try
+        {
+            // First, read NodeClass to determine which attributes to fetch
+            var nodeClassResult = await _client.ReadAttributesAsync(nodeId, Attributes.NodeClass);
+            if (nodeClassResult.Count == 0 || StatusCode.IsBad(nodeClassResult[0].StatusCode))
+            {
+                return null;
+            }
+
+            var nodeClass = nodeClassResult[0].Value is int nc ? (NodeClass)nc : NodeClass.Unspecified;
+
+            // Base attributes for all nodes
+            var baseAttributes = new uint[]
+            {
+                Attributes.NodeId,
+                Attributes.NodeClass,
+                Attributes.BrowseName,
+                Attributes.DisplayName,
+                Attributes.Description,
+                Attributes.WriteMask,
+                Attributes.UserWriteMask,
+            };
+
+            // Class-specific attributes
+            var classAttributes = nodeClass switch
+            {
+                NodeClass.Variable => new uint[]
+                {
+                    Attributes.Value,
+                    Attributes.DataType,
+                    Attributes.ValueRank,
+                    Attributes.ArrayDimensions,
+                    Attributes.AccessLevel,
+                    Attributes.UserAccessLevel,
+                    Attributes.MinimumSamplingInterval,
+                    Attributes.Historizing,
+                    Attributes.AccessLevelEx,
+                },
+                NodeClass.Object => new uint[] { Attributes.EventNotifier },
+                NodeClass.Method => new uint[] { Attributes.Executable, Attributes.UserExecutable },
+                NodeClass.ObjectType or NodeClass.VariableType => new uint[] { Attributes.IsAbstract },
+                NodeClass.DataType => new uint[] { Attributes.IsAbstract, Attributes.DataTypeDefinition },
+                NodeClass.ReferenceType => new uint[]
+                {
+                    Attributes.IsAbstract,
+                    Attributes.Symmetric,
+                    Attributes.InverseName
+                },
+                NodeClass.View => new uint[] { Attributes.ContainsNoLoops, Attributes.EventNotifier },
+                _ => Array.Empty<uint>()
+            };
+
+            // Optional attributes (may not exist on older servers)
+            var optionalAttributes = new uint[]
+            {
+                Attributes.RolePermissions,
+                Attributes.UserRolePermissions,
+                Attributes.AccessRestrictions,
+            };
+
+            // Combine all attributes
+            var allAttributes = baseAttributes
+                .Concat(classAttributes)
+                .Concat(optionalAttributes)
+                .Distinct()
+                .ToArray();
+
+            // Read all attributes in a single call
+            var results = await _client.ReadAttributesAsync(nodeId, allAttributes);
+
+            // Build the result dictionary
+            var result = new Dictionary<string, object?>();
+            var attributeNames = GetAttributeNames();
+
+            for (int i = 0; i < allAttributes.Length && i < results.Count; i++)
+            {
+                var attrId = allAttributes[i];
+                var dataValue = results[i];
+
+                // Skip attributes that don't exist or had errors (except BadAttributeIdInvalid which is expected)
+                if (StatusCode.IsBad(dataValue.StatusCode))
+                {
+                    continue;
+                }
+
+                if (attributeNames.TryGetValue(attrId, out var name))
+                {
+                    var value = dataValue.Value;
+
+                    // Special handling for DataType - resolve to display name
+                    if (attrId == Attributes.DataType && value is NodeId dtNodeId)
+                    {
+                        try
+                        {
+                            var dtName = await GetDataTypeNameByIdAsync(dtNodeId);
+                            value = $"{dtNodeId} ({dtName ?? "Unknown"})";
+                        }
+                        catch
+                        {
+                            // If resolution fails, just use the NodeId string
+                            value = dtNodeId.ToString();
+                        }
+                    }
+
+                    result[name] = value;
+                }
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to read all node attributes: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns a mapping of attribute IDs to their human-readable names.
+    /// </summary>
+    private static Dictionary<uint, string> GetAttributeNames()
+    {
+        return new Dictionary<uint, string>
+        {
+            { Attributes.NodeId, "NodeId" },
+            { Attributes.NodeClass, "NodeClass" },
+            { Attributes.BrowseName, "BrowseName" },
+            { Attributes.DisplayName, "DisplayName" },
+            { Attributes.Description, "Description" },
+            { Attributes.WriteMask, "WriteMask" },
+            { Attributes.UserWriteMask, "UserWriteMask" },
+            { Attributes.IsAbstract, "IsAbstract" },
+            { Attributes.Symmetric, "Symmetric" },
+            { Attributes.InverseName, "InverseName" },
+            { Attributes.ContainsNoLoops, "ContainsNoLoops" },
+            { Attributes.EventNotifier, "EventNotifier" },
+            { Attributes.Value, "Value" },
+            { Attributes.DataType, "DataType" },
+            { Attributes.ValueRank, "ValueRank" },
+            { Attributes.ArrayDimensions, "ArrayDimensions" },
+            { Attributes.AccessLevel, "AccessLevel" },
+            { Attributes.UserAccessLevel, "UserAccessLevel" },
+            { Attributes.MinimumSamplingInterval, "MinimumSamplingInterval" },
+            { Attributes.Historizing, "Historizing" },
+            { Attributes.Executable, "Executable" },
+            { Attributes.UserExecutable, "UserExecutable" },
+            { Attributes.DataTypeDefinition, "DataTypeDefinition" },
+            { Attributes.RolePermissions, "RolePermissions" },
+            { Attributes.UserRolePermissions, "UserRolePermissions" },
+            { Attributes.AccessRestrictions, "AccessRestrictions" },
+            { Attributes.AccessLevelEx, "AccessLevelEx" },
+        };
+    }
+
     private async Task<string?> GetDataTypeNameByIdAsync(NodeId dataTypeId)
     {
         if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == IdType.Numeric)

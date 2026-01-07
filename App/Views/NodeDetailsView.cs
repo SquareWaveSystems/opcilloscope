@@ -2,6 +2,7 @@ using Terminal.Gui;
 using Opc.Ua;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.App.Themes;
+using Opcilloscope.Utilities;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
 namespace Opcilloscope.App.Views;
@@ -13,7 +14,11 @@ namespace Opcilloscope.App.Views;
 public class NodeDetailsView : FrameView
 {
     private readonly Label _detailsLabel;
+    private readonly Button _copyButton;
     private Opcilloscope.OpcUa.NodeBrowser? _nodeBrowser;
+    private NodeId? _currentNodeId;
+    private Logger? _logger;
+    private CancellationTokenSource? _copyOperationCts;
 
     public NodeDetailsView()
     {
@@ -24,11 +29,24 @@ public class NodeDetailsView : FrameView
         var theme = ThemeManager.Current;
         BorderStyle = theme.FrameLineStyle;
 
+        // Copy button in top-right corner of the frame
+        _copyButton = new Button
+        {
+            Text = "Copy",
+            X = Pos.AnchorEnd(8),
+            Y = 0,
+            Height = 1,
+            ShadowStyle = ShadowStyle.None,
+            ColorScheme = theme.ButtonColorScheme,
+            Enabled = false
+        };
+        _copyButton.Accepting += OnCopyClicked;
+
         _detailsLabel = new Label
         {
             X = 1,
             Y = 0,
-            Width = Dim.Fill(1),
+            Width = Dim.Fill(9), // Leave space for Copy button
             Height = Dim.Fill(),
             Text = "Select a node to view details",
             TextAlignment = Alignment.Start,
@@ -41,6 +59,7 @@ public class NodeDetailsView : FrameView
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
 
+        Add(_copyButton);
         Add(_detailsLabel);
     }
 
@@ -48,6 +67,9 @@ public class NodeDetailsView : FrameView
     {
         Application.Invoke(() =>
         {
+            // Update copy button styling
+            _copyButton.ColorScheme = theme.ButtonColorScheme;
+
             // When showing empty state, keep muted color
             if (_detailsLabel.Text == "Select a node to view details" ||
                 _detailsLabel.Text == "Not connected")
@@ -68,23 +90,32 @@ public class NodeDetailsView : FrameView
         });
     }
 
-    public void Initialize(Opcilloscope.OpcUa.NodeBrowser nodeBrowser)
+    /// <summary>
+    /// Initializes the view with the node browser for attribute reading.
+    /// </summary>
+    /// <param name="nodeBrowser">The node browser to use for reading attributes.</param>
+    /// <param name="logger">Optional logger for error reporting.</param>
+    public void Initialize(Opcilloscope.OpcUa.NodeBrowser nodeBrowser, Logger? logger = null)
     {
         _nodeBrowser = nodeBrowser;
+        _logger = logger;
     }
 
     public async Task ShowNodeAsync(BrowsedNode? node)
     {
         if (node == null || _nodeBrowser == null)
         {
+            _currentNodeId = null;
             Application.Invoke(() =>
             {
                 _detailsLabel.Text = "Select a node to view details";
+                _copyButton.Enabled = false;
                 SetMutedColor();
             });
             return;
         }
 
+        _currentNodeId = node.NodeId;
         var attrs = await _nodeBrowser.GetNodeAttributesAsync(node.NodeId);
 
         Application.Invoke(() =>
@@ -92,6 +123,7 @@ public class NodeDetailsView : FrameView
             if (attrs == null)
             {
                 _detailsLabel.Text = $"NodeId: {node.NodeId}\nFailed to read attributes";
+                _copyButton.Enabled = false;
                 SetNormalColor();
                 return;
             }
@@ -116,13 +148,16 @@ public class NodeDetailsView : FrameView
             }
 
             _detailsLabel.Text = string.Join("  │  ", parts);
+            _copyButton.Enabled = true;
             SetNormalColor();
         });
     }
 
     public void Clear()
     {
+        _currentNodeId = null;
         _detailsLabel.Text = "Not connected";
+        _copyButton.Enabled = false;
         SetMutedColor();
     }
 
@@ -165,5 +200,84 @@ public class NodeDetailsView : FrameView
         if (str.Length <= maxLength)
             return str;
         return str[..(maxLength - 3)] + "...";
+    }
+
+    private async void OnCopyClicked(object? sender, CommandEventArgs e)
+    {
+        if (_currentNodeId == null || _nodeBrowser == null)
+            return;
+
+        // Cancel any previous copy operation to avoid race conditions
+        _copyOperationCts?.Cancel();
+        _copyOperationCts = new CancellationTokenSource();
+        var cancellationToken = _copyOperationCts.Token;
+
+        var originalText = _copyButton.Text;
+
+        try
+        {
+            _copyButton.Text = "...";
+            _copyButton.Enabled = false;
+
+            var attributes = await _nodeBrowser.ReadAllNodeAttributesAsync(_currentNodeId);
+
+            // Check if operation was cancelled
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
+            Application.Invoke(() =>
+            {
+                if (attributes == null || attributes.Count == 0)
+                {
+                    _logger?.Warning("Failed to read node attributes for copy");
+                    ShowCopyResult("Err", originalText);
+                    return;
+                }
+
+                var formatted = NodeAttributeFormatter.Format(attributes);
+                var success = Clipboard.TrySetClipboardData(formatted);
+
+                if (success)
+                {
+                    ShowCopyResult("OK", originalText);
+                }
+                else
+                {
+                    _logger?.Warning("Failed to copy node attributes to clipboard");
+                    ShowCopyResult("Err", originalText);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error($"Error copying node attributes: {ex.Message}");
+            Application.Invoke(() => ShowCopyResult("Err", originalText));
+        }
+    }
+
+    /// <summary>
+    /// Shows a temporary result on the copy button, then reverts to original text.
+    /// </summary>
+    private void ShowCopyResult(string result, string originalText)
+    {
+        _copyButton.Text = result;
+        Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+        {
+            _copyButton.Text = originalText;
+            _copyButton.Enabled = _currentNodeId != null;
+            return false;
+        });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _copyOperationCts?.Cancel();
+            _copyOperationCts?.Dispose();
+            _copyButton.Accepting -= OnCopyClicked;
+            ThemeManager.ThemeChanged -= OnThemeChanged;
+        }
+        base.Dispose(disposing);
     }
 }
