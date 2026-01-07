@@ -1,3 +1,4 @@
+using System.Reflection;
 using Terminal.Gui;
 using Opcilloscope.App.Views;
 using Opcilloscope.App.Dialogs;
@@ -1063,8 +1064,12 @@ public class MainWindow : Toplevel
 
     private void ShowAbout()
     {
-        var about = @"╔══════════════════════════════════════╗
-║        opcilloscope v1.0.0           ║
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+        var titleLine = $"opcilloscope v{version}";
+        var titlePadded = titleLine.PadLeft((38 + titleLine.Length) / 2).PadRight(38);
+
+        var about = $@"╔══════════════════════════════════════╗
+║{titlePadded}║
 ║      by Square Wave Systems          ║
 ╚══════════════════════════════════════╝
 
