@@ -41,6 +41,13 @@ public class MainWindow : Toplevel
     private bool _isConnecting;
     private bool _isConnected;
 
+    // Startup sequence state
+    private View? _startupOverlay;
+    private Label? _startupLabel;
+    private bool _startupComplete;
+    private CancellationTokenSource? _startupCancellation;
+    private volatile bool _skipStartup;
+
     private string? _lastEndpoint;
 
     public MainWindow()
@@ -149,12 +156,13 @@ public class MainWindow : Toplevel
         _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
 
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
+        // We position it dynamically based on text width
         _connectionStatusLabel = new Label
         {
-            X = Pos.AnchorEnd(26),  // " ■ All systems nominal. " (longest text)
             Y = Pos.AnchorEnd(1),  // Bottom row (status bar)
             Text = $" {theme.DisconnectedIndicator} "
         };
+        UpdateConnectionStatusLabelPosition();
         UpdateConnectionStatusLabelStyle(isConnected: false);
 
         // Create activity spinner for async operations
@@ -203,61 +211,221 @@ public class MainWindow : Toplevel
         // Apply initial theme (after all controls are created)
         ApplyTheme();
 
+        // Handle window resize to update connection status label position
+        LayoutComplete += (s, e) => UpdateConnectionStatusLabelPosition();
+
+        // Allow any key press to skip the startup sequence
+        KeyDown += (s, e) =>
+        {
+            if (!_startupComplete && !_skipStartup)
+            {
+                _skipStartup = true;
+                e.Handled = true;
+            }
+        };
+
         // Run startup sequence
         _ = RunStartupSequenceAsync();
     }
 
+    /// <summary>
+    /// Updates the connection status label position to be right-aligned.
+    /// </summary>
+    private void UpdateConnectionStatusLabelPosition()
+    {
+        var textLength = _connectionStatusLabel.Text?.Length ?? 0;
+        _connectionStatusLabel.X = Pos.AnchorEnd(textLength);
+    }
+
     private async Task RunStartupSequenceAsync()
     {
+        _startupCancellation = new CancellationTokenSource();
+        var token = _startupCancellation.Token;
         var theme = ThemeManager.Current;
 
-        // Step 1: INITIALIZING..
-        UiThread.Run(() =>
+        try
         {
-            Title = "OPC Scope";
-            _connectionStatusLabel.Text = " INITIALIZING.. ";
-            _connectionStatusLabel.ColorScheme = new ColorScheme
+            // Create fullscreen startup overlay
+            UiThread.Run(() =>
             {
-                Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background)
-            };
-            SetNeedsLayout();
-        });
+                _startupOverlay = new View
+                {
+                    X = 0,
+                    Y = 0,
+                    Width = Dim.Fill(),
+                    Height = Dim.Fill(),
+                    ColorScheme = new ColorScheme
+                    {
+                        Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background)
+                    }
+                };
 
-        await Task.Delay(800);
+                _startupLabel = new Label
+                {
+                    X = Pos.Center(),
+                    Y = Pos.Center(),
+                    TextAlignment = Alignment.Center,
+                    ColorScheme = new ColorScheme
+                    {
+                        Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background)
+                    }
+                };
 
-        // Step 2: Square Wave Systems 2026
-        UiThread.Run(() =>
-        {
-            _connectionStatusLabel.Text = " Square Wave Systems 2026 ";
-            _connectionStatusLabel.ColorScheme = new ColorScheme
+                _startupOverlay.Add(_startupLabel);
+                Add(_startupOverlay);
+                _startupOverlay.MoveToStart(); // Bring to front
+                SetNeedsLayout();
+            });
+
+            // Blank pause
+            if (!await DelayOrSkipAsync(500, token)) return;
+
+            // Company name with amber accent
+            UiThread.Run(() =>
             {
-                Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-            };
-            SetNeedsLayout();
-        });
+                if (_startupLabel != null)
+                {
+                    _startupLabel.Text = "SQUARE WAVE SYSTEMS";
+                    _startupLabel.ColorScheme = new ColorScheme
+                    {
+                        Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background)
+                    };
+                    SetNeedsLayout();
+                }
+            });
 
-        await Task.Delay(1000);
+            if (!await DelayOrSkipAsync(800, token)) return;
 
-        // Step 3: All systems nominal.
-        UiThread.Run(() =>
-        {
-            _connectionStatusLabel.Text = " All systems nominal. ";
-            _connectionStatusLabel.ColorScheme = new ColorScheme
+            // Product name
+            UiThread.Run(() =>
             {
-                Normal = new Terminal.Gui.Attribute(theme.StatusGood, theme.Background)
-            };
-            SetNeedsLayout();
-        });
+                if (_startupLabel != null)
+                {
+                    _startupLabel.Text = "SQUARE WAVE SYSTEMS\n\nOPC SCOPE v1.0";
+                    _startupLabel.ColorScheme = new ColorScheme
+                    {
+                        Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background)
+                    };
+                    SetNeedsLayout();
+                }
+            });
 
-        await Task.Delay(600);
+            if (!await DelayOrSkipAsync(600, token)) return;
 
-        // Show normal disconnected state and log startup
-        UiThread.Run(() =>
+            // Initializing header
+            UiThread.Run(() =>
+            {
+                if (_startupLabel != null)
+                {
+                    _startupLabel.Text = "SQUARE WAVE SYSTEMS\n\nOPC SCOPE v1.0\n\nINITIALIZING SUBSYSTEMS..";
+                    SetNeedsLayout();
+                }
+            });
+
+            if (!await DelayOrSkipAsync(400, token)) return;
+
+            // Subsystem checks - build up line by line
+            string[] subsystems =
+            [
+                "  ■ Terminal interface    [OK]",
+                "  ■ OPC UA stack          [OK]",
+                "  ■ Subscription engine   [OK]",
+                "  ■ Logger                [OK]"
+            ];
+
+            var progressBuilder = new System.Text.StringBuilder("SQUARE WAVE SYSTEMS\n\nOPC SCOPE v1.0\n\nINITIALIZING SUBSYSTEMS..");
+
+            foreach (var subsystem in subsystems)
+            {
+                progressBuilder.Append('\n').Append(subsystem);
+                string currentProgress = progressBuilder.ToString();
+                UiThread.Run(() =>
+                {
+                    if (_startupLabel != null)
+                    {
+                        _startupLabel.Text = currentProgress;
+                        SetNeedsLayout();
+                    }
+                });
+                if (!await DelayOrSkipAsync(300, token)) return;
+            }
+
+            if (!await DelayOrSkipAsync(400, token)) return;
+
+            // Final message in status green
+            progressBuilder.Append("\n\nALL SYSTEMS NOMINAL");
+            string finalProgress = progressBuilder.ToString();
+            UiThread.Run(() =>
+            {
+                if (_startupLabel != null)
+                {
+                    _startupLabel.Text = finalProgress;
+                    _startupLabel.ColorScheme = new ColorScheme
+                    {
+                        Normal = new Terminal.Gui.Attribute(theme.StatusGood, theme.Background)
+                    };
+                    SetNeedsLayout();
+                }
+            });
+
+            await DelayOrSkipAsync(800, token);
+        }
+        catch (OperationCanceledException)
         {
-            UpdateConnectionStatus(isConnected: false);
-            _logger.Info("OPC Scope started - Square Wave Systems");
-            _logger.Info("Press F1 for help, F10 for menu");
-        });
+            // Graceful cancellation during shutdown
+        }
+        finally
+        {
+            // Remove startup overlay and show main UI
+            UiThread.Run(() =>
+            {
+                CleanupStartupOverlay();
+                _startupComplete = true;
+
+                UpdateConnectionStatus(isConnected: false);
+                _logger.Info("OPC Scope started - Square Wave Systems");
+                _logger.Info("Press F1 for help, F10 for menu");
+                SetNeedsLayout();
+            });
+
+            _startupCancellation?.Dispose();
+            _startupCancellation = null;
+        }
+    }
+
+    /// <summary>
+    /// Delays for the specified time, but returns early if skip is requested or cancelled.
+    /// Returns false if skipped/cancelled, true if delay completed normally.
+    /// </summary>
+    private async Task<bool> DelayOrSkipAsync(int milliseconds, CancellationToken token)
+    {
+        const int checkInterval = 50;
+        int elapsed = 0;
+
+        while (elapsed < milliseconds)
+        {
+            if (_skipStartup || token.IsCancellationRequested)
+                return false;
+
+            await Task.Delay(Math.Min(checkInterval, milliseconds - elapsed), CancellationToken.None);
+            elapsed += checkInterval;
+        }
+        return !_skipStartup && !token.IsCancellationRequested;
+    }
+
+    /// <summary>
+    /// Cleans up the startup overlay and its children with proper disposal.
+    /// </summary>
+    private void CleanupStartupOverlay()
+    {
+        if (_startupOverlay != null)
+        {
+            Remove(_startupOverlay);
+            _startupLabel?.Dispose();
+            _startupOverlay.Dispose();
+            _startupLabel = null;
+            _startupOverlay = null;
+        }
     }
 
     private MenuBar CreateMenuBar()
@@ -377,6 +545,7 @@ public class MainWindow : Toplevel
             _connectionStatusLabel.Text = _isConnected
                 ? $" {theme.ConnectedIndicator} "
                 : $" {theme.DisconnectedIndicator} ";
+            UpdateConnectionStatusLabelPosition();
             UpdateConnectionStatusLabelStyle(_isConnected);
 
             _logger.Info($"Theme changed to: {theme.Name}");
@@ -681,6 +850,7 @@ public class MainWindow : Toplevel
         _connectionStatusLabel.Text = isConnected
             ? $" {theme.ConnectedIndicator} "
             : $" {theme.DisconnectedIndicator} ";
+        UpdateConnectionStatusLabelPosition();
         UpdateConnectionStatusLabelStyle(isConnected);
 
         SetNeedsLayout();
@@ -730,6 +900,7 @@ public class MainWindow : Toplevel
             _connectingDotCount = (_connectingDotCount % 3) + 1;
             var dots = new string('.', _connectingDotCount);
             _connectionStatusLabel.Text = $" Connecting{dots} ";
+            UpdateConnectionStatusLabelPosition();
             SetNeedsLayout();
             return true; // Continue animation
         });
@@ -1182,6 +1353,12 @@ License: MIT
     {
         if (disposing)
         {
+            // Cancel startup sequence if still running
+            _startupCancellation?.Cancel();
+            _startupCancellation?.Dispose();
+            _startupCancellation = null;
+            CleanupStartupOverlay();
+
             StopRecordingStatusUpdates();
             StopConnectingAnimation();
             _csvRecordingManager.Dispose();
