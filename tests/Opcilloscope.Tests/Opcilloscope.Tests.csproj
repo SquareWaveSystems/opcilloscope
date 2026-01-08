@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Opcilloscope.csproj" />
-    <ProjectReference Include="..\..\src\Opcilloscope.TestServer\Opcilloscope.TestServer.csproj" />
+    <ProjectReference Include="..\..\tools\Opcilloscope.TestServer\Opcilloscope.TestServer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
