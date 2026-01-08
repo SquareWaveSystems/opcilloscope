@@ -297,6 +297,10 @@ public class ScopeView : View
         _valueChangedHandler = OnValueChanged;
         _subscriptionManager.ValueChanged += _valueChangedHandler;
 
+        // Initialize the graph with current data before starting timer
+        // This ensures GraphView has valid settings for the initial render
+        UpdateGraph();
+
         // Start the refresh timer
         StartUpdateTimer();
 
