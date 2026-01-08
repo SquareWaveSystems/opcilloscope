@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Text;
 using Terminal.Gui;
+using Attribute = Terminal.Gui.Attribute;
 
 namespace Opcilloscope.App.Views;
 
@@ -22,16 +24,16 @@ public class AlienPlotView : View
     public bool UseBrailleRendering { get; set; } = true;
     public int GridSpacing { get; set; } = 8;
     public float IsometricSkew { get; set; } = 0.3f;
-    public Color PrimaryColor { get; set; } = Color.BrightGreen;
-    public Color SecondaryColor { get; set; } = Color.Green;
-    public Color DimColor { get; set; } = Color.DarkGray;
-    public Color BackgroundColor { get; set; } = Color.Black;
+    public Terminal.Gui.Color PrimaryColor { get; set; } = Terminal.Gui.Color.BrightGreen;
+    public Terminal.Gui.Color SecondaryColor { get; set; } = Terminal.Gui.Color.Green;
+    public Terminal.Gui.Color DimColor { get; set; } = Terminal.Gui.Color.DarkGray;
+    public Terminal.Gui.Color BackgroundColor { get; set; } = Terminal.Gui.Color.Black;
 
     public void SetData(IEnumerable<PointF> points)
     {
         _dataPoints = new List<PointF>(points);
         RecalculateBounds();
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     public void SetData(IEnumerable<float> yValues)
@@ -43,13 +45,13 @@ public class AlienPlotView : View
             _dataPoints.Add(new PointF(x++, y));
         }
         RecalculateBounds();
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     public void AnimateTick()
     {
         _sweepPosition = (_sweepPosition + 1) % (Viewport.Width > 0 ? Viewport.Width : 80);
-        SetNeedsDisplay();
+        SetNeedsLayout();
     }
 
     private void RecalculateBounds()
@@ -79,16 +81,16 @@ public class AlienPlotView : View
         _maxY += rangeY * 0.05f;
     }
 
-    public override void OnDrawContent(Rectangle viewport)
+    protected override bool OnDrawingContent(DrawContext? context)
     {
-        base.OnDrawContent(viewport);
+        base.OnDrawingContent(context);
 
         var driver = Application.Driver;
-        if (driver == null) return;
+        if (driver == null) return true;
 
-        int width = viewport.Width;
-        int height = viewport.Height;
-        if (width <= 0 || height <= 0) return;
+        int width = Viewport.Width;
+        int height = Viewport.Height;
+        if (width <= 0 || height <= 0) return true;
 
         driver.SetAttribute(new Attribute(PrimaryColor, BackgroundColor));
 
@@ -108,6 +110,8 @@ public class AlienPlotView : View
 
         DrawFrame(driver, width, height);
         DrawSweepLine(driver, width, height);
+
+        return true;
     }
 
     private void DrawIsometricGrid(IConsoleDriver driver, int width, int height)
