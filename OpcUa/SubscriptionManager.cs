@@ -16,6 +16,8 @@ public class SubscriptionManager : IDisposable
     private Subscription? _subscription;
     private readonly Dictionary<uint, MonitoredNode> _monitoredVariables = new();
     private readonly Dictionary<uint, MonitoredItem> _opcMonitoredItems = new();
+    // Reverse lookup: OPC MonitoredItem.ClientHandle -> our ClientHandle for O(1) notification handling
+    private readonly Dictionary<uint, uint> _opcHandleToClientHandle = new();
     private uint _nextClientHandle = 1;
     private int _publishingInterval = 1000;
     private bool _isInitialized;
@@ -157,14 +159,17 @@ public class SubscriptionManager : IDisposable
             {
                 _monitoredVariables[clientHandle] = variable;
                 _opcMonitoredItems[clientHandle] = monitoredItem;
+                _opcHandleToClientHandle[monitoredItem.ClientHandle] = clientHandle;
             }
 
             _logger.Info($"Subscribed to {displayName}");
             VariableAdded?.Invoke(variable);
 
-            // Read initial value and node attributes (AccessLevel, DataType)
-            await ReadInitialValueAsync(variable);
-            await ReadNodeAttributesAsync(variable);
+            // Read initial value and node attributes (AccessLevel, DataType) in parallel
+            await Task.WhenAll(
+                ReadInitialValueAsync(variable),
+                ReadNodeAttributesAsync(variable)
+            );
 
             return variable;
         }
@@ -181,14 +186,13 @@ public class SubscriptionManager : IDisposable
         {
             if (e.NotificationValue is MonitoredItemNotification notification)
             {
-                // Find our variable by the OPC monitored item's client handle
+                // Find our variable using O(1) reverse lookup
                 MonitoredNode? variable = null;
                 lock (_lock)
                 {
-                    var matchingKvp = _opcMonitoredItems.Where(kvp => kvp.Value.ClientHandle == monitoredItem.ClientHandle).FirstOrDefault();
-                    if (!matchingKvp.Equals(default(KeyValuePair<uint, MonitoredItem>)))
+                    if (_opcHandleToClientHandle.TryGetValue(monitoredItem.ClientHandle, out var clientHandle))
                     {
-                        _monitoredVariables.TryGetValue(matchingKvp.Key, out variable);
+                        _monitoredVariables.TryGetValue(clientHandle, out variable);
                     }
                 }
 
@@ -313,6 +317,13 @@ public class SubscriptionManager : IDisposable
                 return false;
 
             _opcMonitoredItems.TryGetValue(clientHandle, out opcItem);
+
+            // Clean up reverse lookup
+            if (opcItem != null)
+            {
+                _opcHandleToClientHandle.Remove(opcItem.ClientHandle);
+            }
+
             _monitoredVariables.Remove(clientHandle);
             _opcMonitoredItems.Remove(clientHandle);
         }
@@ -526,6 +537,7 @@ public class SubscriptionManager : IDisposable
                 lock (_lock)
                 {
                     _opcMonitoredItems[clientHandle] = monitoredItem;
+                    _opcHandleToClientHandle[monitoredItem.ClientHandle] = clientHandle;
                 }
 
                 restored++;
@@ -559,6 +571,7 @@ public class SubscriptionManager : IDisposable
 
     /// <summary>
     /// Refreshes all monitored variable values by reading from the server.
+    /// Uses parallel reads for better performance with remote servers.
     /// </summary>
     private async Task RefreshAllValuesAsync()
     {
@@ -568,10 +581,8 @@ public class SubscriptionManager : IDisposable
             variables = _monitoredVariables.Values.ToList();
         }
 
-        foreach (var variable in variables)
-        {
-            await ReadInitialValueAsync(variable);
-        }
+        // Read all values in parallel for better performance
+        await Task.WhenAll(variables.Select(ReadInitialValueAsync));
     }
 
     /// <summary>
@@ -586,6 +597,7 @@ public class SubscriptionManager : IDisposable
                 item.Notification -= MonitoredItem_Notification;
             }
             _opcMonitoredItems.Clear();
+            _opcHandleToClientHandle.Clear();
         }
 
         if (_subscription != null)
@@ -640,6 +652,7 @@ public class SubscriptionManager : IDisposable
         _isInitialized = false;
         _monitoredVariables.Clear();
         _opcMonitoredItems.Clear();
+        _opcHandleToClientHandle.Clear();
     }
 }
 
