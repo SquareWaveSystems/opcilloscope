@@ -15,11 +15,13 @@ public class AlienPlotView : View
 {
     // === Rendering Constants ===
     private const char BrailleBase = '\u2800';
+    private const int DefaultViewportWidth = 80;
 
     // Braille dot pattern mapping: each braille character is a 2x4 dot matrix.
-    // Standard Unicode braille pattern where dots are indexed 0-7 in sequence.
-    // The DrawBraillePlot method uses special-case logic to map (x,y) coordinates
-    // to the correct dot positions in this array.
+    // Unicode Braille patterns use the following dot numbering scheme:
+    //   Left column:  dots 1,2,3,7 (top to bottom)
+    //   Right column: dots 4,5,6,8 (top to bottom)
+    // BrailleDots array maps these to Unicode bit positions (0-7).
     private static readonly int[] BrailleDots = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
 
     // Bounds padding percentage (5% on each side)
@@ -32,6 +34,7 @@ public class AlienPlotView : View
     // Isometric grid depth thresholds
     private const float DepthThresholdSolid = 0.3f;
     private const float DepthThresholdDashed = 0.6f;
+    private const float MinRangeEpsilon = 1e-6f;
 
     // === Thread-Safe Data ===
     private readonly object _dataLock = new();
@@ -80,7 +83,7 @@ public class AlienPlotView : View
 
     public void AnimateTick()
     {
-        _sweepPosition = (_sweepPosition + 1) % (Viewport.Width > 0 ? Viewport.Width : 80);
+        _sweepPosition = (_sweepPosition + 1) % (Viewport.Width > 0 ? Viewport.Width : DefaultViewportWidth);
         SetNeedsLayout();
     }
 
@@ -105,8 +108,8 @@ public class AlienPlotView : View
         float rangeX = _maxX - _minX;
         float rangeY = _maxY - _minY;
 
-        if (rangeX == 0) rangeX = 1;
-        if (rangeY == 0) rangeY = 1;
+        if (Math.Abs(rangeX) < MinRangeEpsilon) rangeX = 1f;
+        if (Math.Abs(rangeY) < MinRangeEpsilon) rangeY = 1f;
 
         // Add padding around data bounds
         _minX -= rangeX * BoundsPadding;
@@ -184,7 +187,7 @@ public class AlienPlotView : View
             for (int y = 0; y < height; y++)
             {
                 float depth = (float)y / height;
-                int offset = (int)(i * GridSpacing * (1.0f - depth * IsometricSkew));
+                int offset = (int)((float)i * GridSpacing * (1.0f - depth * IsometricSkew));
                 int x = centerX + offset;
 
                 if (x >= 0 && x < width)
@@ -238,12 +241,50 @@ public class AlienPlotView : View
 
             if (cellX >= 0 && cellX < width && cellY >= 0 && cellY < height)
             {
-                // Map (dotX, dotY) to braille dot index using the BrailleDots array
-                // Braille dots are numbered oddly - dots 7,8 are at bottom, not 4,5
-                // This special case handles the column mapping correctly
-                int dotIndex = dotY + (dotX * 4);
-                if (dotIndex >= 4 && dotIndex < 6) dotIndex = dotY + 3;
-                _brailleBuffer[cellX, cellY] |= BrailleDots[Math.Min(dotIndex, 7)];
+                // Map (dotX, dotY) in our 2x4 sub-cell grid to a Braille dot index (0-7),
+                // then into the BrailleDots array, which holds the Unicode bit masks.
+                //
+                // Unicode Braille patterns use the following dot numbering in a single cell:
+                //
+                //   column 0   column 1
+                //   --------   --------
+                //      1          4
+                //      2          5
+                //      3          6
+                //      7          8
+                //
+                // Our normalized plot coordinates give us (dotX, dotY) in a simple grid:
+                //   dotX: 0 = left column, 1 = right column
+                //   dotY: 0..3 = from top to bottom
+                //
+                // The BrailleDots array is ordered to match the Unicode bit layout for dots 1..8.
+                int dotIndex;
+                if (dotX == 0)
+                {
+                    // Left column
+                    dotIndex = dotY switch
+                    {
+                        0 => 0, // dot 1
+                        1 => 1, // dot 2
+                        2 => 2, // dot 3
+                        3 => 6, // dot 7
+                        _ => 0
+                    };
+                }
+                else
+                {
+                    // Right column
+                    dotIndex = dotY switch
+                    {
+                        0 => 3, // dot 4
+                        1 => 4, // dot 5
+                        2 => 5, // dot 6
+                        3 => 7, // dot 8
+                        _ => 3
+                    };
+                }
+
+                _brailleBuffer[cellX, cellY] |= BrailleDots[dotIndex];
             }
         }
 
