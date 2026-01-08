@@ -191,7 +191,6 @@ public class MainWindow : Toplevel
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredVariablesView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredVariablesView.WriteRequested += OnWriteRequested;
-        _monitoredVariablesView.TrendPlotRequested += OnTrendPlotRequested;
         _monitoredVariablesView.ScopeRequested += LaunchScope;
         _monitoredVariablesView.RecordToggleRequested += ToggleRecording;
 
@@ -617,7 +616,6 @@ public class MainWindow : Toplevel
             _statusBar.Add(new Shortcut(Key.Delete, "Unsub", UnsubscribeSelected));
             _statusBar.Add(new Shortcut(Key.Space, "Sel", () => { })); // Handled by view
             _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
-            _statusBar.Add(new Shortcut(Key.T, "Trend", ShowTrendForSelected));
             _statusBar.Add(new Shortcut(Key.S, "Scope", LaunchScope));
         }
         else
@@ -627,18 +625,6 @@ public class MainWindow : Toplevel
         }
 
         _statusBar.SetNeedsLayout();
-    }
-
-    /// <summary>
-    /// Shows trend plot for the selected variable in the monitored view.
-    /// </summary>
-    private void ShowTrendForSelected()
-    {
-        var variable = _monitoredVariablesView.SelectedVariable;
-        if (variable != null)
-        {
-            OnTrendPlotRequested(variable);
-        }
     }
 
     #endregion
@@ -682,12 +668,6 @@ public class MainWindow : Toplevel
     private void OnUnsubscribeRequested(MonitoredNode item)
     {
         _connectionManager.UnsubscribeAsync(item.ClientHandle).FireAndForget(_logger);
-    }
-
-    private void OnTrendPlotRequested(MonitoredNode item)
-    {
-        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager!, item);
-        Application.Run(dialog);
     }
 
     private void OnWriteRequested(MonitoredNode item)

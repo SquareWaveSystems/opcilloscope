@@ -52,7 +52,6 @@ public class MonitoredVariablesView : FrameView
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action? RecordToggleRequested;
     public event Action<MonitoredNode>? WriteRequested;
-    public event Action<MonitoredNode>? TrendPlotRequested;
     public event Action? ScopeRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
 
@@ -472,15 +471,6 @@ public class MonitoredVariablesView : FrameView
                 e.Handled = true;
             }
         }
-        else if (keyCode == (KeyCode)'t' || keyCode == (KeyCode)'T')
-        {
-            var selected = SelectedVariable;
-            if (selected != null)
-            {
-                TrendPlotRequested?.Invoke(selected);
-                e.Handled = true;
-            }
-        }
         else if (keyCode == (KeyCode)'s' || keyCode == (KeyCode)'S')
         {
             ScopeRequested?.Invoke();
@@ -490,8 +480,9 @@ public class MonitoredVariablesView : FrameView
 
     private void HandleMouseClick(object? sender, MouseEventArgs e)
     {
-        // Convert screen position to table cell
-        var cellPoint = _tableView.ScreenToCell(e.Position.X, e.Position.Y, out int? columnIndex, out int? rowIndex);
+        // e.Position is relative to the TableView viewport, but ScreenToCell expects screen coordinates
+        var screenPoint = _tableView.ViewportToScreen(e.Position);
+        var cellPoint = _tableView.ScreenToCell(screenPoint.X, screenPoint.Y, out int? columnIndex, out int? rowIndex);
 
         // Toggle selection when clicking anywhere on a valid row
         if (rowIndex.HasValue && rowIndex.Value >= 0 && rowIndex.Value < _dataTable.Rows.Count)
