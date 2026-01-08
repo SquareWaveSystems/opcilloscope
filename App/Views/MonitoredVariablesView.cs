@@ -20,8 +20,11 @@ public class MonitoredVariablesView : FrameView
     private const string UncheckedBox = "[ ]";
     private const int MaxScopeSelections = 5;
 
-    // Update batching for performance - collect updates and apply at intervals
-    private const int UpdateBatchIntervalMs = 50; // Apply updates every 50ms
+    // Update batching for performance - collect updates and apply at intervals.
+    // 50ms provides a good balance: fast enough for responsive UI (~20 FPS equivalent),
+    // slow enough to batch multiple updates when connected to high-frequency remote servers.
+    // This reduces table redraws from potentially 100+/sec to max 20/sec.
+    private const int UpdateBatchIntervalMs = 50;
     private readonly ConcurrentDictionary<uint, MonitoredNode> _pendingUpdates = new();
     private object? _updateTimer;
     private bool _updateTimerRunning;

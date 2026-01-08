@@ -131,21 +131,6 @@ public class NodeBrowser
         }
     }
 
-    private async Task<bool> HasChildrenAsync(NodeId nodeId)
-    {
-        try
-        {
-            var refs = await _client.BrowseAsync(nodeId);
-            return refs.Count > 0;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
-        {
-            // Node may not be browsable - this is expected for some node types
-            _logger.Warning($"Could not check children for {nodeId}: {ex.Message}");
-            return false;
-        }
-    }
-
     private async Task<string?> GetDataTypeNameAsync(NodeId nodeId)
     {
         var key = nodeId.ToString();
