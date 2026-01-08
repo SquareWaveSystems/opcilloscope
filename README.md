@@ -197,7 +197,7 @@ opcilloscope includes an in-process OPC UA test server for development and testi
 
 ```bash
 # Run the standalone test server
-dotnet run --project src/Opcilloscope.TestServer
+dotnet run --project tools/Opcilloscope.TestServer
 
 # Server starts at opc.tcp://localhost:4840
 ```

@@ -115,7 +115,7 @@ Opcilloscope/
 │   ├── OpcValueConverter.cs        # OPC UA value type conversion utilities
 │   └── TaskExtensions.cs           # Async task helper extensions (FireAndForget)
 │
-├── src/
+├── tools/
 │   └── Opcilloscope.TestServer/        # In-process OPC UA test server library
 │       ├── Opcilloscope.TestServer.csproj
 │       ├── Program.cs              # Standalone test server entry point

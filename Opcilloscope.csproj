@@ -44,10 +44,10 @@
     <Content Remove="tests/**" />
     <None Remove="tests/**" />
     <EmbeddedResource Remove="tests/**" />
-    <Compile Remove="src/**" />
-    <Content Remove="src/**" />
-    <None Remove="src/**" />
-    <EmbeddedResource Remove="src/**" />
+    <Compile Remove="tools/**" />
+    <Content Remove="tools/**" />
+    <None Remove="tools/**" />
+    <EmbeddedResource Remove="tools/**" />
   </ItemGroup>
 
 </Project>
