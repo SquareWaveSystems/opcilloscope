@@ -300,7 +300,7 @@ public class MainWindow : Toplevel
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
-                    new MenuItem("_Scope", "S", LaunchScope),
+                    new MenuItem("_Scope", "", LaunchScope),
                     new MenuItem("_Refresh Tree", "F5", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     _themeToggleItem,
@@ -640,6 +640,14 @@ public class MainWindow : Toplevel
         if (key == Key.Tab)
         {
             _focusManager?.FocusNext();
+            return true;
+        }
+
+        // S: Launch Scope (global shortcut)
+        var kc = key.KeyCode;
+        if ((kc == (KeyCode)'s' || kc == (KeyCode)'S') && !key.IsCtrl && !key.IsAlt)
+        {
+            LaunchScope();
             return true;
         }
 

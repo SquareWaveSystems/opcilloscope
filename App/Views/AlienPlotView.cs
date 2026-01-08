@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Text;
 using Terminal.Gui;
+using Opcilloscope.App.Themes;
 using Attribute = Terminal.Gui.Attribute;
+using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
 namespace Opcilloscope.App.Views;
 
@@ -52,14 +54,76 @@ public class AlienPlotView : View
     private int _bufferWidth;
     private int _bufferHeight;
 
+    // Theme tracking
+    private AppTheme _currentTheme = null!;
+    private readonly object _themeLock = new();
+
     public bool ShowIsometricPerspective { get; set; } = true;
     public bool UseBrailleRendering { get; set; } = true;
     public int GridSpacing { get; set; } = 8;
     public float IsometricSkew { get; set; } = 0.3f;
-    public Terminal.Gui.Color PrimaryColor { get; set; } = Terminal.Gui.Color.BrightGreen;
-    public Terminal.Gui.Color SecondaryColor { get; set; } = Terminal.Gui.Color.Green;
-    public Terminal.Gui.Color DimColor { get; set; } = Terminal.Gui.Color.DarkGray;
-    public Terminal.Gui.Color BackgroundColor { get; set; } = Terminal.Gui.Color.Black;
+    public Terminal.Gui.Color PrimaryColor { get; private set; } = Terminal.Gui.Color.BrightGreen;
+    public Terminal.Gui.Color SecondaryColor { get; private set; } = Terminal.Gui.Color.Green;
+    public Terminal.Gui.Color DimColor { get; private set; } = Terminal.Gui.Color.DarkGray;
+    public Terminal.Gui.Color BackgroundColor { get; private set; } = Terminal.Gui.Color.Black;
+
+    public AlienPlotView()
+    {
+        // Initialize theme
+        lock (_themeLock)
+        {
+            _currentTheme = ThemeManager.Current;
+        }
+        ApplyTheme();
+
+        // Subscribe to theme changes
+        ThemeManager.ThemeChanged += OnThemeChanged;
+    }
+
+    private void ApplyTheme()
+    {
+        AppTheme theme;
+        lock (_themeLock)
+        {
+            theme = _currentTheme;
+        }
+
+        // Map theme colors to alien plot colors
+        PrimaryColor = theme.AccentBright;
+        SecondaryColor = theme.Accent;
+        DimColor = theme.ForegroundDim;
+        BackgroundColor = theme.Background;
+    }
+
+    private void OnThemeChanged(AppTheme newTheme)
+    {
+        lock (_themeLock)
+        {
+            _currentTheme = newTheme;
+        }
+
+        try
+        {
+            Application.Invoke(() =>
+            {
+                ApplyTheme();
+                SetNeedsLayout();
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            // Application may not be initialized - ignore
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            ThemeManager.ThemeChanged -= OnThemeChanged;
+        }
+        base.Dispose(disposing);
+    }
 
     /// <summary>
     /// Sets the data points to display in the plot.

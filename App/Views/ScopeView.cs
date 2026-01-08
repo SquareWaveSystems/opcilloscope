@@ -532,6 +532,13 @@ public class ScopeView : View
         else
         {
             // Normal mode: update GraphView
+            // Guard against invalid dimensions during initial layout
+            if (_graphView.Frame.Width <= 0 || _graphView.Frame.Height <= 0)
+            {
+                _graphView.SetNeedsLayout();
+                return;
+            }
+
             _graphView.Annotations.Clear();
             _graphView.Series.Clear();
 
