@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Text;
 using Terminal.Gui;
 using Attribute = Terminal.Gui.Attribute;
 
@@ -11,6 +10,11 @@ namespace Opcilloscope.App.Views;
 /// Sci-fi styled plot view with isometric perspective, braille rendering, and sweep animation.
 /// Used as an alternative "Aliens Mode" visualization in the scope dialog.
 /// </summary>
+/// <remarks>
+/// Unlike the standard GraphView which displays multiple series with distinct colors,
+/// this view combines all data points from all series into a single unified plot.
+/// This is intentional for the sci-fi aesthetic effect.
+/// </remarks>
 public class AlienPlotView : View
 {
     // === Rendering Constants ===
@@ -56,6 +60,10 @@ public class AlienPlotView : View
     public Terminal.Gui.Color DimColor { get; set; } = Terminal.Gui.Color.DarkGray;
     public Terminal.Gui.Color BackgroundColor { get; set; } = Terminal.Gui.Color.Black;
 
+    /// <summary>
+    /// Sets the data points to display in the plot.
+    /// </summary>
+    /// <param name="points">The collection of points with X and Y coordinates.</param>
     public void SetData(IEnumerable<PointF> points)
     {
         lock (_dataLock)
@@ -66,6 +74,10 @@ public class AlienPlotView : View
         SetNeedsLayout();
     }
 
+    /// <summary>
+    /// Sets the data points using Y values only, with X auto-generated as sequential indices.
+    /// </summary>
+    /// <param name="yValues">The Y values to plot.</param>
     public void SetData(IEnumerable<float> yValues)
     {
         lock (_dataLock)
@@ -81,9 +93,14 @@ public class AlienPlotView : View
         SetNeedsLayout();
     }
 
+    /// <summary>
+    /// Advances the sweep line animation by one tick.
+    /// Call this periodically (e.g., every 100ms) for the animated effect.
+    /// </summary>
     public void AnimateTick()
     {
-        _sweepPosition = (_sweepPosition + 1) % (Viewport.Width > 0 ? Viewport.Width : DefaultViewportWidth);
+        int width = Viewport.Width;
+        _sweepPosition = (_sweepPosition + 1) % (width > 0 ? width : DefaultViewportWidth);
         SetNeedsLayout();
     }
 
