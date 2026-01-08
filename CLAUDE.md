@@ -426,7 +426,7 @@ Automates release builds and publishing.
 | Delete | Unsubscribe from selected variable |
 | Space | Toggle recording selection (in monitored variables) |
 | W | Write value to selected variable |
-| Ctrl+G | Open Scope with selected variables |
+| S | Open Scope with selected variables |
 | Ctrl+R | Toggle recording (start/stop) |
 | Ctrl+N | New configuration |
 | Ctrl+O | Open configuration |

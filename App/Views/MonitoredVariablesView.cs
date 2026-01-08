@@ -52,7 +52,6 @@ public class MonitoredVariablesView : FrameView
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action? RecordToggleRequested;
     public event Action<MonitoredNode>? WriteRequested;
-    public event Action<MonitoredNode>? TrendPlotRequested;
     public event Action? ScopeRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
 
@@ -469,15 +468,6 @@ public class MonitoredVariablesView : FrameView
             if (selected != null)
             {
                 WriteRequested?.Invoke(selected);
-                e.Handled = true;
-            }
-        }
-        else if (keyCode == (KeyCode)'t' || keyCode == (KeyCode)'T')
-        {
-            var selected = SelectedVariable;
-            if (selected != null)
-            {
-                TrendPlotRequested?.Invoke(selected);
                 e.Handled = true;
             }
         }
