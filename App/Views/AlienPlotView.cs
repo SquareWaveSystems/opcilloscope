@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Text;
 using Terminal.Gui;
 using Attribute = Terminal.Gui.Attribute;
 
