@@ -71,6 +71,7 @@ public class NodeBrowser
             var refs = await _client.BrowseAsync(parent.NodeId);
             var children = new List<BrowsedNode>();
 
+            // First pass: create all child nodes without async operations
             foreach (var r in refs)
             {
                 // Convert ExpandedNodeId to NodeId
@@ -92,19 +93,29 @@ public class NodeBrowser
                     DisplayName = r.DisplayName?.Text ?? r.BrowseName?.Name ?? "Unknown",
                     NodeClass = r.NodeClass,
                     DataType = typeDefNodeId,
-                    Parent = parent
+                    Parent = parent,
+                    // Optimistically assume Objects and Variables may have children to avoid N browse calls.
+                    // This creates false positives (expand arrows on leaf nodes) but eliminates the
+                    // performance cost of checking every node during initial tree expansion.
+                    // The actual child check happens lazily on first expansion.
+                    // Trade-off: Other node classes (Methods, ObjectTypes, etc.) won't show expand arrows
+                    // even if they have children, but this is rare in typical OPC UA address spaces.
+                    HasChildren = r.NodeClass == NodeClass.Object || r.NodeClass == NodeClass.Variable
                 };
 
-                // For variables, try to get the data type
-                if (r.NodeClass == NodeClass.Variable)
-                {
-                    child.DataTypeName = await GetDataTypeNameAsync(targetNodeId);
-                }
-
-                // Check if node has children by doing a quick browse
-                child.HasChildren = await HasChildrenAsync(targetNodeId);
-
                 children.Add(child);
+            }
+
+            // Second pass: fetch data type names for variables in parallel
+            // This is the only async operation we still need - HasChildren is now lazy
+            var variableNodes = children.Where(c => c.NodeClass == NodeClass.Variable).ToList();
+            if (variableNodes.Count > 0)
+            {
+                var dataTypeTasks = variableNodes.Select(async child =>
+                {
+                    child.DataTypeName = await GetDataTypeNameAsync(child.NodeId);
+                });
+                await Task.WhenAll(dataTypeTasks);
             }
 
             parent.ChildrenLoaded = true;
@@ -117,21 +128,6 @@ public class NodeBrowser
         {
             _logger.Error($"Browse failed for {parent.NodeId}: {ex.Message}");
             return new List<BrowsedNode>();
-        }
-    }
-
-    private async Task<bool> HasChildrenAsync(NodeId nodeId)
-    {
-        try
-        {
-            var refs = await _client.BrowseAsync(nodeId);
-            return refs.Count > 0;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
-        {
-            // Node may not be browsable - this is expected for some node types
-            _logger.Warning($"Could not check children for {nodeId}: {ex.Message}");
-            return false;
         }
     }
 

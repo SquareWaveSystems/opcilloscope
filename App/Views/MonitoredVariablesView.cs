@@ -1,6 +1,7 @@
 using Terminal.Gui;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.App.Themes;
+using System.Collections.Concurrent;
 using System.Data;
 using Attribute = Terminal.Gui.Attribute;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
@@ -10,6 +11,7 @@ namespace Opcilloscope.App.Views;
 /// <summary>
 /// TableView for displaying subscribed/monitored variables with real-time updates.
 /// Features theme-aware styling, row coloring based on status, and CSV recording controls.
+/// Uses batched updates to avoid excessive redraws with high-frequency value changes.
 /// </summary>
 public class MonitoredVariablesView : FrameView
 {
@@ -17,6 +19,16 @@ public class MonitoredVariablesView : FrameView
     private const string CheckedBox = "[●]";
     private const string UncheckedBox = "[ ]";
     private const int MaxScopeSelections = 5;
+
+    // Update batching for performance - collect updates and apply at intervals.
+    // 50ms provides a good balance: fast enough for responsive UI (~20 FPS equivalent),
+    // slow enough to batch multiple updates when connected to high-frequency remote servers.
+    // This reduces table redraws from potentially 100+/sec to max 20/sec.
+    private const int UpdateBatchIntervalMs = 50;
+    private readonly ConcurrentDictionary<uint, MonitoredNode> _pendingUpdates = new();
+    private object? _updateTimer;
+    private bool _updateTimerRunning;
+    private readonly object _timerLock = new();
 
     private readonly TableView _tableView;
     private readonly DataTable _dataTable;
@@ -274,16 +286,96 @@ public class MonitoredVariablesView : FrameView
 
     public void UpdateVariable(MonitoredNode variable)
     {
-        if (!_rowsByHandle.TryGetValue(variable.ClientHandle, out var row))
-            return;
+        // Queue the update for batched processing
+        _pendingUpdates[variable.ClientHandle] = variable;
 
-        row["Access"] = variable.AccessString;
-        row["Sel"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
-        row["Value"] = variable.Value;
-        row["Time"] = variable.TimestampString;
-        row["Status"] = FormatStatusWithIcon(variable);
+        // Start the update timer if not already running
+        EnsureUpdateTimerRunning();
+    }
 
+    /// <summary>
+    /// Ensures the batched update timer is running.
+    /// </summary>
+    private void EnsureUpdateTimerRunning()
+    {
+        lock (_timerLock)
+        {
+            if (_updateTimerRunning)
+                return;
+
+            _updateTimerRunning = true;
+            _updateTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(UpdateBatchIntervalMs), ProcessPendingUpdates);
+        }
+    }
+
+    /// <summary>
+    /// Processes all pending variable updates in a single batch.
+    /// </summary>
+    private bool ProcessPendingUpdates()
+    {
+        // Defensive check - handle case where disposal happens concurrently
+        if (_pendingUpdates.IsEmpty)
+        {
+            lock (_timerLock)
+            {
+                _updateTimerRunning = false;
+            }
+            return false;
+        }
+
+        // Snapshot and clear pending updates
+        var keys = _pendingUpdates.Keys.ToList();
+        var updates = new List<(uint ClientHandle, MonitoredNode Variable)>();
+
+        foreach (var key in keys)
+        {
+            if (_pendingUpdates.TryRemove(key, out var variable))
+            {
+                updates.Add((key, variable));
+            }
+        }
+
+        if (updates.Count == 0)
+        {
+            // No more updates - stop the timer
+            lock (_timerLock)
+            {
+                _updateTimerRunning = false;
+            }
+            return false;
+        }
+
+        // Apply all updates to DataTable rows
+        foreach (var (clientHandle, variable) in updates)
+        {
+            if (_rowsByHandle.TryGetValue(clientHandle, out var row))
+            {
+                row["Access"] = variable.AccessString;
+                row["Sel"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
+                row["Value"] = variable.Value;
+                row["Time"] = variable.TimestampString;
+                row["Status"] = FormatStatusWithIcon(variable);
+            }
+        }
+
+        // Check if more updates arrived while we were processing (before redraw)
+        // This avoids a race condition where updates arriving between Update() and
+        // IsEmpty check would be orphaned until the next UpdateVariable() call
+        bool hasMoreUpdates = !_pendingUpdates.IsEmpty;
+
+        // Single table redraw for all updates
         _tableView.Update();
+
+        if (!hasMoreUpdates)
+        {
+            lock (_timerLock)
+            {
+                _updateTimerRunning = false;
+            }
+            return false; // Stop timer
+        }
+
+        return true; // Continue timer for remaining updates
     }
 
     public void RemoveVariable(uint clientHandle)
@@ -495,6 +587,18 @@ public class MonitoredVariablesView : FrameView
     {
         if (disposing)
         {
+            // Stop the update timer
+            lock (_timerLock)
+            {
+                if (_updateTimer != null)
+                {
+                    Application.RemoveTimeout(_updateTimer);
+                    _updateTimer = null;
+                }
+                _updateTimerRunning = false;
+            }
+            _pendingUpdates.Clear();
+
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _recordButton.Accepting -= OnRecordButtonClicked;
             _tableView.MouseClick -= HandleMouseClick;
