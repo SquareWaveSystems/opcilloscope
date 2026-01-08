@@ -496,9 +496,9 @@ public class ScopeView : View
         string scaleInfo = _autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X";
         int totalSamples = seriesCopy.Sum(s => s.Samples.Count);
         string timeInfo = FormatElapsedTime(maxElapsedSeconds);
-        string modeIndicator = _aliensMode ? "[A]" : "";
+        string modeIndicator = _aliensMode ? "[A] " : "";
 
-        _statusLabel.Text = $"[SPACE] Pause  [+/-] Scale  [R] Auto  [A] Mode {modeIndicator}   TIME:{timeInfo}  SAMPLES:{totalSamples}";
+        _statusLabel.Text = $"[SPACE] Pause  [+/-] Scale  [R] Auto  [A] Mode {modeIndicator}  TIME:{timeInfo}  SAMPLES:{totalSamples}";
 
         // Determine the time range for x-axis
         double timeRangeSeconds = Math.Max(maxElapsedSeconds, 10);
