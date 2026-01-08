@@ -490,8 +490,9 @@ public class MonitoredVariablesView : FrameView
 
     private void HandleMouseClick(object? sender, MouseEventArgs e)
     {
-        // Convert screen position to table cell
-        var cellPoint = _tableView.ScreenToCell(e.Position.X, e.Position.Y, out int? columnIndex, out int? rowIndex);
+        // e.Position is relative to the TableView viewport, but ScreenToCell expects screen coordinates
+        var screenPoint = _tableView.ViewportToScreen(e.Position);
+        var cellPoint = _tableView.ScreenToCell(screenPoint.X, screenPoint.Y, out int? columnIndex, out int? rowIndex);
 
         // Toggle selection when clicking anywhere on a valid row
         if (rowIndex.HasValue && rowIndex.Value >= 0 && rowIndex.Value < _dataTable.Rows.Count)
