@@ -310,7 +310,17 @@ public class MonitoredVariablesView : FrameView
     /// </summary>
     private bool ProcessPendingUpdates()
     {
-        // Snapshot and clear pending updates atomically
+        // Defensive check - handle case where disposal happens concurrently
+        if (_pendingUpdates.IsEmpty)
+        {
+            lock (_timerLock)
+            {
+                _updateTimerRunning = false;
+            }
+            return false;
+        }
+
+        // Snapshot and clear pending updates
         var keys = _pendingUpdates.Keys.ToList();
         var updates = new List<(uint ClientHandle, MonitoredNode Variable)>();
 
@@ -332,7 +342,7 @@ public class MonitoredVariablesView : FrameView
             return false;
         }
 
-        // Apply all updates
+        // Apply all updates to DataTable rows
         foreach (var (clientHandle, variable) in updates)
         {
             if (_rowsByHandle.TryGetValue(clientHandle, out var row))
@@ -345,11 +355,15 @@ public class MonitoredVariablesView : FrameView
             }
         }
 
+        // Check if more updates arrived while we were processing (before redraw)
+        // This avoids a race condition where updates arriving between Update() and
+        // IsEmpty check would be orphaned until the next UpdateVariable() call
+        bool hasMoreUpdates = !_pendingUpdates.IsEmpty;
+
         // Single table redraw for all updates
         _tableView.Update();
 
-        // Check if more updates arrived while we were processing
-        if (_pendingUpdates.IsEmpty)
+        if (!hasMoreUpdates)
         {
             lock (_timerLock)
             {

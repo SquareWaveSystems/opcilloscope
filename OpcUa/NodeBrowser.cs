@@ -94,8 +94,12 @@ public class NodeBrowser
                     NodeClass = r.NodeClass,
                     DataType = typeDefNodeId,
                     Parent = parent,
-                    // Optimistically assume nodes may have children (will be resolved on expand)
-                    // This avoids N extra browse calls per tree expansion
+                    // Optimistically assume Objects and Variables may have children to avoid N browse calls.
+                    // This creates false positives (expand arrows on leaf nodes) but eliminates the
+                    // performance cost of checking every node during initial tree expansion.
+                    // The actual child check happens lazily on first expansion.
+                    // Trade-off: Other node classes (Methods, ObjectTypes, etc.) won't show expand arrows
+                    // even if they have children, but this is rare in typical OPC UA address spaces.
                     HasChildren = r.NodeClass == NodeClass.Object || r.NodeClass == NodeClass.Variable
                 };
 
