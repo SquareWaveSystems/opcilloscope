@@ -48,10 +48,6 @@
     <Content Remove="tools/**" />
     <None Remove="tools/**" />
     <EmbeddedResource Remove="tools/**" />
-    <Compile Remove="src/**" />
-    <Content Remove="src/**" />
-    <None Remove="src/**" />
-    <EmbeddedResource Remove="src/**" />
   </ItemGroup>
 
 </Project>

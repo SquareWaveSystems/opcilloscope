@@ -13,12 +13,36 @@ namespace Opcilloscope.App.Views;
 /// </summary>
 public class AlienPlotView : View
 {
+    // === Rendering Constants ===
     private const char BrailleBase = '\u2800';
+
+    // Braille dot pattern mapping: each braille character is a 2x4 dot matrix.
+    // Standard Unicode braille pattern where dots are indexed 0-7 in sequence.
+    // The DrawBraillePlot method uses special-case logic to map (x,y) coordinates
+    // to the correct dot positions in this array.
     private static readonly int[] BrailleDots = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
 
+    // Bounds padding percentage (5% on each side)
+    private const float BoundsPadding = 0.05f;
+
+    // Frame tick mark intervals
+    private const int HorizontalTickInterval = 10;
+    private const int VerticalTickInterval = 5;
+
+    // Isometric grid depth thresholds
+    private const float DepthThresholdSolid = 0.3f;
+    private const float DepthThresholdDashed = 0.6f;
+
+    // === Thread-Safe Data ===
+    private readonly object _dataLock = new();
     private List<PointF> _dataPoints = new();
     private float _minX = 0, _maxX = 100, _minY = 0, _maxY = 100;
     private int _sweepPosition = 0;
+
+    // Reusable braille buffer to reduce allocations (lazily resized)
+    private int[,]? _brailleBuffer;
+    private int _bufferWidth;
+    private int _bufferHeight;
 
     public bool ShowIsometricPerspective { get; set; } = true;
     public bool UseBrailleRendering { get; set; } = true;
@@ -31,20 +55,26 @@ public class AlienPlotView : View
 
     public void SetData(IEnumerable<PointF> points)
     {
-        _dataPoints = new List<PointF>(points);
-        RecalculateBounds();
+        lock (_dataLock)
+        {
+            _dataPoints = new List<PointF>(points);
+            RecalculateBoundsLocked();
+        }
         SetNeedsLayout();
     }
 
     public void SetData(IEnumerable<float> yValues)
     {
-        _dataPoints.Clear();
-        int x = 0;
-        foreach (var y in yValues)
+        lock (_dataLock)
         {
-            _dataPoints.Add(new PointF(x++, y));
+            _dataPoints.Clear();
+            int x = 0;
+            foreach (var y in yValues)
+            {
+                _dataPoints.Add(new PointF(x++, y));
+            }
+            RecalculateBoundsLocked();
         }
-        RecalculateBounds();
         SetNeedsLayout();
     }
 
@@ -54,7 +84,10 @@ public class AlienPlotView : View
         SetNeedsLayout();
     }
 
-    private void RecalculateBounds()
+    /// <summary>
+    /// Recalculates data bounds. Must be called within _dataLock.
+    /// </summary>
+    private void RecalculateBoundsLocked()
     {
         if (_dataPoints.Count == 0) return;
 
@@ -75,10 +108,11 @@ public class AlienPlotView : View
         if (rangeX == 0) rangeX = 1;
         if (rangeY == 0) rangeY = 1;
 
-        _minX -= rangeX * 0.05f;
-        _maxX += rangeX * 0.05f;
-        _minY -= rangeY * 0.05f;
-        _maxY += rangeY * 0.05f;
+        // Add padding around data bounds
+        _minX -= rangeX * BoundsPadding;
+        _maxX += rangeX * BoundsPadding;
+        _minY -= rangeY * BoundsPadding;
+        _maxY += rangeY * BoundsPadding;
     }
 
     protected override bool OnDrawingContent(DrawContext? context)
@@ -92,6 +126,18 @@ public class AlienPlotView : View
         int height = Viewport.Height;
         if (width <= 0 || height <= 0) return true;
 
+        // Take a snapshot of data under lock to avoid race conditions
+        List<PointF> dataSnapshot;
+        float minX, maxX, minY, maxY;
+        lock (_dataLock)
+        {
+            dataSnapshot = _dataPoints.ToList();
+            minX = _minX;
+            maxX = _maxX;
+            minY = _minY;
+            maxY = _maxY;
+        }
+
         driver.SetAttribute(new Attribute(PrimaryColor, BackgroundColor));
 
         if (ShowIsometricPerspective)
@@ -101,14 +147,14 @@ public class AlienPlotView : View
 
         if (UseBrailleRendering)
         {
-            DrawBraillePlot(driver, width, height);
+            DrawBraillePlot(driver, width, height, dataSnapshot, minX, maxX, minY, maxY);
         }
         else
         {
-            DrawBlockPlot(driver, width, height);
+            DrawBlockPlot(driver, width, height, dataSnapshot, minX, maxX, minY, maxY);
         }
 
-        DrawFrame(driver, width, height);
+        DrawFrame(driver, width, height, dataSnapshot.Count, minY, maxY);
         DrawSweepLine(driver, width, height);
 
         return true;
@@ -118,10 +164,11 @@ public class AlienPlotView : View
     {
         driver.SetAttribute(new Attribute(DimColor, BackgroundColor));
 
+        // Draw horizontal grid lines with depth-based style
         for (int y = 0; y < height; y += GridSpacing)
         {
             float depth = (float)y / height;
-            char lineChar = depth < 0.3f ? '─' : depth < 0.6f ? '╌' : '┄';
+            char lineChar = depth < DepthThresholdSolid ? '─' : depth < DepthThresholdDashed ? '╌' : '┄';
             int indent = (int)(y * IsometricSkew);
 
             for (int x = indent; x < width - indent; x++)
@@ -130,6 +177,7 @@ public class AlienPlotView : View
             }
         }
 
+        // Draw vertical grid lines converging toward center
         int centerX = width / 2;
         for (int i = -5; i <= 5; i++)
         {
@@ -148,20 +196,37 @@ public class AlienPlotView : View
         }
     }
 
-    private void DrawBraillePlot(IConsoleDriver driver, int width, int height)
+    private void DrawBraillePlot(IConsoleDriver driver, int width, int height,
+        List<PointF> dataPoints, float minX, float maxX, float minY, float maxY)
     {
-        if (_dataPoints.Count == 0) return;
+        if (dataPoints.Count == 0) return;
 
+        // Braille characters are 2 dots wide x 4 dots tall per character cell
         int subWidth = width * 2;
         int subHeight = height * 4;
-        var brailleBuffer = new int[width, height];
+
+        // Reuse buffer if size matches, otherwise allocate new one
+        if (_brailleBuffer == null || _bufferWidth != width || _bufferHeight != height)
+        {
+            _brailleBuffer = new int[width, height];
+            _bufferWidth = width;
+            _bufferHeight = height;
+        }
+        else
+        {
+            // Clear the existing buffer
+            Array.Clear(_brailleBuffer, 0, _brailleBuffer.Length);
+        }
 
         driver.SetAttribute(new Attribute(PrimaryColor, BackgroundColor));
 
-        foreach (var point in _dataPoints)
+        float rangeX = maxX - minX;
+        float rangeY = maxY - minY;
+
+        foreach (var point in dataPoints)
         {
-            float normX = (_maxX - _minX) > 0 ? (point.X - _minX) / (_maxX - _minX) : 0;
-            float normY = (_maxY - _minY) > 0 ? (point.Y - _minY) / (_maxY - _minY) : 0;
+            float normX = rangeX > 0 ? (point.X - minX) / rangeX : 0;
+            float normY = rangeY > 0 ? (point.Y - minY) / rangeY : 0;
 
             int subX = (int)(normX * (subWidth - 1));
             int subY = (int)((1 - normY) * (subHeight - 1));
@@ -173,9 +238,12 @@ public class AlienPlotView : View
 
             if (cellX >= 0 && cellX < width && cellY >= 0 && cellY < height)
             {
+                // Map (dotX, dotY) to braille dot index using the BrailleDots array
+                // Braille dots are numbered oddly - dots 7,8 are at bottom, not 4,5
+                // This special case handles the column mapping correctly
                 int dotIndex = dotY + (dotX * 4);
                 if (dotIndex >= 4 && dotIndex < 6) dotIndex = dotY + 3;
-                brailleBuffer[cellX, cellY] |= BrailleDots[Math.Min(dotIndex, 7)];
+                _brailleBuffer[cellX, cellY] |= BrailleDots[Math.Min(dotIndex, 7)];
             }
         }
 
@@ -183,31 +251,35 @@ public class AlienPlotView : View
         {
             for (int cx = 0; cx < width; cx++)
             {
-                if (brailleBuffer[cx, cy] != 0)
+                if (_brailleBuffer[cx, cy] != 0)
                 {
-                    AddRune(cx, cy, (Rune)(char)(BrailleBase + brailleBuffer[cx, cy]));
+                    AddRune(cx, cy, (Rune)(char)(BrailleBase + _brailleBuffer[cx, cy]));
                 }
             }
         }
 
-        DrawConnectingLines(driver, width, height);
+        DrawConnectingLines(driver, width, height, dataPoints, minX, maxX, minY, maxY);
     }
 
-    private void DrawConnectingLines(IConsoleDriver driver, int width, int height)
+    private void DrawConnectingLines(IConsoleDriver driver, int width, int height,
+        List<PointF> dataPoints, float minX, float maxX, float minY, float maxY)
     {
-        if (_dataPoints.Count < 2) return;
+        if (dataPoints.Count < 2) return;
 
         driver.SetAttribute(new Attribute(PrimaryColor, BackgroundColor));
 
-        for (int i = 0; i < _dataPoints.Count - 1; i++)
-        {
-            var p1 = _dataPoints[i];
-            var p2 = _dataPoints[i + 1];
+        float rangeX = maxX - minX;
+        float rangeY = maxY - minY;
 
-            float x1 = ((_maxX - _minX) > 0 ? (p1.X - _minX) / (_maxX - _minX) : 0) * (width - 1);
-            float y1 = (1 - ((_maxY - _minY) > 0 ? (p1.Y - _minY) / (_maxY - _minY) : 0)) * (height - 1);
-            float x2 = ((_maxX - _minX) > 0 ? (p2.X - _minX) / (_maxX - _minX) : 0) * (width - 1);
-            float y2 = (1 - ((_maxY - _minY) > 0 ? (p2.Y - _minY) / (_maxY - _minY) : 0)) * (height - 1);
+        for (int i = 0; i < dataPoints.Count - 1; i++)
+        {
+            var p1 = dataPoints[i];
+            var p2 = dataPoints[i + 1];
+
+            float x1 = (rangeX > 0 ? (p1.X - minX) / rangeX : 0) * (width - 1);
+            float y1 = (1 - (rangeY > 0 ? (p1.Y - minY) / rangeY : 0)) * (height - 1);
+            float x2 = (rangeX > 0 ? (p2.X - minX) / rangeX : 0) * (width - 1);
+            float y2 = (1 - (rangeY > 0 ? (p2.Y - minY) / rangeY : 0)) * (height - 1);
 
             DrawLine((int)x1, (int)y1, (int)x2, (int)y2, width, height);
         }
@@ -246,16 +318,20 @@ public class AlienPlotView : View
         }
     }
 
-    private void DrawBlockPlot(IConsoleDriver driver, int width, int height)
+    private void DrawBlockPlot(IConsoleDriver driver, int width, int height,
+        List<PointF> dataPoints, float minX, float maxX, float minY, float maxY)
     {
-        if (_dataPoints.Count == 0) return;
+        if (dataPoints.Count == 0) return;
 
         driver.SetAttribute(new Attribute(PrimaryColor, BackgroundColor));
 
-        foreach (var point in _dataPoints)
+        float rangeX = maxX - minX;
+        float rangeY = maxY - minY;
+
+        foreach (var point in dataPoints)
         {
-            float normX = (_maxX - _minX) > 0 ? (point.X - _minX) / (_maxX - _minX) : 0;
-            float normY = (_maxY - _minY) > 0 ? (point.Y - _minY) / (_maxY - _minY) : 0;
+            float normX = rangeX > 0 ? (point.X - minX) / rangeX : 0;
+            float normY = rangeY > 0 ? (point.Y - minY) / rangeY : 0;
 
             int x = (int)(normX * (width - 1));
             int y = (int)((1 - normY) * (height - 1));
@@ -267,27 +343,31 @@ public class AlienPlotView : View
         }
     }
 
-    private void DrawFrame(IConsoleDriver driver, int width, int height)
+    private void DrawFrame(IConsoleDriver driver, int width, int height, int pointCount, float minY, float maxY)
     {
         driver.SetAttribute(new Attribute(SecondaryColor, BackgroundColor));
 
+        // Draw corners
         AddRune(0, 0, (Rune)'╔');
         AddRune(width - 1, 0, (Rune)'╗');
         AddRune(0, height - 1, (Rune)'╚');
         AddRune(width - 1, height - 1, (Rune)'╝');
 
+        // Draw horizontal edges with tick marks
         for (int x = 1; x < width - 1; x++)
         {
-            AddRune(x, 0, (Rune)(x % 10 == 0 ? '╦' : '═'));
-            AddRune(x, height - 1, (Rune)(x % 10 == 0 ? '╩' : '═'));
+            AddRune(x, 0, (Rune)(x % HorizontalTickInterval == 0 ? '╦' : '═'));
+            AddRune(x, height - 1, (Rune)(x % HorizontalTickInterval == 0 ? '╩' : '═'));
         }
 
+        // Draw vertical edges with tick marks
         for (int y = 1; y < height - 1; y++)
         {
-            AddRune(0, y, (Rune)(y % 5 == 0 ? '╠' : '║'));
-            AddRune(width - 1, y, (Rune)(y % 5 == 0 ? '╣' : '║'));
+            AddRune(0, y, (Rune)(y % VerticalTickInterval == 0 ? '╠' : '║'));
+            AddRune(width - 1, y, (Rune)(y % VerticalTickInterval == 0 ? '╣' : '║'));
         }
 
+        // Draw info labels if there's enough space
         if (width > 10 && height > 4)
         {
             driver.SetAttribute(new Attribute(PrimaryColor, BackgroundColor));
@@ -298,7 +378,7 @@ public class AlienPlotView : View
                 AddRune(2 + i, 1, (Rune)label[i]);
             }
 
-            string status = $"RNG:{_minY:F0}-{_maxY:F0} PTS:{_dataPoints.Count}";
+            string status = $"RNG:{minY:F0}-{maxY:F0} PTS:{pointCount}";
             for (int i = 0; i < status.Length && i < width - 4; i++)
             {
                 AddRune(2 + i, height - 2, (Rune)status[i]);

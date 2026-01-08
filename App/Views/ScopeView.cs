@@ -496,96 +496,17 @@ public class ScopeView : View
         string scaleInfo = _autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X";
         int totalSamples = seriesCopy.Sum(s => s.Samples.Count);
         string timeInfo = FormatElapsedTime(maxElapsedSeconds);
-        string modeInfo = _aliensMode ? "ALIENS" : "NORMAL";
+        string modeIndicator = _aliensMode ? "[A]" : "";
 
-        _statusLabel.Text = $"[SPACE] Pause  [+/-] Scale  [R] Auto  [A] {modeInfo}    TIME:{timeInfo}  SAMPLES:{totalSamples}";
-
-        // Clear previous annotations
-        _graphView.Annotations.Clear();
-        _graphView.Series.Clear();
+        _statusLabel.Text = $"[SPACE] Pause  [+/-] Scale  [R] Auto  [A] Mode {modeIndicator}   TIME:{timeInfo}  SAMPLES:{totalSamples}";
 
         // Determine the time range for x-axis
         double timeRangeSeconds = Math.Max(maxElapsedSeconds, 10);
 
-        if (seriesCopy.Any(s => s.Samples.Count > 0))
-        {
-            // Add path annotations for each series
-            foreach (var series in seriesCopy)
-            {
-                List<TimestampedSample> samples;
-                lock (_lock)
-                {
-                    samples = series.Samples.ToList();
-                }
-
-                if (samples.Count == 0) continue;
-
-                var points = new List<PointF>();
-                foreach (var sample in samples)
-                {
-                    var elapsedSeconds = (float)(sample.Timestamp - _startTime).TotalSeconds;
-                    points.Add(new PointF(elapsedSeconds, sample.Value));
-                }
-
-                var path = new PathAnnotation
-                {
-                    Points = points,
-                    LineColor = new Attribute(series.LineColor, theme.Background),
-                    BeforeSeries = false
-                };
-                _graphView.Annotations.Add(path);
-            }
-
-            // Configure graph scaling
-            float valueRange = visibleMax - visibleMin;
-            if (valueRange < 1) valueRange = 1;
-
-            int graphWidth = Math.Max(1, _graphView.Frame.Width - (int)_graphView.MarginLeft - 2);
-            int graphHeight = Math.Max(1, _graphView.Frame.Height - (int)_graphView.MarginBottom - 2);
-
-            float cellSizeX = (float)timeRangeSeconds / Math.Max(1, graphWidth);
-            float cellSizeY = valueRange / Math.Max(1, graphHeight);
-
-            _graphView.CellSize = new PointF(
-                Math.Max(0.01f, cellSizeX),
-                Math.Max(0.1f, cellSizeY)
-            );
-
-            _graphView.ScrollOffset = new PointF(0, visibleMin);
-
-            // Configure axis labels
-            _graphView.AxisX.Increment = (float)Math.Max(1, timeRangeSeconds / 5);
-            _graphView.AxisX.ShowLabelsEvery = 1;
-            _graphView.AxisX.Minimum = 0;
-            _graphView.AxisX.LabelGetter = v => FormatTimeAxisLabel(v.Value);
-
-            float yIncrement = valueRange / 4;
-            _graphView.AxisY.Increment = yIncrement > 0 ? yIncrement : 10;
-            _graphView.AxisY.ShowLabelsEvery = 1;
-            _graphView.AxisY.LabelGetter = v => FormatAxisValue((float)v.Value);
-        }
-        else
-        {
-            // No data - show default range
-            _graphView.CellSize = new PointF(1, 1);
-            _graphView.ScrollOffset = new PointF(0, 0);
-            _graphView.AxisX.Increment = 10;
-            _graphView.AxisY.Increment = 10;
-
-            // Add "No Signal" annotation
-            var noSignalAnnotation = new TextAnnotation
-            {
-                Text = theme.NoSignalMessage,
-                GraphPosition = new PointF(10, 50)
-            };
-            _graphView.Annotations.Add(noSignalAnnotation);
-        }
-
-        _graphView.SetNeedsLayout();
-
-        // Update AlienPlotView with combined data from all series
+        // Update AlienPlotView or GraphView based on current mode
         if (_aliensMode)
         {
+            // Aliens mode: update AlienPlotView with combined data from all series
             var allPoints = new List<PointF>();
             foreach (var series in seriesCopy)
             {
@@ -603,6 +524,88 @@ public class ScopeView : View
             // Sort points by X (time) for proper line drawing
             allPoints.Sort((a, b) => a.X.CompareTo(b.X));
             _alienPlotView.SetData(allPoints);
+        }
+        else
+        {
+            // Normal mode: update GraphView
+            _graphView.Annotations.Clear();
+            _graphView.Series.Clear();
+
+            if (seriesCopy.Any(s => s.Samples.Count > 0))
+            {
+                // Add path annotations for each series
+                foreach (var series in seriesCopy)
+                {
+                    List<TimestampedSample> samples;
+                    lock (_lock)
+                    {
+                        samples = series.Samples.ToList();
+                    }
+
+                    if (samples.Count == 0) continue;
+
+                    var points = new List<PointF>();
+                    foreach (var sample in samples)
+                    {
+                        var elapsedSeconds = (float)(sample.Timestamp - _startTime).TotalSeconds;
+                        points.Add(new PointF(elapsedSeconds, sample.Value));
+                    }
+
+                    var path = new PathAnnotation
+                    {
+                        Points = points,
+                        LineColor = new Attribute(series.LineColor, theme.Background),
+                        BeforeSeries = false
+                    };
+                    _graphView.Annotations.Add(path);
+                }
+
+                // Configure graph scaling
+                float valueRange = visibleMax - visibleMin;
+                if (valueRange < 1) valueRange = 1;
+
+                int graphWidth = Math.Max(1, _graphView.Frame.Width - (int)_graphView.MarginLeft - 2);
+                int graphHeight = Math.Max(1, _graphView.Frame.Height - (int)_graphView.MarginBottom - 2);
+
+                float cellSizeX = (float)timeRangeSeconds / Math.Max(1, graphWidth);
+                float cellSizeY = valueRange / Math.Max(1, graphHeight);
+
+                _graphView.CellSize = new PointF(
+                    Math.Max(0.01f, cellSizeX),
+                    Math.Max(0.1f, cellSizeY)
+                );
+
+                _graphView.ScrollOffset = new PointF(0, visibleMin);
+
+                // Configure axis labels
+                _graphView.AxisX.Increment = (float)Math.Max(1, timeRangeSeconds / 5);
+                _graphView.AxisX.ShowLabelsEvery = 1;
+                _graphView.AxisX.Minimum = 0;
+                _graphView.AxisX.LabelGetter = v => FormatTimeAxisLabel(v.Value);
+
+                float yIncrement = valueRange / 4;
+                _graphView.AxisY.Increment = yIncrement > 0 ? yIncrement : 10;
+                _graphView.AxisY.ShowLabelsEvery = 1;
+                _graphView.AxisY.LabelGetter = v => FormatAxisValue((float)v.Value);
+            }
+            else
+            {
+                // No data - show default range
+                _graphView.CellSize = new PointF(1, 1);
+                _graphView.ScrollOffset = new PointF(0, 0);
+                _graphView.AxisX.Increment = 10;
+                _graphView.AxisY.Increment = 10;
+
+                // Add "No Signal" annotation
+                var noSignalAnnotation = new TextAnnotation
+                {
+                    Text = theme.NoSignalMessage,
+                    GraphPosition = new PointF(10, 50)
+                };
+                _graphView.Annotations.Add(noSignalAnnotation);
+            }
+
+            _graphView.SetNeedsLayout();
         }
     }
 
