@@ -60,6 +60,10 @@ public class ScopeView : View
     private DateTime _startTime;
     private readonly double _timeWindowSeconds = DefaultTimeWindowSeconds;
 
+    // Aliens mode
+    private bool _aliensMode;
+    private readonly AlienPlotView _alienPlotView;
+
     // GraphView and annotations
     private readonly GraphView _graphView;
     private readonly Label _headerLabel;
@@ -72,9 +76,19 @@ public class ScopeView : View
     public event Action<bool>? PauseStateChanged;
 
     /// <summary>
+    /// Event fired when aliens mode state changes.
+    /// </summary>
+    public event Action<bool>? AliensModeChanged;
+
+    /// <summary>
     /// Gets whether the plot is currently paused.
     /// </summary>
     public bool IsPaused => _isPaused;
+
+    /// <summary>
+    /// Gets whether aliens mode is currently active.
+    /// </summary>
+    public bool IsAliensMode => _aliensMode;
 
     public ScopeView()
     {
@@ -121,6 +135,16 @@ public class ScopeView : View
             CanFocus = false
         };
 
+        // Create the AlienPlotView (hidden by default)
+        _alienPlotView = new AlienPlotView
+        {
+            X = 0,
+            Y = 2,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(2),
+            Visible = false
+        };
+
         // Configure axes
         _graphView.AxisX.Increment = 10;
         _graphView.AxisX.ShowLabelsEvery = 1;
@@ -145,7 +169,7 @@ public class ScopeView : View
             TextAlignment = Alignment.Center
         };
 
-        Add(_headerLabel, _legendLabel, _graphView, _statusLabel);
+        Add(_headerLabel, _legendLabel, _graphView, _alienPlotView, _statusLabel);
 
         // Apply initial theme
         ApplyTheme();
@@ -368,6 +392,13 @@ public class ScopeView : View
     private bool OnTimerTick()
     {
         _frameCount++;
+
+        // Animate sweep line when aliens mode is active
+        if (_aliensMode)
+        {
+            _alienPlotView.AnimateTick();
+        }
+
         UpdateGraph();
         SetNeedsLayout();
         return true; // Keep timer running
@@ -465,8 +496,9 @@ public class ScopeView : View
         string scaleInfo = _autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X";
         int totalSamples = seriesCopy.Sum(s => s.Samples.Count);
         string timeInfo = FormatElapsedTime(maxElapsedSeconds);
+        string modeInfo = _aliensMode ? "ALIENS" : "NORMAL";
 
-        _statusLabel.Text = $"[SPACE] Pause  [+/-] Scale  [R] Auto    SCALE:{scaleInfo}  TIME:{timeInfo}  SAMPLES:{totalSamples}";
+        _statusLabel.Text = $"[SPACE] Pause  [+/-] Scale  [R] Auto  [A] {modeInfo}    TIME:{timeInfo}  SAMPLES:{totalSamples}";
 
         // Clear previous annotations
         _graphView.Annotations.Clear();
@@ -550,6 +582,28 @@ public class ScopeView : View
         }
 
         _graphView.SetNeedsLayout();
+
+        // Update AlienPlotView with combined data from all series
+        if (_aliensMode)
+        {
+            var allPoints = new List<PointF>();
+            foreach (var series in seriesCopy)
+            {
+                List<TimestampedSample> samples;
+                lock (_lock)
+                {
+                    samples = series.Samples.ToList();
+                }
+                foreach (var sample in samples)
+                {
+                    var elapsedSeconds = (float)(sample.Timestamp - _startTime).TotalSeconds;
+                    allPoints.Add(new PointF(elapsedSeconds, sample.Value));
+                }
+            }
+            // Sort points by X (time) for proper line drawing
+            allPoints.Sort((a, b) => a.X.CompareTo(b.X));
+            _alienPlotView.SetData(allPoints);
+        }
     }
 
     private static string GetColorName(Terminal.Gui.Color color)
@@ -585,6 +639,19 @@ public class ScopeView : View
     {
         _isPaused = !_isPaused;
         PauseStateChanged?.Invoke(_isPaused);
+        UpdateGraph();
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Toggles aliens mode (sci-fi visualization).
+    /// </summary>
+    public void ToggleAliensMode()
+    {
+        _aliensMode = !_aliensMode;
+        _graphView.Visible = !_aliensMode;
+        _alienPlotView.Visible = _aliensMode;
+        AliensModeChanged?.Invoke(_aliensMode);
         UpdateGraph();
         SetNeedsLayout();
     }
@@ -645,6 +712,11 @@ public class ScopeView : View
             case (KeyCode)'r':
             case (KeyCode)'R':
                 ResetScale();
+                return true;
+
+            case (KeyCode)'a':
+            case (KeyCode)'A':
+                ToggleAliensMode();
                 return true;
         }
 

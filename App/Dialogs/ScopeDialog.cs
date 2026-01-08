@@ -16,6 +16,7 @@ public class ScopeDialog : Dialog
     private readonly ScopeView _scopeView;
     private readonly Button _closeButton;
     private readonly Button _pauseButton;
+    private readonly Button _aliensModeButton;
 
     // Theme-aware accessor
     private AppTheme Theme => ThemeManager.Current;
@@ -60,16 +61,25 @@ public class ScopeDialog : Dialog
         };
         _pauseButton.Accepting += OnPauseToggle;
 
-        _closeButton = new Button
+        _aliensModeButton = new Button
         {
             X = Pos.Right(_pauseButton) + 2,
+            Y = 0,
+            Text = $"{Theme.ButtonPrefix}ALIENS{Theme.ButtonSuffix}",
+            ColorScheme = Theme.ButtonColorScheme
+        };
+        _aliensModeButton.Accepting += OnAliensModeToggle;
+
+        _closeButton = new Button
+        {
+            X = Pos.Right(_aliensModeButton) + 2,
             Y = 0,
             Text = $"{Theme.ButtonPrefix}CLOSE{Theme.ButtonSuffix}",
             ColorScheme = Theme.ButtonColorScheme
         };
         _closeButton.Accepting += (_, _) => Application.RequestStop();
 
-        buttonFrame.Add(_pauseButton, _closeButton);
+        buttonFrame.Add(_pauseButton, _aliensModeButton, _closeButton);
 
         Add(_scopeView, buttonFrame);
 
@@ -78,6 +88,9 @@ public class ScopeDialog : Dialog
 
         // Subscribe to pause state changes to update button text
         _scopeView.PauseStateChanged += OnPauseStateChanged;
+
+        // Subscribe to aliens mode state changes to update button text
+        _scopeView.AliensModeChanged += OnAliensModeStateChanged;
 
         // Bind to all selected nodes
         _scopeView.BindToNodes(selectedNodes, subscriptionManager);
@@ -100,6 +113,21 @@ public class ScopeDialog : Dialog
         });
     }
 
+    private void OnAliensModeToggle(object? _, CommandEventArgs _1)
+    {
+        _scopeView.ToggleAliensMode();
+    }
+
+    private void OnAliensModeStateChanged(bool isAliensMode)
+    {
+        Application.Invoke(() =>
+        {
+            _aliensModeButton.Text = isAliensMode
+                ? $"{Theme.ButtonPrefix}NORMAL{Theme.ButtonSuffix}"
+                : $"{Theme.ButtonPrefix}ALIENS{Theme.ButtonSuffix}";
+        });
+    }
+
     private void OnThemeChanged(AppTheme theme)
     {
         Application.Invoke(() =>
@@ -112,6 +140,11 @@ public class ScopeDialog : Dialog
                 ? $"{theme.ButtonPrefix}RESUME{theme.ButtonSuffix}"
                 : $"{theme.ButtonPrefix}PAUSE{theme.ButtonSuffix}";
             _pauseButton.ColorScheme = theme.ButtonColorScheme;
+
+            _aliensModeButton.Text = _scopeView.IsAliensMode
+                ? $"{theme.ButtonPrefix}NORMAL{theme.ButtonSuffix}"
+                : $"{theme.ButtonPrefix}ALIENS{theme.ButtonSuffix}";
+            _aliensModeButton.ColorScheme = theme.ButtonColorScheme;
 
             _closeButton.Text = $"{theme.ButtonPrefix}CLOSE{theme.ButtonSuffix}";
             _closeButton.ColorScheme = theme.ButtonColorScheme;
@@ -126,6 +159,7 @@ public class ScopeDialog : Dialog
         {
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _scopeView.PauseStateChanged -= OnPauseStateChanged;
+            _scopeView.AliensModeChanged -= OnAliensModeStateChanged;
             _scopeView.Dispose();
         }
         base.Dispose(disposing);
