@@ -282,15 +282,67 @@ Opcilloscope is designed for keyboard efficiency:
 
 ---
 
-## Suggested Launch Channels
+## Launch Channels
 
-1. **Developer Communities**: Hacker News, Reddit r/PLC, r/SCADA, r/homelab
-2. **Industrial Forums**: PLCTalk, Control.com, Automation World
-3. **Technical Blogs**: Medium, Dev.to, personal blogs
-4. **LinkedIn**: Industrial automation groups, DevOps communities
-5. **GitHub**: Trending repositories, awesome-lists
-6. **YouTube**: Demo videos, tutorials, feature walkthroughs
-7. **Podcasts**: Automation, DevOps, and manufacturing technology podcasts
+### Primary Channels (Priority)
+
+| Channel | Platform | Target Audience | Content Strategy |
+|---------|----------|-----------------|------------------|
+| **SASE Slack** | Slack | Industrial automation professionals | Announce in relevant channels, share use cases, engage in discussions |
+| **LinkedIn** | Social | Automation engineers, managers, integrators | Professional posts, demo videos, thought leadership articles |
+| **OTEE Discord** | Discord | OT/ICS security and engineering community | Technical deep-dives, live demos, community engagement |
+| **Reddit r/commandline** | Reddit | CLI enthusiasts, terminal power users | Show terminal-native workflow, highlight keyboard efficiency |
+| **Self-Hosted Blog** | Web | Organic search, direct traffic | SEO-optimized tutorials, release announcements, use case stories |
+| **Email Newsletter** | Email | Engaged prospects, existing users | Release notes, tips & tricks, industry insights |
+| **GitHub** | Open Source | Developers, contributors, technical evaluators | README optimization, awesome-list submissions, community building |
+
+### Secondary Channels (Industrial Automation Communities)
+
+| Community | Platform | Focus | Notes |
+|-----------|----------|-------|-------|
+| **PLCTalk Forum** | Forum | PLC programming, industrial automation | Long-standing community, high engagement |
+| **Reddit r/PLC** | Reddit | PLC/automation discussion | 50K+ members, active daily |
+| **Reddit r/SCADA** | Reddit | SCADA systems, industrial control | Niche but highly targeted |
+| **Reddit r/IndustrialAutomation** | Reddit | Broader automation topics | Growing community |
+| **Control.com** | Forum | Process control, instrumentation | Professional engineers |
+| **Automation World** | News/Forum | Manufacturing automation news | Industry publication with community |
+| **ISA (International Society of Automation)** | Professional | Automation standards, education | Professional network, local chapters |
+| **OPC Foundation Community** | Forum | OPC UA specifically | Directly relevant, technical audience |
+| **Ignition Forum (Inductive Automation)** | Forum | Ignition/SCADA users | Often need OPC UA tools |
+| **Codesys Forum** | Forum | IEC 61131-3, PLC development | Technical automation developers |
+
+### Developer & DevOps Communities
+
+| Community | Platform | Angle |
+|-----------|----------|-------|
+| **Hacker News** | News | "Show HN" post, technical differentiators |
+| **Reddit r/selfhosted** | Reddit | Self-hosted monitoring, homelab use cases |
+| **Reddit r/homelab** | Reddit | Industrial protocol monitoring for enthusiasts |
+| **Dev.to** | Blog | Technical tutorials, launch announcement |
+| **Lobsters** | News | Technical deep-dive, open source focus |
+| **ICS/OT Security Twitter/X** | Social | Security angle, protocol visibility |
+
+### Content Calendar Suggestions
+
+**Week 1 (Soft Launch)**
+- GitHub README polish, awesome-list PRs
+- Blog post: "Why We Built opcilloscope"
+- Email to existing contacts
+
+**Week 2 (Community Launch)**
+- SASE Slack announcement
+- OTEE Discord introduction
+- Reddit r/commandline "Show r/commandline" post
+
+**Week 3 (Professional Launch)**
+- LinkedIn announcement + demo video
+- PLCTalk forum post
+- Reddit r/PLC, r/SCADA posts
+
+**Week 4 (Expansion)**
+- Hacker News "Show HN"
+- Dev.to technical article
+- Control.com, OPC Foundation forums
 
 ---
 
