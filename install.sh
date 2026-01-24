@@ -2,9 +2,9 @@
 set -e
 
 # Opcilloscope installer for Linux and macOS
-# Usage: curl -fsSL https://raw.githubusercontent.com/BrettKinny/Opcilloscope/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.sh | bash
 
-REPO="BrettKinny/Opcilloscope"
+REPO="SquareWaveSystems/opcilloscope"
 INSTALL_DIR="${OPCILLOSCOPE_INSTALL_DIR:-$HOME/.local/bin}"
 
 # Colors

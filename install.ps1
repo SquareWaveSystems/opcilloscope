@@ -1,9 +1,9 @@
 # Opcilloscope installer for Windows
-# Usage: irm https://raw.githubusercontent.com/BrettKinny/Opcilloscope/main/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
-$Repo = "BrettKinny/Opcilloscope"
+$Repo = "SquareWaveSystems/opcilloscope"
 $InstallDir = if ($env:OPCILLOSCOPE_INSTALL_DIR) { $env:OPCILLOSCOPE_INSTALL_DIR } else { "$env:LOCALAPPDATA\Opcilloscope" }
 
 function Write-Info { param($Message) Write-Host "[INFO] $Message" -ForegroundColor Green }

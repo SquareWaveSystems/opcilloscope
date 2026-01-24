@@ -58,17 +58,17 @@ Save your connection and subscriptions to a config file. Load it next time to pi
 
 **Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BrettKinny/opcilloscope/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/BrettKinny/opcilloscope/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.ps1 | iex
 ```
 
 ### Or Download a Release
 
-Grab the latest from [GitHub Releases](https://github.com/BrettKinny/opcilloscope/releases):
+Grab the latest from [GitHub Releases](https://github.com/SquareWaveSystems/opcilloscope/releases):
 
 | Platform | File |
 |----------|------|
@@ -82,7 +82,7 @@ Grab the latest from [GitHub Releases](https://github.com/BrettKinny/opcilloscop
 ### Build From Source
 
 ```bash
-git clone https://github.com/BrettKinny/opcilloscope.git
+git clone https://github.com/SquareWaveSystems/opcilloscope.git
 cd opcilloscope
 dotnet build
 dotnet run
