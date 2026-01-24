@@ -1,5 +1,6 @@
 using System.Reflection;
 using Terminal.Gui;
+using Opcilloscope.App.Keybindings;
 using Opcilloscope.App.Views;
 using Opcilloscope.App.Dialogs;
 using Opcilloscope.App.Themes;
@@ -14,8 +15,9 @@ namespace Opcilloscope.App;
 
 /// <summary>
 /// Main application window with layout orchestration.
+/// Implements lazygit-inspired keybinding system.
 /// </summary>
-public class MainWindow : Toplevel
+public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 {
     private readonly Logger _logger;
     private readonly ConnectionManager _connectionManager;
@@ -47,6 +49,9 @@ public class MainWindow : Toplevel
     // Focus tracking for context-aware UI
     private View? _focusedPanel;
     private FocusManager? _focusManager;
+
+    // Lazygit-inspired keybinding system
+    private readonly KeybindingManager _keybindingManager;
 
     public MainWindow()
     {
@@ -194,6 +199,10 @@ public class MainWindow : Toplevel
         _monitoredVariablesView.TrendPlotRequested += OnTrendPlotRequested;
         _monitoredVariablesView.ScopeRequested += LaunchScope;
         _monitoredVariablesView.RecordToggleRequested += ToggleRecording;
+
+        // Initialize lazygit-inspired keybinding system
+        _keybindingManager = new KeybindingManager();
+        DefaultKeybindings.Configure(_keybindingManager, this);
 
         // Focus tracking using polling-based FocusManager (workaround for Terminal.Gui v2 Enter event instability)
         // Only track the two interactive panes (AddressSpace and MonitoredVariables)
@@ -566,6 +575,14 @@ public class MainWindow : Toplevel
             UpdatePanelBorder(panel, isFocused: true);
         }
 
+        // Update keybinding context based on focused panel
+        _keybindingManager.CurrentContext = panel switch
+        {
+            AddressSpaceView => KeybindingContext.AddressSpace,
+            MonitoredVariablesView => KeybindingContext.MonitoredVariables,
+            _ => KeybindingContext.Global
+        };
+
         // Update status bar shortcuts based on focused panel
         UpdateStatusBarShortcuts();
     }
@@ -588,6 +605,7 @@ public class MainWindow : Toplevel
 
     /// <summary>
     /// Updates the status bar shortcuts based on which panel has focus.
+    /// Uses the KeybindingManager for context-aware shortcuts (lazygit-inspired).
     /// </summary>
     private void UpdateStatusBarShortcuts()
     {
@@ -601,30 +619,14 @@ public class MainWindow : Toplevel
             _statusBar.Remove(item);
         }
 
-        // Always add global shortcuts first
-        _statusBar.Add(new Shortcut(Key.F1, "Help", ShowHelp));
-        _statusBar.Add(new Shortcut(Key.Tab, "Switch", () => _focusManager?.FocusNext()));
-        _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
+        // Add shortcuts from keybinding manager (context-aware)
+        foreach (var binding in _keybindingManager.GetStatusBarBindings())
+        {
+            _statusBar.Add(new Shortcut(binding.Key, binding.Label, binding.Handler));
+        }
 
-        // Add context-specific shortcuts based on focused panel
-        if (_focusedPanel == _addressSpaceView)
-        {
-            _statusBar.Add(new Shortcut(Key.Enter, "Subscribe", SubscribeSelected));
-            _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
-        }
-        else if (_focusedPanel == _monitoredVariablesView)
-        {
-            _statusBar.Add(new Shortcut(Key.Delete, "Unsub", UnsubscribeSelected));
-            _statusBar.Add(new Shortcut(Key.Space, "Sel", () => { })); // Handled by view
-            _statusBar.Add(new Shortcut(Key.W, "Write", WriteSelected));
-            _statusBar.Add(new Shortcut(Key.T, "Trend", ShowTrendForSelected));
-            _statusBar.Add(new Shortcut(Key.S, "Scope", LaunchScope));
-        }
-        else
-        {
-            // Default: show refresh
-            _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
-        }
+        // Add ? hint for quick help (always show)
+        _statusBar.Add(new Shortcut((Key)'?', "?", ShowQuickHelp));
 
         _statusBar.SetNeedsLayout();
     }
@@ -641,15 +643,31 @@ public class MainWindow : Toplevel
         }
     }
 
+    /// <summary>
+    /// Shows context-sensitive quick help overlay (lazygit-inspired ? menu).
+    /// </summary>
+    private void ShowQuickHelp()
+    {
+        var dialog = new QuickHelpDialog(_keybindingManager);
+        Application.Run(dialog);
+    }
+
     #endregion
 
     #region Global Keyboard Shortcuts
 
     /// <summary>
-    /// Handles global keyboard shortcuts for pane navigation.
+    /// Handles global keyboard shortcuts using lazygit-inspired keybinding manager.
     /// </summary>
     protected override bool OnKeyDown(Key key)
     {
+        // ? key for quick help (check before keybinding manager)
+        if (key.KeyCode == (KeyCode)'?')
+        {
+            ShowQuickHelp();
+            return true;
+        }
+
         // Tab: Cycle between panes
         if (key == Key.Tab)
         {
@@ -1052,7 +1070,7 @@ public class MainWindow : Toplevel
 
     private void ShowHelp()
     {
-        var dialog = new HelpDialog();
+        var dialog = new HelpDialog(_keybindingManager);
         Application.Run(dialog);
     }
 
@@ -1334,6 +1352,29 @@ License: MIT
             return false;
         });
     }
+
+    #endregion
+
+    #region IKeybindingActions Implementation
+
+    void DefaultKeybindings.IKeybindingActions.SwitchPane() => _focusManager?.FocusNext();
+    void DefaultKeybindings.IKeybindingActions.ShowHelp() => ShowHelp();
+    void DefaultKeybindings.IKeybindingActions.ShowQuickHelp() => ShowQuickHelp();
+    void DefaultKeybindings.IKeybindingActions.OpenMenu() => _menuBar.OpenMenu();
+    void DefaultKeybindings.IKeybindingActions.SubscribeSelected() => SubscribeSelected();
+    void DefaultKeybindings.IKeybindingActions.RefreshTree() => RefreshTree();
+    void DefaultKeybindings.IKeybindingActions.UnsubscribeSelected() => UnsubscribeSelected();
+    void DefaultKeybindings.IKeybindingActions.ToggleScopeSelection() { /* Handled by MonitoredVariablesView */ }
+    void DefaultKeybindings.IKeybindingActions.WriteToSelected() => WriteSelected();
+    void DefaultKeybindings.IKeybindingActions.ShowTrendPlot() => ShowTrendForSelected();
+    void DefaultKeybindings.IKeybindingActions.OpenScope() => LaunchScope();
+    void DefaultKeybindings.IKeybindingActions.OpenConfig() => OpenConfig();
+    void DefaultKeybindings.IKeybindingActions.SaveConfig() => SaveConfig();
+    void DefaultKeybindings.IKeybindingActions.SaveConfigAs() => SaveConfigAs();
+    void DefaultKeybindings.IKeybindingActions.ToggleRecording() => ToggleRecording();
+    void DefaultKeybindings.IKeybindingActions.Connect() => ShowConnectDialog();
+    void DefaultKeybindings.IKeybindingActions.Disconnect() => Disconnect();
+    void DefaultKeybindings.IKeybindingActions.Quit() => RequestStop();
 
     #endregion
 

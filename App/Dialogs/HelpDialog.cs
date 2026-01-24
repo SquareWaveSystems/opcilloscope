@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.App.Keybindings;
 using Opcilloscope.App.Themes;
 using Attribute = Terminal.Gui.Attribute;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
@@ -7,11 +8,16 @@ namespace Opcilloscope.App.Dialogs;
 
 /// <summary>
 /// Help dialog displaying all keyboard shortcuts in a formatted layout.
+/// Can auto-generate help from KeybindingManager or use static content.
 /// </summary>
 public class HelpDialog : Dialog
 {
-    public HelpDialog()
+    private readonly KeybindingManager? _keybindingManager;
+
+    public HelpDialog(KeybindingManager? keybindingManager = null)
     {
+        _keybindingManager = keybindingManager;
+
         Title = " opcilloscope - Help ";
         Width = 64;
         Height = 34;
@@ -41,10 +47,68 @@ public class HelpDialog : Dialog
             }
         };
 
-        contentView.Text = @"
+        contentView.Text = keybindingManager != null
+            ? GenerateHelpFromBindings(keybindingManager)
+            : GetStaticHelpText();
+
+        // OK button
+        var okButton = new Button
+        {
+            Text = "OK",
+            X = Pos.Center(),
+            Y = Pos.AnchorEnd(1),
+            IsDefault = true,
+            ColorScheme = theme.ButtonColorScheme
+        };
+        okButton.Accepting += (_, _) => RequestStop();
+
+        Add(contentView);
+        Add(okButton);
+
+        // Subscribe to theme changes
+        ThemeManager.ThemeChanged += OnThemeChanged;
+    }
+
+    /// <summary>
+    /// Generates help text from the KeybindingManager.
+    /// </summary>
+    private static string GenerateHelpFromBindings(KeybindingManager manager)
+    {
+        var lines = new List<string> { "" };
+
+        foreach (var group in manager.GetAllBindingsGroupedByCategory())
+        {
+            lines.Add(group.Key.ToUpperInvariant());
+
+            foreach (var binding in group.OrderBy(b => b.StatusBarPriority))
+            {
+                var keyDisplay = binding.KeyDisplay.PadRight(16);
+                lines.Add($"  {keyDisplay}{binding.Description}");
+            }
+
+            lines.Add("");
+        }
+
+        // Add tips section
+        lines.Add("TIPS");
+        lines.Add("  - Press ? for context-sensitive quick help");
+        lines.Add("  - Only Variable nodes can be subscribed");
+        lines.Add("  - Select up to 5 variables for Scope/Recording");
+        lines.Add("  - Status bar shows context-specific shortcuts");
+
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// Returns static help text (fallback when no KeybindingManager is provided).
+    /// </summary>
+    private static string GetStaticHelpText()
+    {
+        return @"
 NAVIGATION
   Tab              Switch between panes
   Arrow Keys       Navigate within pane
+  ?                Context-sensitive quick help
 
 ADDRESS SPACE
   Enter            Subscribe to selected node
@@ -73,27 +137,11 @@ APPLICATION
   Ctrl+Q           Quit
 
 TIPS
+  - Press ? for context-sensitive quick help
   - Only Variable nodes can be subscribed
   - Select up to 5 variables for Scope/Recording
   - Status bar shows context-specific shortcuts
 ";
-
-        // OK button
-        var okButton = new Button
-        {
-            Text = "OK",
-            X = Pos.Center(),
-            Y = Pos.AnchorEnd(1),
-            IsDefault = true,
-            ColorScheme = theme.ButtonColorScheme
-        };
-        okButton.Accepting += (_, _) => RequestStop();
-
-        Add(contentView);
-        Add(okButton);
-
-        // Subscribe to theme changes
-        ThemeManager.ThemeChanged += OnThemeChanged;
     }
 
     private void OnThemeChanged(AppTheme theme)
