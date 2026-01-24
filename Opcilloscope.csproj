@@ -11,8 +11,8 @@
     <!-- Package metadata (Version is driven by MinVer from Git tags) -->
     <Authors>Brett Kinny</Authors>
     <Description>A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data.</Description>
-    <PackageProjectUrl>https://github.com/BrettKinny/Opcilloscope</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/BrettKinny/Opcilloscope.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/SquareWaveSystems/opcilloscope</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SquareWaveSystems/opcilloscope.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>opcua;opc-ua;terminal;tui;industrial;automation;scada</PackageTags>

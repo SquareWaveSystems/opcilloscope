@@ -197,12 +197,12 @@ JSON-based `.cfg` files containing:
 
 ### Linux/macOS
 ```bash
-curl -fsSL https://github.com/BrettKinny/opcilloscope/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/SquareWaveSystems/opcilloscope/releases/latest/download/install.sh | bash
 ```
 
 ### Windows (PowerShell)
 ```powershell
-iwr -useb https://github.com/BrettKinny/opcilloscope/releases/latest/download/install.ps1 | iex
+iwr -useb https://github.com/SquareWaveSystems/opcilloscope/releases/latest/download/install.ps1 | iex
 ```
 
 ### Manual Download
@@ -381,8 +381,8 @@ Opcilloscope is designed for keyboard efficiency:
 
 For questions about this document or opcilloscope:
 
-- **GitHub**: https://github.com/BrettKinny/opcilloscope
-- **Issues**: https://github.com/BrettKinny/opcilloscope/issues
+- **GitHub**: https://github.com/SquareWaveSystems/opcilloscope
+- **Issues**: https://github.com/SquareWaveSystems/opcilloscope/issues
 - **Company**: Square Wave Systems
 
 ---
