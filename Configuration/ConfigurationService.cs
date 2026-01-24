@@ -51,6 +51,11 @@ public class ConfigurationService
     }
 
     /// <summary>
+    /// Maximum allowed configuration file size (1 MB).
+    /// </summary>
+    private const long MaxConfigFileSizeBytes = 1024 * 1024;
+
+    /// <summary>
     /// Loads a configuration from the specified file path.
     /// </summary>
     /// <param name="filePath">Path to the configuration file.</param>
@@ -58,6 +63,14 @@ public class ConfigurationService
     /// <exception cref="InvalidDataException">Thrown if the file contains invalid data.</exception>
     public async Task<OpcilloscopeConfig> LoadAsync(string filePath)
     {
+        // Validate file size before reading to prevent memory exhaustion
+        var fileInfo = new FileInfo(filePath);
+        if (fileInfo.Length > MaxConfigFileSizeBytes)
+        {
+            throw new InvalidDataException(
+                $"Configuration file too large: {fileInfo.Length:N0} bytes (maximum: {MaxConfigFileSizeBytes:N0} bytes)");
+        }
+
         var json = await File.ReadAllTextAsync(filePath);
         var config = JsonSerializer.Deserialize(json, OpcilloscopeJsonContext.Default.OpcilloscopeConfig)
             ?? throw new InvalidDataException("Invalid configuration file");

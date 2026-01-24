@@ -170,7 +170,7 @@ public class NodeBrowser
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             // Data type lookup failure is non-critical - node will still be displayed
-            System.Diagnostics.Debug.WriteLine($"Data type lookup failed for {nodeId}: {ex.Message}");
+            _logger.Warning($"Data type lookup failed for {nodeId}: {ex.Message}");
         }
 
         return null;
@@ -403,7 +403,7 @@ public class NodeBrowser
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             // Fall back to NodeId string representation
-            System.Diagnostics.Debug.WriteLine($"Could not resolve data type name for {dataTypeId}: {ex.Message}");
+            _logger.Warning($"Could not resolve data type name for {dataTypeId}: {ex.Message}");
         }
 
         return dataTypeId.ToString();

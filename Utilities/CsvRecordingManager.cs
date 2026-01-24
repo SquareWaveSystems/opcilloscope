@@ -277,23 +277,47 @@ public class CsvRecordingManager : IDisposable
                 return;
             }
 
-            // Signal background task to stop
-            _cancellationTokenSource?.Cancel();
+            _isRecording = false;
             taskToWait = _writeTask;
             ctsToDispose = _cancellationTokenSource;
-            _isRecording = false;
         }
 
-        // Wait for background task outside of lock to avoid deadlock
-        try
+        // 1. Signal cancellation BEFORE waiting
+        ctsToDispose?.Cancel();
+
+        // 2. Wait for write loop to complete with timeout
+        // This must happen BEFORE disposing the writer to prevent ObjectDisposedException
+        bool taskCompleted = false;
+        if (taskToWait != null)
         {
-            taskToWait?.Wait(TimeSpan.FromSeconds(5));
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"Error waiting for background writer: {ex.Message}");
+            try
+            {
+                // Wait with a reasonable timeout - if the task doesn't complete,
+                // we still need to clean up, but the writer access is protected by the lock
+                taskCompleted = taskToWait.Wait(TimeSpan.FromSeconds(10));
+                if (!taskCompleted)
+                {
+                    _logger.Warning("Background writer task did not complete within timeout");
+                }
+            }
+            catch (AggregateException ex)
+            {
+                // Task.Wait wraps exceptions in AggregateException
+                foreach (var inner in ex.InnerExceptions)
+                {
+                    if (inner is not OperationCanceledException)
+                    {
+                        _logger.Error($"Error in background writer: {inner.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error waiting for background writer: {ex.Message}");
+            }
         }
 
+        // 3. Only dispose writer AFTER the write loop has exited (or timed out)
         lock (_lock)
         {
             try
@@ -345,18 +369,35 @@ public class CsvRecordingManager : IDisposable
             while (!cancellationToken.IsCancellationRequested)
             {
                 // Wait for items in the queue or cancellation
-                await _queueSemaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    await _queueSemaphore.WaitAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Cancellation requested - exit the loop cleanly
+                    break;
+                }
+
+                // Check cancellation again before processing (defensive)
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
 
                 // Process all queued items
                 while (_recordQueue.TryDequeue(out var item))
                 {
+                    // Check cancellation between items for faster shutdown
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        // Re-queue the item so it can be processed in the finally block
+                        _recordQueue.Enqueue(item);
+                        break;
+                    }
                     WriteRecord(item);
                 }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected when stopping
         }
         catch (Exception ex)
         {
@@ -364,7 +405,8 @@ public class CsvRecordingManager : IDisposable
         }
         finally
         {
-            // Write any remaining queued items
+            // Write any remaining queued items before exiting
+            // This runs BEFORE StopRecording disposes the writer (due to the Wait)
             while (_recordQueue.TryDequeue(out var item))
             {
                 WriteRecord(item);

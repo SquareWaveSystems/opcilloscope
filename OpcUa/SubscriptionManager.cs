@@ -9,7 +9,7 @@ namespace Opcilloscope.OpcUa;
 /// Manages OPC UA subscriptions and monitored variables using proper Publish/Subscribe.
 /// Supports subscription preservation and restoration during reconnection.
 /// </summary>
-public class SubscriptionManager : IDisposable
+public class SubscriptionManager : IDisposable, IAsyncDisposable
 {
     private readonly OpcUaClientWrapper _clientWrapper;
     private readonly Logger _logger;
@@ -610,7 +610,10 @@ public class SubscriptionManager : IDisposable
                 }
                 _subscription.Dispose();
             }
-            catch { /* Ignore cleanup errors */ }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Failed to cleanup OPC subscription: {ex.Message}");
+            }
             _subscription = null;
         }
 
@@ -633,26 +636,58 @@ public class SubscriptionManager : IDisposable
         }
     }
 
-    public void Dispose()
+    /// <summary>
+    /// Asynchronously disposes of the subscription manager and cleans up OPC UA resources.
+    /// </summary>
+    public async ValueTask DisposeAsync()
     {
         if (_subscription != null && _clientWrapper.Session != null)
         {
             try
             {
-                _clientWrapper.Session.RemoveSubscriptionAsync(_subscription).GetAwaiter().GetResult();
+                await _clientWrapper.Session.RemoveSubscriptionAsync(_subscription);
                 _subscription.Dispose();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to dispose OPC UA subscription: {ex}");
+                _logger?.Warning($"Failed to dispose OPC UA subscription: {ex.Message}");
             }
         }
 
         _subscription = null;
         _isInitialized = false;
-        _monitoredVariables.Clear();
-        _opcMonitoredItems.Clear();
-        _opcHandleToClientHandle.Clear();
+
+        lock (_lock)
+        {
+            _monitoredVariables.Clear();
+            _opcMonitoredItems.Clear();
+            _opcHandleToClientHandle.Clear();
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Synchronously disposes of the subscription manager.
+    /// Uses a timeout to avoid deadlocks when called from a synchronization context.
+    /// </summary>
+    public void Dispose()
+    {
+        try
+        {
+            // Use Task.Run to avoid deadlock when called from a synchronization context
+            Task.Run(async () => await DisposeAsync()).Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (AggregateException ex)
+        {
+            _logger?.Warning($"Disposal warning: {ex.InnerException?.Message ?? ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning($"Disposal warning: {ex.Message}");
+        }
+
+        GC.SuppressFinalize(this);
     }
 }
 
