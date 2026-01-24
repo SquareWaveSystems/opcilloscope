@@ -12,7 +12,7 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 
 ## Why opcilloscope?
 
-Cause I felt like it, and I thought it would be fun, but also...
+Cause it was fun to build, but also...
 
 | Traditional OPC Clients | opcilloscope |
 |------------------------|--------------|
