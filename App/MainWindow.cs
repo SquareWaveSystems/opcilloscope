@@ -155,9 +155,9 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         };
 
         // Minimal status bar: only essential shortcuts
-        _statusBar.Add(new Shortcut(Key.F1, "Help", ShowHelp));
-        _statusBar.Add(new Shortcut(Key.F5, "Refresh", RefreshTree));
-        _statusBar.Add(new Shortcut(Key.F10, "Menu", () => _menuBar.OpenMenu()));
+        _statusBar.Add(new Shortcut((Key)'?', "Help", ShowHelp));
+        _statusBar.Add(new Shortcut((Key)'r', "Refresh", RefreshTree));
+        _statusBar.Add(new Shortcut((Key)'m', "Menu", () => _menuBar.OpenMenu()));
 
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
         // We position it dynamically based on text width
@@ -311,7 +311,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
                 new MenuBarItem("_View", new MenuItem[]
                 {
                     new MenuItem("_Scope", "S", LaunchScope),
-                    new MenuItem("_Refresh Tree", "F5", RefreshTree),
+                    new MenuItem("_Refresh Tree", "R", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     _themeToggleItem,
                     null!, // Separator
