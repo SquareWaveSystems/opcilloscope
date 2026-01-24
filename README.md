@@ -1,6 +1,6 @@
 # opcilloscope
 
-**The lightweight OPC UA client that gets out of your way.**
+**A lightweight OPC UA client for the terminal heads.**
 
 Browse, monitor, and subscribe to industrial automation data — right from your terminal. No bloated GUI, no complex setup, no license fees.
 
@@ -11,6 +11,8 @@ Browse, monitor, and subscribe to industrial automation data — right from your
 ---
 
 ## Why opcilloscope?
+
+Cause I felt like it, and I thought it would be fun, but also...
 
 | Traditional OPC Clients | opcilloscope |
 |------------------------|--------------|
