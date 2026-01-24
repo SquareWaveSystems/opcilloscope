@@ -245,14 +245,20 @@ public static class DefaultKeybindings
 
     private static void ConfigureScopeBindings(KeybindingManager manager)
     {
-        // Scope view has its own keybindings defined in ScopeView
-        // These are documented for help generation
+        // NOTE: Scope keybindings are handled directly by ScopeView's KeyDown handler
+        // because ScopeView is a modal dialog that captures its own key events.
+        // These registrations exist solely for:
+        //   1. Help text generation (F1 and ? dialogs)
+        //   2. Status bar display when Scope context is active
+        // The empty handlers () => { } are intentional - they are never invoked.
+        // If you need to change Scope keybindings, update both here AND in ScopeView.
+
         manager.Register(
             KeybindingContext.Scope,
             Key.Space,
             "Pause",
             "Pause/resume plotting",
-            () => { }, // Handled by ScopeView directly
+            () => { }, // Documentation only - handled by ScopeView
             showInStatusBar: true,
             statusBarPriority: 10,
             category: "Scope View");
@@ -262,7 +268,7 @@ public static class DefaultKeybindings
             (Key)'+',
             "Zoom+",
             "Zoom in (increase scale)",
-            () => { },
+            () => { }, // Documentation only - handled by ScopeView
             showInStatusBar: true,
             statusBarPriority: 20,
             category: "Scope View");
@@ -272,7 +278,7 @@ public static class DefaultKeybindings
             (Key)'-',
             "Zoom-",
             "Zoom out (decrease scale)",
-            () => { },
+            () => { }, // Documentation only - handled by ScopeView
             showInStatusBar: true,
             statusBarPriority: 21,
             category: "Scope View");
@@ -282,7 +288,7 @@ public static class DefaultKeybindings
             (Key)'r',
             "Reset",
             "Reset to auto-scale",
-            () => { },
+            () => { }, // Documentation only - handled by ScopeView
             showInStatusBar: true,
             statusBarPriority: 30,
             category: "Scope View");

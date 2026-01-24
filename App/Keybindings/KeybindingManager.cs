@@ -13,11 +13,17 @@ namespace Opcilloscope.App.Keybindings;
 /// </summary>
 public sealed class KeybindingManager
 {
+    /// <summary>
+    /// Maximum number of shortcuts to display in the status bar to avoid overflow.
+    /// </summary>
+    public const int MaxStatusBarShortcuts = 6;
+
     private readonly Dictionary<KeybindingContext, List<Keybinding>> _bindings = new();
     private KeybindingContext _currentContext = KeybindingContext.Global;
 
     /// <summary>
     /// Event fired when a keybinding is executed.
+    /// This can be used for logging, analytics, or debugging keybinding usage.
     /// </summary>
     public event Action<Keybinding>? KeybindingExecuted;
 
@@ -44,7 +50,9 @@ public sealed class KeybindingManager
 
     /// <summary>
     /// Registers a keybinding for a specific context.
+    /// If a keybinding with the same key already exists in the context, it will be replaced.
     /// </summary>
+    /// <exception cref="ArgumentNullException">Thrown when handler is null.</exception>
     public KeybindingManager Register(
         KeybindingContext context,
         Key key,
@@ -55,11 +63,23 @@ public sealed class KeybindingManager
         int statusBarPriority = 100,
         string category = "General")
     {
+        ArgumentNullException.ThrowIfNull(handler);
+
         var keybinding = new Keybinding(
             context, key, label, description, handler,
             showInStatusBar, statusBarPriority, category);
 
-        _bindings[context].Add(keybinding);
+        // Check for duplicate key in the same context and replace if found
+        var existingIndex = _bindings[context].FindIndex(b => b.Key == key);
+        if (existingIndex >= 0)
+        {
+            _bindings[context][existingIndex] = keybinding;
+        }
+        else
+        {
+            _bindings[context].Add(keybinding);
+        }
+
         return this;
     }
 
@@ -138,18 +158,19 @@ public sealed class KeybindingManager
 
     /// <summary>
     /// Gets keybindings that should be shown in the status bar for the current context.
+    /// Limited to <see cref="MaxStatusBarShortcuts"/> items to avoid overflow.
     /// </summary>
     public IEnumerable<Keybinding> GetStatusBarBindings()
     {
         return GetActiveBindings()
             .Where(b => b.ShowInStatusBar)
-            .Take(6); // Limit to avoid overflow
+            .Take(MaxStatusBarShortcuts);
     }
 
     /// <summary>
-    /// Gets all keybindings for a specific context.
+    /// Gets all keybindings for a specific context as a read-only collection.
     /// </summary>
-    public IEnumerable<Keybinding> GetBindingsForContext(KeybindingContext context)
+    public IReadOnlyList<Keybinding> GetBindingsForContext(KeybindingContext context)
     {
         return _bindings[context].AsReadOnly();
     }
