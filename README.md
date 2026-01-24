@@ -17,10 +17,10 @@ Cause it was fun to build, but also...
 | Traditional OPC Clients | opcilloscope |
 |------------------------|--------------|
 | Heavy desktop apps with complex licensing | Single portable binary, MIT licensed |
-| Minutes to install and configure | `curl | bash` and you're running |
+| Seconds to install | `curl | bash` and you're running |
 | Resource-hungry GUIs | ~50MB RAM, runs anywhere |
 | Windows-only | Windows, Linux, macOS (x64 & ARM) |
-| Click-heavy workflows | Keyboard-driven, terminal-native |
+| Click-heavy workflows | Keyboard-driven, mouse support, terminal-native |
 
 ---
 
