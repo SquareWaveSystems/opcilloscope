@@ -658,20 +658,13 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
     /// <summary>
     /// Handles global keyboard shortcuts using lazygit-inspired keybinding manager.
+    /// All keybindings are centralized in <see cref="Keybindings.DefaultKeybindings"/>.
     /// </summary>
     protected override bool OnKeyDown(Key key)
     {
-        // ? key for quick help (check before keybinding manager)
-        if (key.KeyCode == (KeyCode)'?')
+        // Use the centralized keybinding manager for all key handling
+        if (_keybindingManager.TryHandle(key))
         {
-            ShowQuickHelp();
-            return true;
-        }
-
-        // Tab: Cycle between panes
-        if (key == Key.Tab)
-        {
-            _focusManager?.FocusNext();
             return true;
         }
 

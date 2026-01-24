@@ -23,12 +23,24 @@ public class QuickHelpDialog : Dialog
 
         // Calculate size based on content
         var bindings = keybindingManager.GetActiveBindings().ToList();
-        var maxKeyWidth = bindings.Max(b => b.KeyDisplay.Length);
-        var maxDescWidth = bindings.Max(b => b.Description.Length);
-        var contentWidth = Math.Max(maxKeyWidth + maxDescWidth + 6, 40);
 
-        Width = Math.Min(contentWidth + 4, 60);
-        Height = Math.Min(bindings.Count + 6, 24);
+        int maxKeyWidth;
+        // Handle empty bindings case
+        if (bindings.Count == 0)
+        {
+            maxKeyWidth = 8; // Default width for "No keybindings"
+            Width = 44;
+            Height = 8;
+        }
+        else
+        {
+            maxKeyWidth = bindings.Max(b => b.KeyDisplay.Length);
+            var maxDescWidth = bindings.Max(b => b.Description.Length);
+            var contentWidth = Math.Max(maxKeyWidth + maxDescWidth + 6, 40);
+
+            Width = Math.Min(contentWidth + 4, 60);
+            Height = Math.Min(bindings.Count + 6, 24);
+        }
 
         var theme = ThemeManager.Current;
 
@@ -82,19 +94,26 @@ public class QuickHelpDialog : Dialog
         Add(closeButton);
     }
 
-    private string GenerateHelpContent(List<Keybinding> bindings, int keyWidth)
+    private static string GenerateHelpContent(List<Keybinding> bindings, int keyWidth)
     {
         var lines = new List<string>();
 
-        // Group by category
-        var groups = bindings.GroupBy(b => b.Category);
-
-        foreach (var group in groups)
+        if (bindings.Count == 0)
         {
-            foreach (var binding in group)
+            lines.Add("  No keybindings available for this context.");
+        }
+        else
+        {
+            // Group by category
+            var groups = bindings.GroupBy(b => b.Category);
+
+            foreach (var group in groups)
             {
-                var key = binding.KeyDisplay.PadRight(keyWidth + 2);
-                lines.Add($"  {key}{binding.Description}");
+                foreach (var binding in group)
+                {
+                    var key = binding.KeyDisplay.PadRight(keyWidth + 2);
+                    lines.Add($"  {key}{binding.Description}");
+                }
             }
         }
 
