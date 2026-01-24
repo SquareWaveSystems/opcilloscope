@@ -185,7 +185,7 @@ public class OpcUaClientWrapper : IDisposable
             catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
             {
                 // Session cleanup errors are expected during network issues
-                System.Diagnostics.Debug.WriteLine($"Session cleanup error (non-critical): {ex.Message}");
+                _logger.Warning($"Session cleanup error (non-critical): {ex.Message}");
             }
             _session = null;
             _currentEndpoint = null;

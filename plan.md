@@ -78,3 +78,46 @@
 **Fix:** Either create placeholder images, remove the image references, or replace with text descriptions. For v0.1, removing or replacing with descriptive text is acceptable.
 
 **Status:** [x] Complete
+
+---
+
+# Medium Priority Issues
+
+## Task 7: Replace Debug.WriteLine with Logger
+
+**Files:**
+- `OpcUa/NodeBrowser.cs:173`
+- `OpcUa/OpcUaClientWrapper.cs:188`
+- `OpcUa/SubscriptionManager.cs:647`
+
+**Problem:** `Debug.WriteLine` calls are invisible in release builds, making errors impossible to diagnose in production.
+
+**Fix:** Replace `Debug.WriteLine` with `_logger.Warning()` or `_logger.Error()` calls. Each of these classes should already have a `_logger` field available.
+
+**Status:** [x] Complete
+
+---
+
+## Task 8: Add Null Check for SubscriptionManager Assertion
+
+**Files:**
+- `App/MainWindow.cs:689`
+
+**Problem:** Non-null assertion operator (`!`) used without prior null check could cause `NullReferenceException` at runtime.
+
+**Fix:** Add a proper null check before using the `!` operator, or use null-conditional access (`?.`) with appropriate fallback behavior.
+
+**Status:** [x] Complete
+
+---
+
+## Task 9: Add Config File Size Validation
+
+**Files:**
+- `Configuration/ConfigurationService.cs:59`
+
+**Problem:** No file size validation when loading configuration files. A maliciously large file could cause memory exhaustion (DoS).
+
+**Fix:** Add a file size check before reading. Reject files larger than a reasonable limit (e.g., 1MB for a config file). Log a warning and return an error if the file is too large.
+
+**Status:** [x] Complete

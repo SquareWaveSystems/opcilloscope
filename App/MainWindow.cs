@@ -686,7 +686,13 @@ public class MainWindow : Toplevel
 
     private void OnTrendPlotRequested(MonitoredNode item)
     {
-        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager!, item);
+        if (_connectionManager.SubscriptionManager == null)
+        {
+            _logger.Warning("Cannot open trend plot: not connected");
+            return;
+        }
+
+        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager, item);
         Application.Run(dialog);
     }
 
