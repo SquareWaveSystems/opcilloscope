@@ -199,7 +199,7 @@ public class AddressSpaceView : FrameView
                 e.Handled = true;
             }
         }
-        else if (e == Key.F5)
+        else if (e == (Key)'r' || e == (Key)'R')
         {
             Refresh();
             e.Handled = true;

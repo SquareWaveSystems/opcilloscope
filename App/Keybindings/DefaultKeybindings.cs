@@ -64,7 +64,7 @@ public static class DefaultKeybindings
             category: "Navigation");
 
         manager.RegisterGlobal(
-            Key.F1,
+            (Key)'?',
             "Help",
             "Show help",
             actions.ShowHelp,
@@ -73,21 +73,21 @@ public static class DefaultKeybindings
             category: "Application");
 
         manager.RegisterGlobal(
-            (Key)'?',
-            "?",
-            "Show context-sensitive quick help",
-            actions.ShowQuickHelp,
-            showInStatusBar: false,
-            statusBarPriority: 2,
-            category: "Application");
-
-        manager.RegisterGlobal(
-            Key.F10,
+            (Key)'m',
             "Menu",
             "Open menu",
             actions.OpenMenu,
             showInStatusBar: true,
             statusBarPriority: 99,
+            category: "Application");
+
+        manager.RegisterGlobal(
+            (Key)'M',
+            "Menu",
+            "Open menu",
+            actions.OpenMenu,
+            showInStatusBar: false,
+            statusBarPriority: 100,
             category: "Application");
 
         // File operations
@@ -151,12 +151,22 @@ public static class DefaultKeybindings
 
         manager.Register(
             KeybindingContext.AddressSpace,
-            Key.F5,
+            (Key)'r',
             "Refresh",
             "Refresh address space tree",
             actions.RefreshTree,
             showInStatusBar: true,
             statusBarPriority: 30,
+            category: "Address Space");
+
+        manager.Register(
+            KeybindingContext.AddressSpace,
+            (Key)'R',
+            "Refresh",
+            "Refresh address space tree",
+            actions.RefreshTree,
+            showInStatusBar: false,
+            statusBarPriority: 31,
             category: "Address Space");
     }
 

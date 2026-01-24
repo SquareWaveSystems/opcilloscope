@@ -108,12 +108,13 @@ public class HelpDialog : Dialog
 NAVIGATION
   Tab              Switch between panes
   Arrow Keys       Navigate within pane
-  ?                Context-sensitive quick help
+  ?                Show help
+  M                Open menu
 
 ADDRESS SPACE
   Enter            Subscribe to selected node
   Space            Expand/collapse tree node
-  F5               Refresh
+  R                Refresh
 
 MONITORED VARIABLES
   Delete           Unsubscribe from item
@@ -128,8 +129,6 @@ SCOPE VIEW CONTROLS
   R                Reset to auto-scale
 
 APPLICATION
-  F1               Help
-  F10              Open menu
   Ctrl+O           Open configuration
   Ctrl+S           Save configuration
   Ctrl+Shift+S     Save As
@@ -137,7 +136,7 @@ APPLICATION
   Ctrl+Q           Quit
 
 TIPS
-  - Press ? for context-sensitive quick help
+  - Press ? for help anytime
   - Only Variable nodes can be subscribed
   - Select up to 5 variables for Scope/Recording
   - Status bar shows context-specific shortcuts

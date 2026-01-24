@@ -417,24 +417,34 @@ Automates release builds and publishing.
 
 ## Keyboard Shortcuts
 
+**Global:**
 | Key | Action |
 |-----|--------|
-| F1 | Show help |
-| F5 | Refresh address space tree |
-| F10 | Open menu |
-| Enter | Subscribe to selected node |
-| Delete | Unsubscribe from selected variable |
-| Space | Toggle recording selection (in monitored variables) |
-| W | Write value to selected variable |
-| Ctrl+G | Open Scope with selected variables |
-| Ctrl+R | Toggle recording (start/stop) |
-| Ctrl+N | New configuration |
+| ? | Show help |
+| M | Open menu |
+| Tab | Switch between panes |
 | Ctrl+O | Open configuration |
 | Ctrl+S | Save configuration |
 | Ctrl+Shift+S | Save configuration as |
+| Ctrl+R | Toggle recording (start/stop) |
 | Ctrl+Q | Quit |
 
-**In Scope View:**
+**Address Space:**
+| Key | Action |
+|-----|--------|
+| Enter | Subscribe to selected node |
+| R | Refresh address space tree |
+
+**Monitored Variables:**
+| Key | Action |
+|-----|--------|
+| Delete | Unsubscribe from selected variable |
+| Space | Toggle selection (for Scope/Recording) |
+| W | Write value to selected variable |
+| T | Show trend plot |
+| S | Open Scope with selected variables |
+
+**Scope/Trend Plot View:**
 | Key | Action |
 |-----|--------|
 | Space | Pause/resume plotting |
