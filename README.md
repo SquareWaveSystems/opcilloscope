@@ -2,7 +2,7 @@
 
 **A lightweight OPC UA client for the terminal heads.**
 
-Browse, monitor, and subscribe to industrial automation data — right from your terminal. No bloated GUI, no complex setup, no license fees.
+Browse, monitor, and subscribe to industrial automation data right from your terminal. No bloated GUI, no complex setup, no license fees.
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-purple)](https://dotnet.microsoft.com/download/dotnet/10.0)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
