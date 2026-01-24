@@ -22,8 +22,6 @@ Cause it was fun to build, but also...
 | Windows-only | Windows, Linux, macOS (x64 & ARM) |
 | Click-heavy workflows | Keyboard-driven, terminal-native |
 
-**Built for automation engineers who live in the terminal.**
-
 ---
 
 ## See It In Action
