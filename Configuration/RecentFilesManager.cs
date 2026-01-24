@@ -116,9 +116,10 @@ public class RecentFilesManager
                 _recentFiles = JsonSerializer.Deserialize(json, OpcilloscopeJsonContext.Default.ListString) ?? new();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore corrupted settings, start fresh
+            // Log and ignore corrupted settings, start fresh
+            System.Diagnostics.Debug.WriteLine($"Failed to load recent files: {ex.Message}");
             _recentFiles = new();
         }
     }
@@ -134,9 +135,10 @@ public class RecentFilesManager
             }
             File.WriteAllText(_settingsPath, JsonSerializer.Serialize(_recentFiles, OpcilloscopeJsonContext.Default.ListString));
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore save failures - non-critical feature
+            // Log save failures - non-critical feature
+            System.Diagnostics.Debug.WriteLine($"Failed to save recent files: {ex.Message}");
         }
     }
 }

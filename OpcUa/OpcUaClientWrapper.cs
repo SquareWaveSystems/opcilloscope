@@ -320,7 +320,10 @@ public class OpcUaClientWrapper : IDisposable
                     // on the server so we can transfer them to the new session.
                     _session.Dispose();
                 }
-                catch { /* Ignore cleanup errors during reconnection */ }
+                catch (Exception ex)
+                {
+                    _logger.Warning($"Session cleanup error during reconnection: {ex.Message}");
+                }
                 _session = null;
             }
 

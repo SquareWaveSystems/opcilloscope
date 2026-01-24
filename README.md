@@ -4,8 +4,6 @@
 
 Browse, monitor, and subscribe to industrial automation data — right from your terminal. No bloated GUI, no complex setup, no license fees.
 
-![opcilloscope Demo](docs/assets/hero-demo.gif)
-
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-purple)](https://dotnet.microsoft.com/download/dotnet/10.0)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Terminal.Gui](https://img.shields.io/badge/UI-Terminal.Gui-blue)](https://github.com/gui-cs/Terminal.Gui)
@@ -32,39 +30,25 @@ Browse, monitor, and subscribe to industrial automation data — right from your
 
 Connect to any OPC UA server and lazily browse the address space. No loading the entire tree upfront — just expand what you need.
 
-![Connect and Browse](docs/assets/connect-browse.gif)
-
 ### Real-Time Monitoring
 
 Select variables with `Enter` to subscribe. Values update in real-time via OPC UA subscriptions — not polling. Remove with `Delete`.
-
-![Live Monitoring](docs/assets/live-monitoring.gif)
 
 ### Inspect Node Details
 
 Full attribute visibility: Description, DataType, AccessLevel, ValueRank. See exactly what you're working with.
 
-![Node Details](docs/assets/node-details.gif)
-
 ### Light & Dark Themes
 
 Easy on the eyes in any environment. Toggle themes to match your terminal or preference.
-
-| Dark Theme | Light Theme |
-|------------|-------------|
-| ![Dark](docs/assets/theme-dark.png) | ![Light](docs/assets/theme-light.png) |
 
 ### Export to CSV
 
 Capture a snapshot of your monitored values for documentation, analysis, or handoff.
 
-![CSV Export](docs/assets/csv-export.gif)
-
 ### Save & Load Configurations
 
 Save your connection and subscriptions to a config file. Load it next time to pick up exactly where you left off — perfect for recurring commissioning tasks.
-
-![Config Files](docs/assets/config-save-load.gif)
 
 ---
 
