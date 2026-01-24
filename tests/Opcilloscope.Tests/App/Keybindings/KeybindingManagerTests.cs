@@ -332,10 +332,11 @@ public class KeybindingManagerTests
     {
         // Arrange
         var manager = new KeybindingManager();
+        var keys = new[] { Key.D0, Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9 };
         for (int i = 0; i < 10; i++)
         {
             manager.RegisterGlobal(
-                Key.F1.WithCtrl | (Key)('0' + i),
+                keys[i].WithCtrl,
                 $"Binding{i}",
                 $"Binding {i}",
                 () => { },
