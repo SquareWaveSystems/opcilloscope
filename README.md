@@ -96,16 +96,44 @@ Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 opcilloscope is designed for keyboard-first workflows:
 
+**Global:**
+
 | Key | Action |
 |-----|--------|
-| `Ctrl+O` | Connect to server |
-| `Enter` | Subscribe to selected node |
-| `Delete` | Unsubscribe |
-| `F5` | Refresh address space |
-| `F1` | Help |
-| `F10` | Menu |
-| `Tab` | Switch panels |
+| `?` | Show help |
+| `M` | Open menu |
+| `Tab` | Switch between panes |
+| `Ctrl+O` | Open configuration |
+| `Ctrl+S` | Save configuration |
+| `Ctrl+Shift+S` | Save configuration as |
+| `Ctrl+R` | Toggle recording (start/stop) |
 | `Ctrl+Q` | Quit |
+
+**Address Space:**
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Subscribe to selected node |
+| `R` | Refresh address space tree |
+
+**Monitored Variables:**
+
+| Key | Action |
+|-----|--------|
+| `Delete` | Unsubscribe from selected variable |
+| `Space` | Toggle selection (for Scope/Recording) |
+| `W` | Write value to selected variable |
+| `T` | Show trend plot |
+| `S` | Open Scope with selected variables |
+
+**Scope/Trend Plot View:**
+
+| Key | Action |
+|-----|--------|
+| `Space` | Pause/resume plotting |
+| `+`/`=` | Zoom in (increase scale) |
+| `-` | Zoom out (decrease scale) |
+| `R` | Reset to auto-scale |
 
 ---
 
