@@ -278,5 +278,5 @@ MIT License — use it however you want.
 
 <p align="center">
   <strong>Built by <a href="https://squarewavesystems.com">Square Wave Systems</a></strong><br>
-  Modern automation software for mid-market manufacturers
+  Modern automation software
 </p>
