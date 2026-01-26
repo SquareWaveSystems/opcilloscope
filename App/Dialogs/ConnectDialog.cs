@@ -8,13 +8,16 @@ namespace Opcilloscope.App.Dialogs;
 /// <summary>
 /// Dialog for entering OPC UA server connection details.
 /// Uses Terminal.Gui v2 styling with theme support.
+/// Hardcodes 'opc.tcp://' prefix and handles pasted addresses intelligently.
 /// </summary>
 public class ConnectDialog : Dialog
 {
+    private const string ProtocolPrefix = "opc.tcp://";
     private readonly TextField _endpointField;
     private bool _confirmed;
+    private bool _isProcessingTextChange;
 
-    public string EndpointUrl => _endpointField.Text ?? string.Empty;
+    public string EndpointUrl => ProtocolPrefix + (_endpointField.Text?.Trim() ?? string.Empty);
     public bool Confirmed => _confirmed;
 
     public ConnectDialog()
@@ -37,22 +40,34 @@ public class ConnectDialog : Dialog
         {
             X = 1,
             Y = 1,
-            Text = "Endpoint URL:"
+            Text = "Server Address:"
+        };
+
+        // Fixed protocol prefix label
+        var protocolLabel = new Label
+        {
+            X = 1,
+            Y = 2,
+            Text = ProtocolPrefix,
+            ColorScheme = theme.MainColorScheme
         };
 
         _endpointField = new TextField
         {
-            X = 1,
+            X = 1 + ProtocolPrefix.Length,
             Y = 2,
             Width = Dim.Fill(1),
             Text = string.Empty
         };
 
+        // Handle pasted addresses by stripping protocol prefixes
+        _endpointField.TextChanged += OnTextChanged;
+
         var hintLabel = new Label
         {
             X = 1,
             Y = 3,
-            Text = "Example: opc.tcp://server:4840/path",
+            Text = "Enter: server:4840/path (protocol is added automatically)",
             ColorScheme = theme.MainColorScheme
         };
 
@@ -98,42 +113,108 @@ public class ConnectDialog : Dialog
             Application.RequestStop();
         };
 
-        Add(endpointLabel, _endpointField, hintLabel, connectButton, cancelButton);
+        Add(endpointLabel, protocolLabel, _endpointField, hintLabel, connectButton, cancelButton);
 
         _endpointField.SetFocus();
     }
 
     private bool ValidateEndpoint()
     {
-        var url = EndpointUrl.Trim();
+        var serverAddress = _endpointField.Text?.Trim() ?? string.Empty;
 
-        if (string.IsNullOrEmpty(url))
+        if (string.IsNullOrEmpty(serverAddress))
         {
-            MessageBox.ErrorQuery("Error", "Please enter an endpoint URL", "OK");
-            return false;
-        }
-
-        if (!url.StartsWith("opc.tcp://", StringComparison.OrdinalIgnoreCase))
-        {
-            MessageBox.ErrorQuery("Error", "Endpoint must start with 'opc.tcp://'", "OK");
+            MessageBox.ErrorQuery("Error", "Please enter a server address", "OK");
             return false;
         }
 
         try
         {
-            var uri = new Uri(url);
+            var uri = new Uri(EndpointUrl);
             if (string.IsNullOrEmpty(uri.Host))
             {
-                MessageBox.ErrorQuery("Error", "Invalid host in endpoint URL", "OK");
+                MessageBox.ErrorQuery("Error", "Invalid host in server address", "OK");
                 return false;
             }
         }
         catch
         {
-            MessageBox.ErrorQuery("Error", "Invalid endpoint URL format", "OK");
+            MessageBox.ErrorQuery("Error", "Invalid server address format", "OK");
             return false;
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Handles text changes to strip protocol prefixes from pasted addresses.
+    /// Supports opc.tcp://, http://, https://, and handles double-prefixing.
+    /// </summary>
+    private void OnTextChanged(object? sender, EventArgs e)
+    {
+        if (_isProcessingTextChange)
+            return;
+
+        var text = _endpointField.Text ?? string.Empty;
+        var cleaned = StripProtocolPrefix(text);
+
+        if (cleaned != text)
+        {
+            _isProcessingTextChange = true;
+            try
+            {
+                _endpointField.Text = cleaned;
+                // Move cursor to end
+                _endpointField.CursorPosition = cleaned.Length;
+            }
+            finally
+            {
+                _isProcessingTextChange = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Strips common protocol prefixes from the input string.
+    /// Handles cases like "opc.tcp://localhost:4840" → "localhost:4840"
+    /// and double-prefixes like "opc.tcp://opc.tcp://localhost" → "localhost"
+    /// </summary>
+    private static string StripProtocolPrefix(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        var result = input;
+        var changed = true;
+
+        // Keep stripping prefixes until no more are found (handles double-paste scenarios)
+        while (changed)
+        {
+            changed = false;
+            var lower = result.ToLowerInvariant();
+
+            if (lower.StartsWith("opc.tcp://"))
+            {
+                result = result.Substring(10);
+                changed = true;
+            }
+            else if (lower.StartsWith("http://"))
+            {
+                result = result.Substring(7);
+                changed = true;
+            }
+            else if (lower.StartsWith("https://"))
+            {
+                result = result.Substring(8);
+                changed = true;
+            }
+            else if (lower.StartsWith("opc.https://"))
+            {
+                result = result.Substring(12);
+                changed = true;
+            }
+        }
+
+        return result;
     }
 }
