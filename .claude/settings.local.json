@@ -11,7 +11,9 @@
       "WebFetch(domain:gui-cs.github.io)",
       "Bash(dotnet restore:*)",
       "Bash(gh run view:*)",
-      "Bash(dotnet msbuild:*)"
+      "Bash(dotnet msbuild:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(gh repo view:*)"
     ]
   },
   "remote": {
