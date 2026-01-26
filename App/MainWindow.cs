@@ -430,7 +430,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
     private void ShowConnectDialog()
     {
-        var dialog = new ConnectDialog();
+        var dialog = new ConnectDialog(_lastEndpoint);
         Application.Run(dialog);
 
         if (dialog.Confirmed)

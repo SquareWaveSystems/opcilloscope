@@ -17,7 +17,7 @@ public class ConnectDialog : Dialog
     public string EndpointUrl => _endpointField.Text ?? string.Empty;
     public bool Confirmed => _confirmed;
 
-    public ConnectDialog()
+    public ConnectDialog(string? initialEndpoint = null)
     {
         var theme = AppThemeManager.Current;
 
@@ -45,7 +45,7 @@ public class ConnectDialog : Dialog
             X = 1,
             Y = 2,
             Width = Dim.Fill(1),
-            Text = string.Empty
+            Text = initialEndpoint ?? string.Empty
         };
 
         var hintLabel = new Label
