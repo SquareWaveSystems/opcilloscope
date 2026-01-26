@@ -190,8 +190,36 @@ public class AddressSpaceView : FrameView
 
     private void HandleKeyDown(object? _, Key e)
     {
-        if (e == Key.Enter || e == Key.Space)
+        if (e == Key.Enter)
         {
+            var selected = _treeView.SelectedObject;
+            if (selected != null)
+            {
+                // Toggle expand/collapse if node has children
+                if (selected.HasChildren)
+                {
+                    if (_treeView.IsExpanded(selected))
+                    {
+                        _treeView.Collapse(selected);
+                    }
+                    else
+                    {
+                        _treeView.Expand(selected);
+                    }
+                }
+
+                // Also subscribe if it's a Variable node
+                if (selected.NodeClass == Opc.Ua.NodeClass.Variable)
+                {
+                    NodeSubscribeRequested?.Invoke(selected);
+                }
+
+                e.Handled = true;
+            }
+        }
+        else if (e == Key.Space)
+        {
+            // Space only subscribes (original behavior for variables)
             var selected = _treeView.SelectedObject;
             if (selected != null && selected.NodeClass == Opc.Ua.NodeClass.Variable)
             {
