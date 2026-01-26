@@ -625,9 +625,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
             _statusBar.Add(new Shortcut(binding.Key, binding.Label, binding.Handler));
         }
 
-        // Add ? hint for quick help (always show)
-        _statusBar.Add(new Shortcut((Key)'?', "?", ShowQuickHelp));
-
         _statusBar.SetNeedsLayout();
     }
 
