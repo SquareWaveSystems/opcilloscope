@@ -73,6 +73,7 @@ Opcilloscope/
 │
 ├── App/
 │   ├── MainWindow.cs               # Main UI layout, menu bar, status bar, event orchestration
+│   ├── FocusManager.cs             # Keyboard focus navigation between panes
 │   ├── Views/
 │   │   ├── AddressSpaceView.cs     # TreeView for OPC UA address space navigation
 │   │   ├── MonitoredVariablesView.cs # TableView for subscribed variables with selection
@@ -85,7 +86,16 @@ Opcilloscope/
 │   │   ├── WriteValueDialog.cs     # Write value to node dialog
 │   │   ├── SettingsDialog.cs       # Application settings dialog
 │   │   ├── ScopeDialog.cs          # Multi-signal scope dialog (up to 5 signals)
-│   │   └── TrendPlotDialog.cs      # Single-signal trend plot dialog
+│   │   ├── TrendPlotDialog.cs      # Single-signal trend plot dialog
+│   │   ├── SaveConfigDialog.cs     # Save configuration file dialog
+│   │   ├── SaveRecordingDialog.cs  # Save CSV recording dialog
+│   │   ├── HelpDialog.cs           # Full help/documentation dialog
+│   │   └── QuickHelpDialog.cs      # Quick keyboard shortcuts reference
+│   ├── Keybindings/
+│   │   ├── Keybinding.cs           # Keybinding model (key, action, context)
+│   │   ├── KeybindingContext.cs    # Context enum (Global, AddressSpace, etc.)
+│   │   ├── KeybindingManager.cs    # Keybinding registration and lookup
+│   │   └── DefaultKeybindings.cs   # Default keybinding definitions
 │   └── Themes/
 │       ├── AppTheme.cs             # Abstract base theme class
 │       ├── DarkTheme.cs            # Dark theme implementation
@@ -96,8 +106,9 @@ Opcilloscope/
 ├── Configuration/
 │   ├── ConfigurationService.cs     # Load/save .cfg configuration files
 │   ├── RecentFilesManager.cs       # Recently opened files tracking
+│   ├── OpcilloscopeJsonContext.cs  # Source-generated JSON serialization context
 │   └── Models/
-│       └── OpcilloscopeConfig.cs       # Configuration data models (ServerConfig, SubscriptionSettings, etc.)
+│       └── OpcilloscopeConfig.cs   # Configuration data models (ServerConfig, SubscriptionSettings, etc.)
 │
 ├── OpcUa/
 │   ├── OpcUaClientWrapper.cs       # OPC Foundation Session wrapper with connection management
@@ -113,7 +124,9 @@ Opcilloscope/
 │   ├── UiThread.cs                 # Thread marshalling for UI updates
 │   ├── CsvRecordingManager.cs      # Background CSV recording of monitored values
 │   ├── OpcValueConverter.cs        # OPC UA value type conversion utilities
-│   └── TaskExtensions.cs           # Async task helper extensions (FireAndForget)
+│   ├── TaskExtensions.cs           # Async task helper extensions (FireAndForget)
+│   ├── ConnectionIdentifier.cs     # Parse connection strings and server identifiers
+│   └── NodeAttributeFormatter.cs   # Format OPC UA node attributes for display
 │
 ├── Tests/
 │   ├── Opcilloscope.TestServer/        # In-process OPC UA test server library
@@ -127,10 +140,19 @@ Opcilloscope/
 │       ├── Infrastructure/
 │       │   └── TestServerFixture.cs # xUnit fixture with IAsyncLifetime
 │       ├── Integration/
-│       │   └── OpcUaIntegrationTests.cs
+│       │   ├── OpcUaIntegrationTests.cs
+│       │   ├── ConnectionManagerIntegrationTests.cs
+│       │   ├── ErrorHandlingIntegrationTests.cs
+│       │   ├── NodeBrowserIntegrationTests.cs
+│       │   └── SubscriptionManagerIntegrationTests.cs
 │       ├── App/
 │       │   ├── ThemeManagerTests.cs
-│       │   └── AppThemeTests.cs
+│       │   ├── AppThemeTests.cs
+│       │   └── Keybindings/
+│       │       ├── KeybindingTests.cs
+│       │       └── KeybindingManagerTests.cs
+│       ├── Configuration/
+│       │   └── ConfigurationServiceTests.cs
 │       ├── OpcUa/
 │       │   ├── SubscriptionManagerTests.cs
 │       │   ├── NodeAttributesTests.cs
@@ -140,7 +162,8 @@ Opcilloscope/
 │       └── Utilities/
 │           ├── LoggerTests.cs
 │           ├── CsvRecordingManagerTests.cs
-│           └── OpcValueConverterTests.cs
+│           ├── OpcValueConverterTests.cs
+│           └── ConnectionIdentifierTests.cs
 │
 ├── docs/
 │   ├── MARKETING_DESCRIPTION.md    # Product marketing copy
