@@ -101,7 +101,6 @@ opcilloscope is designed for keyboard-first workflows:
 | Key | Action |
 |-----|--------|
 | `?` | Show help |
-| `M` | Open menu |
 | `Tab` | Switch between panes |
 | `Ctrl+O` | Open configuration |
 | `Ctrl+S` | Save configuration |

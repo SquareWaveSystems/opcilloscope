@@ -157,8 +157,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         // Minimal status bar: only essential shortcuts
         _statusBar.Add(new Shortcut((Key)'?', "Help", ShowHelp));
         _statusBar.Add(new Shortcut((Key)'r', "Refresh", RefreshTree));
-        _statusBar.Add(new Shortcut((Key)'m', "Menu", () => _menuBar.OpenMenu()));
-
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
         // We position it dynamically based on text width
         _connectionStatusLabel = new Label
@@ -1356,7 +1354,6 @@ License: MIT
     void DefaultKeybindings.IKeybindingActions.SwitchPane() => _focusManager?.FocusNext();
     void DefaultKeybindings.IKeybindingActions.ShowHelp() => ShowHelp();
     void DefaultKeybindings.IKeybindingActions.ShowQuickHelp() => ShowQuickHelp();
-    void DefaultKeybindings.IKeybindingActions.OpenMenu() => _menuBar.OpenMenu();
     void DefaultKeybindings.IKeybindingActions.SubscribeSelected() => SubscribeSelected();
     void DefaultKeybindings.IKeybindingActions.RefreshTree() => RefreshTree();
     void DefaultKeybindings.IKeybindingActions.UnsubscribeSelected() => UnsubscribeSelected();
