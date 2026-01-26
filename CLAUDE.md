@@ -115,14 +115,13 @@ Opcilloscope/
 │   ├── OpcValueConverter.cs        # OPC UA value type conversion utilities
 │   └── TaskExtensions.cs           # Async task helper extensions (FireAndForget)
 │
-├── tools/
-│   └── Opcilloscope.TestServer/        # In-process OPC UA test server library
-│       ├── Opcilloscope.TestServer.csproj
-│       ├── Program.cs              # Standalone test server entry point
-│       ├── TestServer.cs           # Server with ApplicationConfiguration
-│       └── TestNodeManager.cs      # Custom NodeManager with test nodes
-│
-├── tests/
+├── Tests/
+│   ├── Opcilloscope.TestServer/        # In-process OPC UA test server library
+│   │   ├── Opcilloscope.TestServer.csproj
+│   │   ├── Program.cs              # Standalone test server entry point
+│   │   ├── TestServer.cs           # Server with ApplicationConfiguration
+│   │   └── TestNodeManager.cs      # Custom NodeManager with test nodes
+│   │
 │   └── Opcilloscope.Tests/             # Unit and integration tests (xUnit)
 │       ├── Opcilloscope.Tests.csproj
 │       ├── Infrastructure/
@@ -142,6 +141,11 @@ Opcilloscope/
 │           ├── LoggerTests.cs
 │           ├── CsvRecordingManagerTests.cs
 │           └── OpcValueConverterTests.cs
+│
+├── docs/
+│   ├── MARKETING_DESCRIPTION.md    # Product marketing copy
+│   ├── UAT-CHECKLIST.md            # User acceptance testing guide
+│   └── plan.md                     # Development plan
 │
 └── .github/workflows/
     ├── ci.yml                      # Build and test on push/PR

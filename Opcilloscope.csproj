@@ -40,14 +40,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="tests/**" />
-    <Content Remove="tests/**" />
-    <None Remove="tests/**" />
-    <EmbeddedResource Remove="tests/**" />
-    <Compile Remove="tools/**" />
-    <Content Remove="tools/**" />
-    <None Remove="tools/**" />
-    <EmbeddedResource Remove="tools/**" />
+    <Compile Remove="Tests/**" />
+    <Content Remove="Tests/**" />
+    <None Remove="Tests/**" />
+    <EmbeddedResource Remove="Tests/**" />
   </ItemGroup>
 
 </Project>
