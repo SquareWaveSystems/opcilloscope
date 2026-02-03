@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Opcilloscope</RootNamespace>
-    <AssemblyName>Opcilloscope</AssemblyName>
+    <AssemblyName>opcilloscope</AssemblyName>
 
     <!-- Package metadata (Version is driven by MinVer from Git tags) -->
     <Authors>Brett Kinny</Authors>
