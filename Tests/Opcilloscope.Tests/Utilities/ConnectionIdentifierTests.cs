@@ -14,7 +14,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.Generate("opc.tcp://192.168.1.67:50000", timestamp);
 
         // Assert
-        Assert.Equal("192.168.1.67_50000_202601071234", result);
+        Assert.Equal("192.168.1.67-50000_20260107_1234", result);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.Generate("opc.tcp://localhost:4840", timestamp);
 
         // Assert
-        Assert.Equal("localhost_4840_202601071234", result);
+        Assert.Equal("localhost-4840_20260107_1234", result);
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.Generate("opc.tcp://server:4840/UA/MyServer", timestamp);
 
         // Assert
-        Assert.Equal("server_4840_202601071234", result);
+        Assert.Equal("server-4840_20260107_1234", result);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.Generate(null, timestamp);
 
         // Assert
-        Assert.Equal("config_202601071234", result);
+        Assert.Equal("config_20260107_1234", result);
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.Generate("", timestamp);
 
         // Assert
-        Assert.Equal("config_202601071234", result);
+        Assert.Equal("config_20260107_1234", result);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.Generate("opc.tcp://localhost:4840", timestamp, "yyyyMMddHHmmss");
 
         // Assert
-        Assert.Equal("localhost_4840_20260107123456", result);
+        Assert.Equal("localhost-4840_20260107123456", result);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.ExtractHostPort("opc.tcp://192.168.1.67:50000");
 
         // Assert
-        Assert.Equal("192.168.1.67_50000", result);
+        Assert.Equal("192.168.1.67-50000", result);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.ExtractHostPort("opc.https://server.example.com:443");
 
         // Assert
-        Assert.Equal("server.example.com_443", result);
+        Assert.Equal("server.example.com-443", result);
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.ExtractHostPort("https://server.example.com:443");
 
         // Assert
-        Assert.Equal("server.example.com_443", result);
+        Assert.Equal("server.example.com-443", result);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.ExtractHostPort("opc.tcp://server:4840/UA/MyServer");
 
         // Assert
-        Assert.Equal("server_4840", result);
+        Assert.Equal("server-4840", result);
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.ExtractHostPort("opc.tcp://10.0.0.1:4840");
 
         // Assert
-        Assert.Equal("10.0.0.1_4840", result);
+        Assert.Equal("10.0.0.1-4840", result);
     }
 
     [Fact]
@@ -206,28 +206,28 @@ public class ConnectionIdentifierTests
         var result = ConnectionIdentifier.Generate("opc.tcp://localhost:4840");
         var after = DateTime.Now;
 
-        // Assert - should contain a 12-digit timestamp
-        Assert.Matches(@"localhost_4840_\d{12}$", result);
+        // Assert - should contain a timestamp in format yyyyMMdd_HHmm
+        Assert.Matches(@"localhost-4840_\d{8}_\d{4}$", result);
 
         // Verify the timestamp is within the expected range
-        var expectedPrefix = "localhost_4840_";
+        var expectedPrefix = "localhost-4840_";
         var timestampPart = result.Substring(expectedPrefix.Length);
-        var parsedTimestamp = DateTime.ParseExact(timestampPart, "yyyyMMddHHmm", null);
+        var parsedTimestamp = DateTime.ParseExact(timestampPart, "yyyyMMdd_HHmm", null);
         Assert.True(parsedTimestamp >= before.AddSeconds(-60) && parsedTimestamp <= after.AddSeconds(60));
     }
 
     [Fact]
-    public void ExtractHostPort_EnsuresUnderscoreBetweenIpAndPort()
+    public void ExtractHostPort_EnsuresHyphenBetweenIpAndPort()
     {
         // This tests the specific issue mentioned in the task:
-        // IP and port should be separated by underscore
+        // IP and port should be separated by hyphen
 
         // Act
         var result = ConnectionIdentifier.ExtractHostPort("opc.tcp://192.168.1.67:50000");
 
-        // Assert - verify there's an underscore between IP and port
-        Assert.Equal("192.168.1.67_50000", result);
-        Assert.Contains("_", result);
+        // Assert - verify there's a hyphen between IP and port
+        Assert.Equal("192.168.1.67-50000", result);
+        Assert.Contains("-", result);
         Assert.DoesNotContain("6750000", result); // This would be the bug case
     }
 }
