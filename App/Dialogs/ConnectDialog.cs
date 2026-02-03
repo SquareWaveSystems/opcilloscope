@@ -20,7 +20,7 @@ public class ConnectDialog : Dialog
     public string EndpointUrl => ProtocolPrefix + (_endpointField.Text?.Trim() ?? string.Empty);
     public bool Confirmed => _confirmed;
 
-    public ConnectDialog()
+    public ConnectDialog(string? initialEndpoint = null)
     {
         var theme = AppThemeManager.Current;
 
@@ -57,7 +57,7 @@ public class ConnectDialog : Dialog
             X = 1 + ProtocolPrefix.Length,
             Y = 2,
             Width = Dim.Fill(1),
-            Text = string.Empty
+            Text = initialEndpoint ?? string.Empty
         };
 
         // Handle pasted addresses by stripping protocol prefixes
