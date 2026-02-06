@@ -708,8 +708,8 @@ public class ScopeView : View
             segments =
             [
                 new("SPACE", true), new(" Pause/Cursor  ", false),
-                new("+/-", true), new(" VertScale  ", false),
-                new("↑/↓", true), new(" VertPan  ", false),
+                new("+", true), new("/", false), new("-", true), new(" VertScale  ", false),
+                new("↑", true), new("/", false), new("↓", true), new(" VertPan  ", false),
                 new("[", true), new("/", false), new("]", true), new(" HorizScale  ", false),
                 new("R", true), new(" Auto  ", false),
                 new($"SCALE:{scaleInfo}  WIN:{windowInfo}  TIME:{timeInfo}  SAMPLES:{totalSamples}", false)
