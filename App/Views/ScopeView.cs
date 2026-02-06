@@ -41,7 +41,7 @@ public class ScopeView : View
     private readonly List<SeriesData> _series = new();
     private readonly object _lock = new();
     private const int MaxSamples = 2000;
-    private const double DefaultTimeWindowSeconds = 60.0;
+    private const double DefaultTimeWindowSeconds = 30.0;
     private const double MinTimeWindowSeconds = 5.0;
     private const double MaxTimeWindowSeconds = 300.0;
     private const double TimeWindowZoomFactor = 1.5;
