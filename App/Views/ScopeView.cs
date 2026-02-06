@@ -26,7 +26,7 @@ public class ScopeView : View
     private class SeriesData
     {
         public MonitoredNode Node { get; init; } = null!;
-        public List<TimestampedSample> Samples { get; } = new(200);
+        public List<TimestampedSample> Samples { get; } = new(2000);
         public Terminal.Gui.Color LineColor { get; init; }
         public float VisibleMin { get; set; } = float.MaxValue;
         public float VisibleMax { get; set; } = float.MinValue;
@@ -34,7 +34,7 @@ public class ScopeView : View
 
     private readonly List<SeriesData> _series = new();
     private readonly object _lock = new();
-    private const int MaxSamples = 200;
+    private const int MaxSamples = 2000;
     private const double DefaultTimeWindowSeconds = 60.0;
 
     // Distinct colors for up to 5 series (using Terminal.Gui.Color)
