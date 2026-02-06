@@ -25,8 +25,6 @@ public static class DefaultKeybindings
         // Monitored Variables
         void UnsubscribeSelected();
         void ToggleScopeSelection();
-        void WriteToSelected();
-        void ShowTrendPlot();
         void OpenScope();
 
         // Application
@@ -132,22 +130,12 @@ public static class DefaultKeybindings
 
         manager.Register(
             KeybindingContext.AddressSpace,
-            (Key)'r',
+            Key.F5,
             "Refresh",
             "Refresh address space tree",
             actions.RefreshTree,
             showInStatusBar: true,
             statusBarPriority: 30,
-            category: "Address Space");
-
-        manager.Register(
-            KeybindingContext.AddressSpace,
-            (Key)'R',
-            "Refresh",
-            "Refresh address space tree",
-            actions.RefreshTree,
-            showInStatusBar: false,
-            statusBarPriority: 31,
             category: "Address Space");
     }
 
@@ -175,42 +163,22 @@ public static class DefaultKeybindings
 
         manager.Register(
             KeybindingContext.MonitoredVariables,
-            (Key)'w',
-            "Write",
-            "Write value to selected node",
-            actions.WriteToSelected,
+            (Key)'r',
+            "Rec",
+            "Toggle CSV recording",
+            actions.ToggleRecording,
             showInStatusBar: true,
             statusBarPriority: 30,
             category: "Monitored Variables");
 
         manager.Register(
             KeybindingContext.MonitoredVariables,
-            (Key)'W',
-            "Write",
-            "Write value to selected node",
-            actions.WriteToSelected,
+            (Key)'R',
+            "Rec",
+            "Toggle CSV recording",
+            actions.ToggleRecording,
             showInStatusBar: false,
             statusBarPriority: 31,
-            category: "Monitored Variables");
-
-        manager.Register(
-            KeybindingContext.MonitoredVariables,
-            (Key)'t',
-            "Trend",
-            "Show trend plot for selected variable",
-            actions.ShowTrendPlot,
-            showInStatusBar: true,
-            statusBarPriority: 40,
-            category: "Monitored Variables");
-
-        manager.Register(
-            KeybindingContext.MonitoredVariables,
-            (Key)'T',
-            "Trend",
-            "Show trend plot for selected variable",
-            actions.ShowTrendPlot,
-            showInStatusBar: false,
-            statusBarPriority: 41,
             category: "Monitored Variables");
 
         manager.Register(
@@ -220,7 +188,7 @@ public static class DefaultKeybindings
             "Open Scope with selected variables",
             actions.OpenScope,
             showInStatusBar: true,
-            statusBarPriority: 50,
+            statusBarPriority: 40,
             category: "Monitored Variables");
 
         manager.Register(
@@ -230,7 +198,7 @@ public static class DefaultKeybindings
             "Open Scope with selected variables",
             actions.OpenScope,
             showInStatusBar: false,
-            statusBarPriority: 51,
+            statusBarPriority: 41,
             category: "Monitored Variables");
     }
 
@@ -282,6 +250,46 @@ public static class DefaultKeybindings
             () => { }, // Documentation only - handled by ScopeView
             showInStatusBar: true,
             statusBarPriority: 30,
+            category: "Scope View");
+
+        manager.Register(
+            KeybindingContext.Scope,
+            (Key)'[',
+            "TimeOut",
+            "Widen time window (show more)",
+            () => { }, // Documentation only - handled by ScopeView
+            showInStatusBar: true,
+            statusBarPriority: 40,
+            category: "Scope View");
+
+        manager.Register(
+            KeybindingContext.Scope,
+            (Key)']',
+            "TimeIn",
+            "Narrow time window (zoom in)",
+            () => { }, // Documentation only - handled by ScopeView
+            showInStatusBar: true,
+            statusBarPriority: 41,
+            category: "Scope View");
+
+        manager.Register(
+            KeybindingContext.Scope,
+            Key.CursorLeft,
+            "CurL",
+            "Move cursor left (when paused)",
+            () => { }, // Documentation only - handled by ScopeView
+            showInStatusBar: false,
+            statusBarPriority: 50,
+            category: "Scope View");
+
+        manager.Register(
+            KeybindingContext.Scope,
+            Key.CursorRight,
+            "CurR",
+            "Move cursor right (when paused)",
+            () => { }, // Documentation only - handled by ScopeView
+            showInStatusBar: false,
+            statusBarPriority: 51,
             category: "Scope View");
     }
 }

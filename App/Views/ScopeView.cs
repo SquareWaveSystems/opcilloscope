@@ -3,7 +3,6 @@ using Opcilloscope.OpcUa;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.App.Themes;
 using Opcilloscope.Utilities;
-using System.Drawing;
 using Attribute = Terminal.Gui.Attribute;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
@@ -11,6 +10,7 @@ namespace Opcilloscope.App.Views;
 
 /// <summary>
 /// Real-time Scope view supporting multiple signals with time-based x-axis.
+/// Renders waveforms using braille Unicode characters for 8x resolution.
 /// Supports up to 5 simultaneous signals with distinct colors.
 /// </summary>
 public class ScopeView : View
@@ -22,22 +22,31 @@ public class ScopeView : View
     // Sample with timestamp
     private record TimestampedSample(DateTime Timestamp, float Value);
 
-    // Series data per node (up to 5)
+    // Series data per node (up to 5) with stats tracking
     private class SeriesData
     {
         public MonitoredNode Node { get; init; } = null!;
-        public List<TimestampedSample> Samples { get; } = new(200);
+        public List<TimestampedSample> Samples { get; } = new(500);
         public Terminal.Gui.Color LineColor { get; init; }
-        public float VisibleMin { get; set; } = float.MaxValue;
-        public float VisibleMax { get; set; } = float.MinValue;
+
+        // Stats tracking
+        public float CurrentValue { get; set; } = float.NaN;
+        public float MinValue { get; set; } = float.MaxValue;
+        public float MaxValue { get; set; } = float.MinValue;
+        public double Sum { get; set; }
+        public int Count { get; set; }
+        public float Average => Count > 0 ? (float)(Sum / Count) : float.NaN;
     }
 
     private readonly List<SeriesData> _series = new();
     private readonly object _lock = new();
     private const int MaxSamples = 500;
     private const double DefaultTimeWindowSeconds = 30.0;
+    private const double MinTimeWindowSeconds = 5.0;
+    private const double MaxTimeWindowSeconds = 300.0;
+    private const double TimeWindowZoomFactor = 1.5;
 
-    // Distinct colors for up to 5 series (using Terminal.Gui.Color)
+    // Distinct colors for up to 5 series
     private static readonly Terminal.Gui.Color[] SeriesColors =
     {
         Terminal.Gui.Color.Green,
@@ -46,6 +55,13 @@ public class ScopeView : View
         Terminal.Gui.Color.Magenta,
         Terminal.Gui.Color.White
     };
+
+    // Layout constants
+    private const int HeaderRows = 2;    // Title + legend
+    private const int StatusRows = 2;    // Status bar
+    private const int YAxisLabelWidth = 9; // Left margin for Y-axis labels
+    private const int XAxisLabelHeight = 1; // Bottom margin for X-axis labels
+    private const int GridDotSpacing = 4;  // Braille-pixel spacing for grid dots
 
     // Auto-scale tracking
     private bool _autoScale = true;
@@ -58,13 +74,11 @@ public class ScopeView : View
     private object? _timerToken;
     private int _frameCount;
     private DateTime _startTime;
-    private readonly double _timeWindowSeconds = DefaultTimeWindowSeconds;
+    private double _timeWindowSeconds = DefaultTimeWindowSeconds;
 
-    // GraphView and annotations
-    private readonly GraphView _graphView;
-    private readonly Label _headerLabel;
-    private readonly Label _legendLabel;
-    private readonly Label _statusLabel;
+    // Cursor state (active only when paused)
+    private bool _cursorActive;
+    private int _cursorPixelX; // cursor position in braille pixel coordinates
 
     /// <summary>
     /// Event fired when pause state changes.
@@ -90,66 +104,6 @@ public class ScopeView : View
         CanFocus = true;
         WantMousePositionReports = false;
 
-        // Header label showing signal names
-        _headerLabel = new Label
-        {
-            X = 0,
-            Y = 0,
-            Width = Dim.Fill(),
-            Height = 1,
-            TextAlignment = Alignment.Center
-        };
-
-        // Legend label showing series colors
-        _legendLabel = new Label
-        {
-            X = 0,
-            Y = 1,
-            Width = Dim.Fill(),
-            Height = 1,
-            TextAlignment = Alignment.Center
-        };
-
-        // Create the GraphView
-        _graphView = new GraphView
-        {
-            X = 0,
-            Y = 2,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(2),
-            BorderStyle = LineStyle.Single,
-            CanFocus = false
-        };
-
-        // Configure axes
-        _graphView.AxisX.Increment = 10;
-        _graphView.AxisX.ShowLabelsEvery = 1;
-        _graphView.AxisX.Text = "Time (s)";
-        _graphView.AxisX.Minimum = 0;
-
-        _graphView.AxisY.Increment = 10;
-        _graphView.AxisY.ShowLabelsEvery = 1;
-        _graphView.AxisY.Text = "Value";
-
-        // Set margins for axis labels
-        _graphView.MarginLeft = 10;
-        _graphView.MarginBottom = 2;
-
-        // Status bar at bottom
-        _statusLabel = new Label
-        {
-            X = 0,
-            Y = Pos.Bottom(_graphView),
-            Width = Dim.Fill(),
-            Height = 2,
-            TextAlignment = Alignment.Center
-        };
-
-        Add(_headerLabel, _legendLabel, _graphView, _statusLabel);
-
-        // Apply initial theme
-        ApplyTheme();
-
         _startTime = DateTime.Now;
     }
 
@@ -161,58 +115,14 @@ public class ScopeView : View
             theme = _currentTheme;
         }
 
-        var normalAttr = theme.NormalAttr;
-        var brightAttr = theme.BrightAttr;
-        var dimAttr = theme.DimAttr;
-        var accentAttr = theme.AccentAttr;
-
         ColorScheme = new ColorScheme
         {
-            Normal = normalAttr,
-            Focus = brightAttr,
-            HotNormal = accentAttr,
-            HotFocus = brightAttr,
-            Disabled = dimAttr
+            Normal = theme.NormalAttr,
+            Focus = theme.BrightAttr,
+            HotNormal = theme.AccentAttr,
+            HotFocus = theme.BrightAttr,
+            Disabled = theme.DimAttr
         };
-
-        _headerLabel.ColorScheme = new ColorScheme
-        {
-            Normal = brightAttr,
-            Focus = brightAttr,
-            HotNormal = brightAttr,
-            HotFocus = brightAttr,
-            Disabled = dimAttr
-        };
-
-        _legendLabel.ColorScheme = new ColorScheme
-        {
-            Normal = dimAttr,
-            Focus = dimAttr,
-            HotNormal = dimAttr,
-            HotFocus = dimAttr,
-            Disabled = dimAttr
-        };
-
-        _statusLabel.ColorScheme = new ColorScheme
-        {
-            Normal = dimAttr,
-            Focus = dimAttr,
-            HotNormal = dimAttr,
-            HotFocus = dimAttr,
-            Disabled = dimAttr
-        };
-
-        // Configure GraphView appearance
-        _graphView.ColorScheme = new ColorScheme
-        {
-            Normal = normalAttr,
-            Focus = brightAttr,
-            HotNormal = accentAttr,
-            HotFocus = brightAttr,
-            Disabled = dimAttr
-        };
-
-        _graphView.BorderStyle = theme.BorderLineStyle;
     }
 
     private void OnThemeChanged(AppTheme newTheme)
@@ -263,6 +173,11 @@ public class ScopeView : View
                 if (TryParseValue(node.Value, out var value))
                 {
                     series.Samples.Add(new TimestampedSample(DateTime.Now, value));
+                    series.CurrentValue = value;
+                    series.MinValue = value;
+                    series.MaxValue = value;
+                    series.Sum = value;
+                    series.Count = 1;
                 }
 
                 _series.Add(series);
@@ -276,6 +191,7 @@ public class ScopeView : View
         // Start the refresh timer
         StartUpdateTimer();
 
+        ApplyTheme();
         SetNeedsLayout();
     }
 
@@ -290,6 +206,13 @@ public class ScopeView : View
             {
                 var sample = new TimestampedSample(DateTime.Now, value);
                 series.Samples.Add(sample);
+
+                // Update stats
+                series.CurrentValue = value;
+                if (value < series.MinValue) series.MinValue = value;
+                if (value > series.MaxValue) series.MaxValue = value;
+                series.Sum += value;
+                series.Count++;
 
                 // Trim old samples beyond time window
                 var cutoff = DateTime.Now.AddSeconds(-_timeWindowSeconds);
@@ -339,12 +262,15 @@ public class ScopeView : View
             foreach (var series in _series)
             {
                 series.Samples.Clear();
-                series.VisibleMin = float.MaxValue;
-                series.VisibleMax = float.MinValue;
+                series.CurrentValue = float.NaN;
+                series.MinValue = float.MaxValue;
+                series.MaxValue = float.MinValue;
+                series.Sum = 0;
+                series.Count = 0;
             }
         }
         _startTime = DateTime.Now;
-        UpdateGraph();
+        _cursorActive = false;
         SetNeedsLayout();
     }
 
@@ -368,16 +294,17 @@ public class ScopeView : View
     private bool OnTimerTick()
     {
         _frameCount++;
-        UpdateGraph();
         SetNeedsLayout();
         return true; // Keep timer running
     }
 
     /// <summary>
-    /// Updates the GraphView with current sample data from all series.
+    /// Renders the entire scope view using braille characters.
     /// </summary>
-    private void UpdateGraph()
+    protected override bool OnDrawingContent(DrawContext? context)
     {
+        if (Driver is null) return false;
+
         AppTheme theme;
         lock (_themeLock)
         {
@@ -385,32 +312,62 @@ public class ScopeView : View
         }
 
         List<SeriesData> seriesCopy;
+        List<List<TimestampedSample>> samplesCopy;
         lock (_lock)
         {
             seriesCopy = _series.ToList();
+            samplesCopy = _series.Select(s => s.Samples.ToList()).ToList();
         }
 
-        // Calculate global min/max for Y-axis across all series
+        var viewport = Viewport;
+        int totalWidth = viewport.Width;
+        int totalHeight = viewport.Height;
+
+        if (totalWidth < 5 || totalHeight < 5) return false;
+
+        // Layout regions
+        int plotLeft = YAxisLabelWidth;
+        int plotTop = HeaderRows;
+        int plotWidth = totalWidth - plotLeft;
+        int plotHeight = totalHeight - HeaderRows - StatusRows - XAxisLabelHeight;
+
+        if (plotWidth < 2 || plotHeight < 2) return false;
+
+        // Clear the viewport
+        var normalAttr = theme.NormalAttr;
+        Driver!.SetAttribute(normalAttr);
+        for (int y = 0; y < totalHeight; y++)
+        {
+            Move(0, y);
+            for (int x = 0; x < totalWidth; x++)
+                Driver!.AddRune(' ');
+        }
+
+        // === Draw header ===
+        DrawHeader(theme, seriesCopy, totalWidth);
+
+        // === Calculate data ranges ===
+        var now = _isPaused && samplesCopy.Any(s => s.Count > 0)
+            ? samplesCopy.Where(s => s.Count > 0).Max(s => s.Last().Timestamp)
+            : DateTime.Now;
+        var windowStart = now.AddSeconds(-_timeWindowSeconds);
+        var windowDuration = _timeWindowSeconds;
+
         float globalMin = float.MaxValue;
         float globalMax = float.MinValue;
-        double maxElapsedSeconds = 0;
 
-        foreach (var series in seriesCopy)
+        for (int i = 0; i < samplesCopy.Count; i++)
         {
-            lock (_lock)
+            foreach (var sample in samplesCopy[i])
             {
-                foreach (var sample in series.Samples)
+                if (sample.Timestamp >= windowStart)
                 {
                     if (sample.Value < globalMin) globalMin = sample.Value;
                     if (sample.Value > globalMax) globalMax = sample.Value;
-
-                    var elapsed = (sample.Timestamp - _startTime).TotalSeconds;
-                    if (elapsed > maxElapsedSeconds) maxElapsedSeconds = elapsed;
                 }
             }
         }
 
-        // If no samples were found, use default range
         if (globalMin == float.MaxValue || globalMax == float.MinValue)
         {
             globalMin = 0;
@@ -433,7 +390,6 @@ public class ScopeView : View
             visibleMax = center + range;
         }
 
-        // Ensure valid range
         if (visibleMax <= visibleMin)
         {
             visibleMin = globalMin - 1;
@@ -446,110 +402,333 @@ public class ScopeView : View
         visibleMin -= padding;
         visibleMax += padding;
 
-        // Update header with signal names
+        // === Create braille canvas and render ===
+        var canvas = new BrailleCanvas(plotWidth, plotHeight);
+
+        int canvasPixelW = canvas.PixelWidth;
+        int canvasPixelH = canvas.PixelHeight;
+
+        // Draw grid lines (layer -1)
+        DrawGrid(canvas, canvasPixelW, canvasPixelH);
+
+        // Draw each series as connected line segments
+        bool hasSamples = false;
+        for (int si = 0; si < samplesCopy.Count; si++)
+        {
+            var samples = samplesCopy[si];
+            if (samples.Count == 0) continue;
+            hasSamples = true;
+
+            int prevPx = -1, prevPy = -1;
+            foreach (var sample in samples)
+            {
+                if (sample.Timestamp < windowStart) continue;
+
+                double tx = (sample.Timestamp - windowStart).TotalSeconds / windowDuration;
+                double ty = 1.0 - (sample.Value - visibleMin) / (visibleMax - visibleMin);
+
+                int px = (int)Math.Round(tx * (canvasPixelW - 1));
+                int py = (int)Math.Round(ty * (canvasPixelH - 1));
+
+                px = Math.Clamp(px, 0, canvasPixelW - 1);
+                py = Math.Clamp(py, 0, canvasPixelH - 1);
+
+                if (prevPx >= 0)
+                {
+                    canvas.DrawLine(prevPx, prevPy, px, py, layer: si);
+                }
+                else
+                {
+                    canvas.SetPixel(px, py, layer: si);
+                }
+
+                prevPx = px;
+                prevPy = py;
+            }
+        }
+
+        // Draw cursor vertical line (highest priority layer = 100) if active
+        if (_cursorActive && _isPaused)
+        {
+            int cursorX = Math.Clamp(_cursorPixelX, 0, canvasPixelW - 1);
+            for (int py = 0; py < canvasPixelH; py++)
+            {
+                canvas.SetPixel(cursorX, py, layer: 100);
+            }
+        }
+
+        // === Render canvas to terminal ===
+        var gridAttr = theme.GridAttr;
+        var accentAttr = theme.AccentAttr;
+
+        // Pre-build signal attributes
+        var signalAttrs = new Attribute[SeriesColors.Length];
+        for (int i = 0; i < SeriesColors.Length; i++)
+        {
+            signalAttrs[i] = new Attribute(SeriesColors[i], theme.Background);
+        }
+
+        for (int cy = 0; cy < canvas.CellHeight; cy++)
+        {
+            Move(plotLeft, plotTop + cy);
+            for (int cx = 0; cx < canvas.CellWidth; cx++)
+            {
+                char brailleChar = canvas.GetCellFiltered(cx, cy);
+                if (brailleChar == '\u2800')
+                {
+                    Driver!.SetAttribute(normalAttr);
+                    Driver!.AddRune(' ');
+                    continue;
+                }
+
+                int dominantLayer = canvas.GetCellDominantLayer(cx, cy);
+
+                if (dominantLayer == 100)
+                {
+                    // Cursor
+                    Driver!.SetAttribute(accentAttr);
+                }
+                else if (dominantLayer >= 0 && dominantLayer < signalAttrs.Length)
+                {
+                    Driver!.SetAttribute(signalAttrs[dominantLayer]);
+                }
+                else
+                {
+                    // Grid or unknown
+                    Driver!.SetAttribute(gridAttr);
+                }
+
+                Driver!.AddRune(brailleChar);
+            }
+        }
+
+        // === Draw Y-axis labels ===
+        DrawYAxisLabels(theme, plotTop, plotHeight, visibleMin, visibleMax);
+
+        // === Draw X-axis labels ===
+        DrawXAxisLabels(theme, plotLeft, plotTop + plotHeight, plotWidth, windowDuration);
+
+        // === Draw stats overlay ===
+        if (hasSamples)
+        {
+            DrawStatsOverlay(theme, seriesCopy, plotLeft, plotTop, plotWidth);
+        }
+        else
+        {
+            // No signal message
+            var msg = theme.NoSignalMessage;
+            int msgX = plotLeft + (plotWidth - msg.Length) / 2;
+            int msgY = plotTop + plotHeight / 2;
+            if (msgX >= 0 && msgY >= 0)
+            {
+                Driver!.SetAttribute(theme.DimAttr);
+                Move(msgX, msgY);
+                Driver!.AddStr(msg);
+            }
+        }
+
+        // === Draw status bar ===
+        DrawStatusBar(theme, seriesCopy, samplesCopy, totalWidth, totalHeight,
+                      windowStart, windowDuration, canvasPixelW);
+
+        return true;
+    }
+
+    private void DrawHeader(AppTheme theme, List<SeriesData> seriesCopy, int totalWidth)
+    {
+        // Title line
         string title = seriesCopy.Count > 0
             ? string.Join(" | ", seriesCopy.Select(s => s.Node.DisplayName?.ToUpperInvariant() ?? "?"))
             : "SCOPE";
         string statusIndicator = _isPaused ? theme.StatusHold : theme.StatusLive;
         string activityIndicator = !_isPaused && (_frameCount % 10) < 5 ? "●" : "○";
+        string headerText = $"{theme.TitleDecoration} {title} {theme.TitleDecoration}  {statusIndicator} {activityIndicator}";
 
-        _headerLabel.Text = $"{theme.TitleDecoration} {title} {theme.TitleDecoration}  {statusIndicator} {activityIndicator}";
+        Driver!.SetAttribute(theme.BrightAttr);
+        int headerX = Math.Max(0, (totalWidth - headerText.Length) / 2);
+        Move(headerX, 0);
+        Driver!.AddStr(headerText.Length <= totalWidth ? headerText : headerText[..totalWidth]);
 
-        // Update legend with color indicators
+        // Legend line
         var legendParts = seriesCopy.Select((s, i) =>
             $"{GetColorName(SeriesColors[i])}:{s.Node.DisplayName ?? "?"}")
             .ToList();
-        _legendLabel.Text = string.Join("  ", legendParts);
 
-        // Update status bar
-        string scaleInfo = _autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X";
-        int totalSamples = seriesCopy.Sum(s => s.Samples.Count);
-        string timeInfo = FormatElapsedTime(maxElapsedSeconds);
+        string legendText = string.Join("  ", legendParts);
+        Driver!.SetAttribute(theme.DimAttr);
+        int legendX = Math.Max(0, (totalWidth - legendText.Length) / 2);
+        Move(legendX, 1);
+        Driver!.AddStr(legendText.Length <= totalWidth ? legendText : legendText[..totalWidth]);
+    }
 
-        _statusLabel.Text = $"[SPACE] Pause  [+/-] Scale  [R] Auto    SCALE:{scaleInfo}  TIME:{timeInfo}  SAMPLES:{totalSamples}";
-
-        // Clear previous annotations
-        _graphView.Annotations.Clear();
-        _graphView.Series.Clear();
-
-        // Determine the time range for x-axis
-        double timeRangeSeconds = Math.Max(maxElapsedSeconds, 10);
-
-        if (seriesCopy.Any(s => s.Samples.Count > 0))
+    private void DrawGrid(BrailleCanvas canvas, int pixelW, int pixelH)
+    {
+        // Horizontal grid lines at roughly 5 positions
+        int numHLines = 4;
+        for (int i = 1; i < numHLines; i++)
         {
-            // Add path annotations for each series
-            foreach (var series in seriesCopy)
+            int y = i * pixelH / numHLines;
+            canvas.DrawDottedHorizontalLine(y, GridDotSpacing);
+        }
+
+        // Vertical grid lines at roughly 6 positions
+        int numVLines = 5;
+        for (int i = 1; i < numVLines; i++)
+        {
+            int x = i * pixelW / numVLines;
+            canvas.DrawDottedVerticalLine(x, GridDotSpacing);
+        }
+    }
+
+    private void DrawYAxisLabels(AppTheme theme, int plotTop, int plotHeight,
+                                  float visibleMin, float visibleMax)
+    {
+        Driver!.SetAttribute(theme.DimAttr);
+
+        int numLabels = Math.Min(plotHeight, 5);
+        for (int i = 0; i <= numLabels; i++)
+        {
+            float fraction = (float)i / numLabels;
+            float value = visibleMax - fraction * (visibleMax - visibleMin);
+            string label = FormatAxisValue(value);
+
+            int y = plotTop + (int)(fraction * (plotHeight - 1));
+            // Right-align the label
+            int x = Math.Max(0, YAxisLabelWidth - 1 - label.Length);
+            Move(x, y);
+            Driver!.AddStr(label);
+        }
+    }
+
+    private void DrawXAxisLabels(AppTheme theme, int plotLeft, int labelY,
+                                  int plotWidth, double windowDuration)
+    {
+        Driver!.SetAttribute(theme.DimAttr);
+
+        int numLabels = Math.Min(plotWidth / 8, 6); // At least 8 chars apart
+        if (numLabels < 2) numLabels = 2;
+
+        for (int i = 0; i <= numLabels; i++)
+        {
+            double fraction = (double)i / numLabels;
+            double seconds = fraction * windowDuration;
+            string label = FormatElapsedTime(seconds);
+
+            int x = plotLeft + (int)(fraction * (plotWidth - 1));
+            // Center the label around x
+            int labelX = x - label.Length / 2;
+            labelX = Math.Clamp(labelX, plotLeft, plotLeft + plotWidth - label.Length);
+
+            Move(labelX, labelY);
+            Driver!.AddStr(label);
+        }
+    }
+
+    private void DrawStatsOverlay(AppTheme theme, List<SeriesData> seriesCopy,
+                                   int plotLeft, int plotTop, int plotWidth)
+    {
+        // Draw stats in top-right corner of the plot area
+        for (int i = 0; i < seriesCopy.Count; i++)
+        {
+            var s = seriesCopy[i];
+            string colorName = GetColorName(s.LineColor);
+
+            string statsText;
+            if (float.IsNaN(s.CurrentValue))
             {
-                List<TimestampedSample> samples;
-                lock (_lock)
-                {
-                    samples = series.Samples.ToList();
-                }
-
-                if (samples.Count == 0) continue;
-
-                var points = new List<PointF>();
-                foreach (var sample in samples)
-                {
-                    var elapsedSeconds = (float)(sample.Timestamp - _startTime).TotalSeconds;
-                    points.Add(new PointF(elapsedSeconds, sample.Value));
-                }
-
-                var path = new PathAnnotation
-                {
-                    Points = points,
-                    LineColor = new Attribute(series.LineColor, theme.Background),
-                    BeforeSeries = false
-                };
-                _graphView.Annotations.Add(path);
+                statsText = $"{colorName}: ---";
+            }
+            else
+            {
+                statsText = $"{colorName}: {FormatAxisValue(s.CurrentValue)}" +
+                           $" [{FormatAxisValue(s.MinValue)}/{FormatAxisValue(s.MaxValue)}" +
+                           $" avg:{FormatAxisValue(s.Average)}]";
             }
 
-            // Configure graph scaling
-            float valueRange = visibleMax - visibleMin;
-            if (valueRange < 1) valueRange = 1;
+            int x = plotLeft + plotWidth - statsText.Length - 1;
+            if (x < plotLeft) x = plotLeft;
+            int y = plotTop + i;
 
-            int graphWidth = Math.Max(1, _graphView.Frame.Width - (int)_graphView.MarginLeft - 2);
-            int graphHeight = Math.Max(1, _graphView.Frame.Height - (int)_graphView.MarginBottom - 2);
+            // Use signal color for the stat line
+            var attr = new Attribute(s.LineColor, theme.Background);
+            Driver!.SetAttribute(attr);
+            Move(x, y);
+            Driver!.AddStr(statsText.Length <= plotWidth ? statsText : statsText[..plotWidth]);
+        }
+    }
 
-            float cellSizeX = (float)timeRangeSeconds / Math.Max(1, graphWidth);
-            float cellSizeY = valueRange / Math.Max(1, graphHeight);
+    private void DrawStatusBar(AppTheme theme, List<SeriesData> seriesCopy,
+                                List<List<TimestampedSample>> samplesCopy,
+                                int totalWidth, int totalHeight,
+                                DateTime windowStart, double windowDuration,
+                                int canvasPixelW)
+    {
+        int statusY = totalHeight - StatusRows;
+        Driver!.SetAttribute(theme.DimAttr);
 
-            _graphView.CellSize = new PointF(
-                Math.Max(0.01f, cellSizeX),
-                Math.Max(0.1f, cellSizeY)
-            );
+        string scaleInfo = _autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X";
+        int totalSamples = samplesCopy.Sum(s => s.Count);
+        double elapsed = (DateTime.Now - _startTime).TotalSeconds;
+        string timeInfo = FormatElapsedTime(elapsed);
+        string windowInfo = FormatElapsedTime(_timeWindowSeconds);
 
-            _graphView.ScrollOffset = new PointF(0, visibleMin);
+        string statusText;
+        if (_isPaused && _cursorActive)
+        {
+            // Cursor mode status
+            double cursorFraction = canvasPixelW > 1
+                ? (double)_cursorPixelX / (canvasPixelW - 1)
+                : 0;
+            double cursorSeconds = cursorFraction * windowDuration;
+            string cursorTime = $"{cursorSeconds:F1}s";
 
-            // Configure axis labels
-            _graphView.AxisX.Increment = (float)Math.Max(1, timeRangeSeconds / 5);
-            _graphView.AxisX.ShowLabelsEvery = 1;
-            _graphView.AxisX.Minimum = 0;
-            _graphView.AxisX.LabelGetter = v => FormatTimeAxisLabel(v.Value);
+            var cursorValues = new List<string>();
+            for (int i = 0; i < seriesCopy.Count && i < samplesCopy.Count; i++)
+            {
+                var samples = samplesCopy[i];
+                string colorName = GetColorName(seriesCopy[i].LineColor);
+                float interpolated = InterpolateSampleAtTime(samples, windowStart, windowDuration, cursorFraction);
+                cursorValues.Add($"{colorName}:{FormatAxisValue(interpolated)}");
+            }
 
-            float yIncrement = valueRange / 4;
-            _graphView.AxisY.Increment = yIncrement > 0 ? yIncrement : 10;
-            _graphView.AxisY.ShowLabelsEvery = 1;
-            _graphView.AxisY.LabelGetter = v => FormatAxisValue((float)v.Value);
+            statusText = $"<LEFT/RIGHT> Cursor  <SPACE> Resume  CURSOR @ {cursorTime}  {string.Join("  ", cursorValues)}";
         }
         else
         {
-            // No data - show default range
-            _graphView.CellSize = new PointF(1, 1);
-            _graphView.ScrollOffset = new PointF(0, 0);
-            _graphView.AxisX.Increment = 10;
-            _graphView.AxisY.Increment = 10;
-
-            // Add "No Signal" annotation
-            var noSignalAnnotation = new TextAnnotation
-            {
-                Text = theme.NoSignalMessage,
-                GraphPosition = new PointF(10, 50)
-            };
-            _graphView.Annotations.Add(noSignalAnnotation);
+            statusText = $"<SPACE> Pause  <+/-> VScale  <R> Auto  <[/]> Time" +
+                         $"  SCALE:{scaleInfo}  WIN:{windowInfo}  TIME:{timeInfo}  SAMPLES:{totalSamples}";
         }
 
-        _graphView.SetNeedsLayout();
+        int statusX = Math.Max(0, (totalWidth - statusText.Length) / 2);
+        Move(statusX, statusY);
+        Driver!.AddStr(statusText.Length <= totalWidth ? statusText : statusText[..totalWidth]);
+    }
+
+    /// <summary>
+    /// Interpolates a value from sample data at a given fractional position within the time window.
+    /// </summary>
+    private static float InterpolateSampleAtTime(List<TimestampedSample> samples,
+                                                  DateTime windowStart, double windowDuration,
+                                                  double fraction)
+    {
+        if (samples.Count == 0) return float.NaN;
+
+        var targetTime = windowStart.AddSeconds(fraction * windowDuration);
+
+        // Find the two samples surrounding the target time
+        int idx = samples.FindIndex(s => s.Timestamp >= targetTime);
+
+        if (idx < 0) return samples[^1].Value; // Past the end
+        if (idx == 0) return samples[0].Value;  // Before the start
+
+        var before = samples[idx - 1];
+        var after = samples[idx];
+
+        double totalSpan = (after.Timestamp - before.Timestamp).TotalSeconds;
+        if (totalSpan <= 0) return before.Value;
+
+        double t = (targetTime - before.Timestamp).TotalSeconds / totalSpan;
+        return (float)(before.Value + t * (after.Value - before.Value));
     }
 
     private static string GetColorName(Terminal.Gui.Color color)
@@ -576,16 +755,18 @@ public class ScopeView : View
         }
     }
 
-    private static string FormatTimeAxisLabel(double seconds) => FormatElapsedTime(seconds);
-
     /// <summary>
     /// Toggles pause state.
     /// </summary>
     public void TogglePause()
     {
         _isPaused = !_isPaused;
+        if (!_isPaused)
+        {
+            // Resuming - hide cursor
+            _cursorActive = false;
+        }
         PauseStateChanged?.Invoke(_isPaused);
-        UpdateGraph();
         SetNeedsLayout();
     }
 
@@ -596,7 +777,6 @@ public class ScopeView : View
     {
         _autoScale = false;
         _scaleMultiplier *= 1.2f;
-        UpdateGraph();
         SetNeedsLayout();
     }
 
@@ -608,7 +788,6 @@ public class ScopeView : View
         _autoScale = false;
         _scaleMultiplier /= 1.2f;
         if (_scaleMultiplier < 0.1f) _scaleMultiplier = 0.1f;
-        UpdateGraph();
         SetNeedsLayout();
     }
 
@@ -619,7 +798,50 @@ public class ScopeView : View
     {
         _autoScale = true;
         _scaleMultiplier = 1.0f;
-        UpdateGraph();
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Widens the time window (show more history).
+    /// </summary>
+    public void WidenTimeWindow()
+    {
+        _timeWindowSeconds = Math.Min(_timeWindowSeconds * TimeWindowZoomFactor, MaxTimeWindowSeconds);
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Narrows the time window (zoom in on time).
+    /// </summary>
+    public void NarrowTimeWindow()
+    {
+        _timeWindowSeconds = Math.Max(_timeWindowSeconds / TimeWindowZoomFactor, MinTimeWindowSeconds);
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Moves the cursor left (when paused).
+    /// </summary>
+    public void MoveCursorLeft()
+    {
+        if (!_isPaused) return;
+        _cursorActive = true;
+        _cursorPixelX = Math.Max(0, _cursorPixelX - 2);
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Moves the cursor right (when paused).
+    /// </summary>
+    public void MoveCursorRight()
+    {
+        if (!_isPaused) return;
+        _cursorActive = true;
+
+        // Determine max from current plot width
+        int plotWidth = Math.Max(1, Frame.Width - YAxisLabelWidth);
+        int maxPixelX = plotWidth * 2 - 1;
+        _cursorPixelX = Math.Min(maxPixelX, _cursorPixelX + 2);
         SetNeedsLayout();
     }
 
@@ -645,6 +867,22 @@ public class ScopeView : View
             case (KeyCode)'r':
             case (KeyCode)'R':
                 ResetScale();
+                return true;
+
+            case (KeyCode)'[':
+                WidenTimeWindow();
+                return true;
+
+            case (KeyCode)']':
+                NarrowTimeWindow();
+                return true;
+
+            case KeyCode.CursorLeft:
+                MoveCursorLeft();
+                return true;
+
+            case KeyCode.CursorRight:
+                MoveCursorRight();
                 return true;
         }
 

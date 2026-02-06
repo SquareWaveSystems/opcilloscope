@@ -20,7 +20,7 @@ public class HelpDialog : Dialog
 
         Title = " opcilloscope - Help ";
         Width = 64;
-        Height = 34;
+        Height = Dim.Fill(2);
 
         var theme = ThemeManager.Current;
 
@@ -127,6 +127,8 @@ SCOPE VIEW CONTROLS
   Space            Pause/resume plotting
   +/-              Adjust vertical scale
   R                Reset to auto-scale
+  [/]              Widen/narrow time window
+  Left/Right       Move cursor (when paused)
 
 APPLICATION
   Ctrl+O           Open configuration
