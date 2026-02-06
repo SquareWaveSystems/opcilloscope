@@ -101,6 +101,9 @@ install() {
         fi
 
         echo "Run 'opcilloscope' to start the application."
+        echo ""
+        echo "To uninstall later:"
+        echo "  curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/uninstall.sh | bash"
     else
         error "Installation failed"
     fi
