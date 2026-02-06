@@ -194,6 +194,7 @@ public class MonitoredVariablesView : FrameView
             Text = "● REC",
             X = Pos.AnchorEnd(10),
             Y = 0,
+            Width = 10,
             Height = 1,
             ShadowStyle = ShadowStyle.None,
             ColorScheme = theme.ButtonColorScheme
