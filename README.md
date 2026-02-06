@@ -129,7 +129,7 @@ Don't have an OPC UA server handy? Here are some options:
 **Built-in test server:**
 
 ```bash
-dotnet run --project tools/Opcilloscope.TestServer
+dotnet run --project Tests/Opcilloscope.TestServer
 # Starts at opc.tcp://localhost:4840 with simulation nodes
 ```
 
