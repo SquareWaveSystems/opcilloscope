@@ -48,7 +48,7 @@ public class NodeDetailsView : FrameView
             Y = 0,
             Width = Dim.Fill(9), // Leave space for Copy button
             Height = Dim.Fill(),
-            Text = "Select a node to view details",
+            Text = "",
             TextAlignment = Alignment.Start,
             ColorScheme = new ColorScheme
             {
@@ -71,7 +71,7 @@ public class NodeDetailsView : FrameView
             _copyButton.ColorScheme = theme.ButtonColorScheme;
 
             // When showing empty state, keep muted color
-            if (_detailsLabel.Text == "Select a node to view details" ||
+            if (_detailsLabel.Text == "" ||
                 _detailsLabel.Text == "Not connected")
             {
                 _detailsLabel.ColorScheme = new ColorScheme
@@ -108,7 +108,7 @@ public class NodeDetailsView : FrameView
             _currentNodeId = null;
             Application.Invoke(() =>
             {
-                _detailsLabel.Text = "Select a node to view details";
+                _detailsLabel.Text = "";
                 _copyButton.Enabled = false;
                 SetMutedColor();
             });
