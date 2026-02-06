@@ -2,8 +2,6 @@
 
 **A lightweight, cross-platform OPC UA client for the terminal heads.**
 
-Built with [.NET 10](https://dotnet.microsoft.com/download/dotnet/10.0), [Terminal.Gui](https://github.com/gui-cs/Terminal.Gui), and the [OPC UA](https://opcfoundation.org/about/opc-technologies/opc-ua/) standard.
-
 Browse, monitor, and subscribe to industrial automation data right from your terminal. No bloated GUI, no complex setup, no license fees.
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-purple)](https://dotnet.microsoft.com/download/dotnet/10.0)
