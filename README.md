@@ -99,12 +99,6 @@ dotnet build
 dotnet run
 ```
 
-Start the built-in test server (Counter, SineWave, RandomValue, writable nodes):
-```bash
-dotnet run --project Tests/Opcilloscope.TestServer
-# Starts at opc.tcp://localhost:4840
-```
-
 Run tests:
 ```bash
 dotnet test
