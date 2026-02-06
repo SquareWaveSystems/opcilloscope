@@ -95,6 +95,9 @@ public class HelpDialog : Dialog
         lines.Add("  - Only Variable nodes can be subscribed");
         lines.Add("  - Select up to 5 variables for Scope/Recording");
         lines.Add("  - Status bar shows context-specific shortcuts");
+        lines.Add("  - Publishing Interval (Settings) controls how often");
+        lines.Add("    the server sends data and affects Scope, Trend,");
+        lines.Add("    and CSV data resolution");
 
         return string.Join("\n", lines);
     }
@@ -142,6 +145,9 @@ TIPS
   - Only Variable nodes can be subscribed
   - Select up to 5 variables for Scope/Recording
   - Status bar shows context-specific shortcuts
+  - Publishing Interval (Settings) controls how often
+    the server sends data and affects Scope, Trend,
+    and CSV data resolution
 ";
     }
 
