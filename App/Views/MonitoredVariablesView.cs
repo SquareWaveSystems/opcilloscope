@@ -52,6 +52,7 @@ public class MonitoredVariablesView : FrameView
     public event Action<MonitoredNode>? UnsubscribeRequested;
     public event Action? RecordToggleRequested;
     public event Action<int>? ScopeSelectionChanged;  // Fires with current selection count
+    public event Action<MonitoredNode>? SelectedVariableChanged;
 
     public MonitoredNode? SelectedVariable
     {
@@ -154,6 +155,7 @@ public class MonitoredVariablesView : FrameView
 
         _tableView.KeyDown += HandleKeyDown;
         _tableView.MouseClick += HandleMouseClick;
+        _tableView.SelectedCellChanged += OnSelectedCellChanged;
 
         // Create empty state label
         _emptyStateLabel = new Label
@@ -441,6 +443,18 @@ public class MonitoredVariablesView : FrameView
         RecordToggleRequested?.Invoke();
     }
 
+    private void OnSelectedCellChanged(object? sender, SelectedCellChangedEventArgs e)
+    {
+        if (e.NewRow >= 0 && e.NewRow < _dataTable.Rows.Count)
+        {
+            var row = _dataTable.Rows[e.NewRow];
+            if (row["_VariableRef"] is MonitoredNode node)
+            {
+                SelectedVariableChanged?.Invoke(node);
+            }
+        }
+    }
+
     private void HandleKeyDown(object? _, Key e)
     {
         // Use KeyCode for comparisons - Terminal.Gui v2 pattern
@@ -578,6 +592,7 @@ public class MonitoredVariablesView : FrameView
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _recordButton.Accepting -= OnRecordButtonClicked;
             _tableView.MouseClick -= HandleMouseClick;
+            _tableView.SelectedCellChanged -= OnSelectedCellChanged;
             _tableView.KeyDown -= HandleKeyDown;
         }
         base.Dispose(disposing);

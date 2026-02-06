@@ -191,6 +191,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredVariablesView.UnsubscribeRequested += OnUnsubscribeRequested;
         _monitoredVariablesView.RecordToggleRequested += ToggleRecording;
+        _monitoredVariablesView.SelectedVariableChanged += OnMonitoredVariableSelected;
 
         // Initialize lazygit-inspired keybinding system
         _keybindingManager = new KeybindingManager();
@@ -537,6 +538,11 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     private void OnNodeSelected(BrowsedNode node)
     {
         _nodeDetailsView.ShowNodeAsync(node).FireAndForget(_logger);
+    }
+
+    private void OnMonitoredVariableSelected(MonitoredNode node)
+    {
+        _nodeDetailsView.ShowNodeByIdAsync(node.NodeId).FireAndForget(_logger);
     }
 
     #region Focus Tracking and Context-Aware UI

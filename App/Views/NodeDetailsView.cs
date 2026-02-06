@@ -101,6 +101,56 @@ public class NodeDetailsView : FrameView
         _logger = logger;
     }
 
+    public async Task ShowNodeByIdAsync(NodeId? nodeId)
+    {
+        if (nodeId == null || _nodeBrowser == null)
+        {
+            _currentNodeId = null;
+            Application.Invoke(() =>
+            {
+                _detailsLabel.Text = "Select a node to view details";
+                _copyButton.Enabled = false;
+                SetMutedColor();
+            });
+            return;
+        }
+
+        _currentNodeId = nodeId;
+        var attrs = await _nodeBrowser.GetNodeAttributesAsync(nodeId);
+
+        Application.Invoke(() =>
+        {
+            if (attrs == null)
+            {
+                _detailsLabel.Text = $"NodeId: {nodeId}\nFailed to read attributes";
+                _copyButton.Enabled = false;
+                SetNormalColor();
+                return;
+            }
+
+            var line1Parts = new List<string>();
+            if (attrs.NodeClass == NodeClass.Variable)
+            {
+                line1Parts.Add($"Value: {attrs.Value ?? "N/A"}");
+                line1Parts.Add($"Type: {attrs.DataType ?? "N/A"}");
+                line1Parts.Add($"Access: {attrs.AccessLevelString}");
+            }
+            else
+            {
+                line1Parts.Add($"Name: {attrs.DisplayName ?? attrs.BrowseName ?? "N/A"}");
+                line1Parts.Add($"Class: {attrs.NodeClass}");
+            }
+            line1Parts.Add($"NodeId: {attrs.NodeId}");
+
+            var desc = !string.IsNullOrEmpty(attrs.Description) ? attrs.Description : "";
+            var line2 = $"Desc: {desc}";
+
+            _detailsLabel.Text = string.Join("  │  ", line1Parts) + "\n" + line2;
+            _copyButton.Enabled = true;
+            SetNormalColor();
+        });
+    }
+
     public async Task ShowNodeAsync(BrowsedNode? node)
     {
         if (node == null || _nodeBrowser == null)
