@@ -97,8 +97,9 @@ public sealed class ConnectionManager : IDisposable
     /// Connects to an OPC UA server.
     /// </summary>
     /// <param name="endpoint">The endpoint URL to connect to.</param>
+    /// <param name="publishingInterval">Publishing interval in milliseconds for the subscription.</param>
     /// <returns>True if connection succeeded, false otherwise.</returns>
-    public async Task<bool> ConnectAsync(string endpoint)
+    public async Task<bool> ConnectAsync(string endpoint, int publishingInterval = 250)
     {
         Disconnect();
 
@@ -111,7 +112,7 @@ public sealed class ConnectionManager : IDisposable
 
             if (success)
             {
-                await InitializeSubscriptionAsync();
+                await InitializeSubscriptionAsync(publishingInterval);
                 StateChanged?.Invoke(ConnectionState.Connected);
             }
             else
@@ -252,9 +253,10 @@ public sealed class ConnectionManager : IDisposable
         return _subscriptionManager?.RemoveNodeAsync(clientHandle) ?? Task.FromResult(false);
     }
 
-    private async Task InitializeSubscriptionAsync()
+    private async Task InitializeSubscriptionAsync(int publishingInterval = 250)
     {
         _subscriptionManager = new SubscriptionManager(_client, _logger);
+        _subscriptionManager.PublishingInterval = publishingInterval;
         await _subscriptionManager.InitializeAsync();
 
         // Store handler references for proper unsubscription

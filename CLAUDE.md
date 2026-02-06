@@ -82,9 +82,8 @@ Opcilloscope/
 │   │   ├── ScopeView.cs            # Real-time multi-signal oscilloscope view
 │   │   └── TrendPlotView.cs        # Single-signal trend plot view
 │   ├── Dialogs/
-│   │   ├── ConnectDialog.cs        # Server connection dialog
+│   │   ├── ConnectDialog.cs        # Server connection dialog with publishing interval
 │   │   ├── WriteValueDialog.cs     # Write value to node dialog
-│   │   ├── SettingsDialog.cs       # Application settings dialog
 │   │   ├── ScopeDialog.cs          # Multi-signal scope dialog (up to 5 signals)
 │   │   ├── TrendPlotDialog.cs      # Single-signal trend plot dialog
 │   │   ├── SaveConfigDialog.cs     # Save configuration file dialog

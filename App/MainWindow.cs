@@ -308,9 +308,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
                     new MenuItem("_Scope", "s", LaunchScope),
                     new MenuItem("_Refresh Tree", "r", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
-                    _themeToggleItem,
-                    null!, // Separator
-                    new MenuItem("Se_ttings...", "", ShowSettings)
+                    _themeToggleItem
                 }),
                 new MenuBarItem("_Help", new MenuItem[]
                 {
@@ -425,16 +423,17 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
     private void ShowConnectDialog()
     {
-        var dialog = new ConnectDialog(_lastEndpoint);
+        var currentInterval = _connectionManager.SubscriptionManager?.PublishingInterval ?? 250;
+        var dialog = new ConnectDialog(_lastEndpoint, currentInterval);
         Application.Run(dialog);
 
         if (dialog.Confirmed)
         {
-            ConnectAsync(dialog.EndpointUrl).FireAndForget(_logger);
+            ConnectAsync(dialog.EndpointUrl, dialog.PublishingInterval).FireAndForget(_logger);
         }
     }
 
-    private async Task ConnectAsync(string endpoint)
+    private async Task ConnectAsync(string endpoint, int publishingInterval = 250)
     {
         // Disconnect if already connected
         Disconnect();
@@ -444,7 +443,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
         try
         {
-            var success = await _connectionManager.ConnectAsync(endpoint);
+            var success = await _connectionManager.ConnectAsync(endpoint, publishingInterval);
 
             if (success)
             {
@@ -850,23 +849,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         SetNeedsLayout();
     }
 
-    private void ShowSettings()
-    {
-        var currentInterval = _connectionManager.SubscriptionManager?.PublishingInterval ?? 1000;
-        var dialog = new SettingsDialog(currentInterval);
-        Application.Run(dialog);
-
-        if (dialog.Confirmed && _connectionManager.SubscriptionManager != null)
-        {
-            _connectionManager.SubscriptionManager.PublishingInterval = dialog.PublishingInterval;
-            _logger.Info($"Publishing interval changed to {dialog.PublishingInterval}ms");
-
-            // Mark configuration as having unsaved changes
-            _configService.MarkDirty();
-            UpdateWindowTitle();
-        }
-    }
-
     private void LaunchScope()
     {
         if (_connectionManager.SubscriptionManager == null)
@@ -1083,7 +1065,7 @@ License: MIT
             // Connect to server and subscribe to nodes
             if (!string.IsNullOrEmpty(config.Server.EndpointUrl))
             {
-                var connected = await _connectionManager.ConnectAsync(config.Server.EndpointUrl);
+                var connected = await _connectionManager.ConnectAsync(config.Server.EndpointUrl, config.Settings.PublishingIntervalMs);
 
                 if (connected)
                 {
@@ -1095,12 +1077,6 @@ License: MIT
                     _nodeDetailsView.Clear();
 
                     _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
-
-                    // Apply publishing interval to the newly created subscription manager
-                    if (_connectionManager.SubscriptionManager != null)
-                    {
-                        _connectionManager.SubscriptionManager.PublishingInterval = config.Settings.PublishingIntervalMs;
-                    }
 
                     // Subscribe to saved nodes
                     foreach (var node in config.MonitoredNodes.Where(n => n.Enabled))
