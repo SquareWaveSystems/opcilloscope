@@ -706,9 +706,9 @@ public class ScopeView : View
             segments =
             [
                 new("SPACE", true), new(" Pause  ", false),
-                new("+/-", true), new(" VScale  ", false),
+                new("+/-", true), new(" VertScale  ", false),
                 new("R", true), new(" Auto  ", false),
-                new("[/]", true), new(" Time  ", false),
+                new("[/]", true), new(" HorizScale  ", false),
                 new($"SCALE:{scaleInfo}  WIN:{windowInfo}  TIME:{timeInfo}  SAMPLES:{totalSamples}", false)
             ];
         }
