@@ -1,6 +1,8 @@
 # opcilloscope
 
-**A lightweight OPC UA client for the terminal heads.**
+**A lightweight, cross-platform OPC UA client for the terminal heads.**
+
+Built with [.NET 10](https://dotnet.microsoft.com/download/dotnet/10.0), [Terminal.Gui](https://github.com/gui-cs/Terminal.Gui), and the [OPC UA](https://opcfoundation.org/about/opc-technologies/opc-ua/) standard.
 
 Browse, monitor, and subscribe to industrial automation data right from your terminal. No bloated GUI, no complex setup, no license fees.
 
