@@ -677,7 +677,7 @@ public class ScopeView : View
         string windowInfo = FormatElapsedTime(_timeWindowSeconds);
 
         List<StatusSegment> segments;
-        if (_isPaused && _cursorActive)
+        if (_isPaused)
         {
             double cursorFraction = canvasPixelW > 1
                 ? (double)_cursorPixelX / (canvasPixelW - 1)
@@ -705,10 +705,10 @@ public class ScopeView : View
         {
             segments =
             [
-                new("SPACE", true), new(" Pause  ", false),
+                new("SPACE", true), new(" Pause/Cursor  ", false),
                 new("+/-", true), new(" VertScale  ", false),
+                new("[", true), new("/", false), new("]", true), new(" HorizScale  ", false),
                 new("R", true), new(" Auto  ", false),
-                new("[/]", true), new(" HorizScale  ", false),
                 new($"SCALE:{scaleInfo}  WIN:{windowInfo}  TIME:{timeInfo}  SAMPLES:{totalSamples}", false)
             ];
         }
@@ -785,7 +785,14 @@ public class ScopeView : View
     public void TogglePause()
     {
         _isPaused = !_isPaused;
-        if (!_isPaused)
+        if (_isPaused)
+        {
+            // Pausing - activate cursor at right edge (most recent data)
+            _cursorActive = true;
+            int plotWidth = Math.Max(1, Frame.Width - YAxisLabelWidth);
+            _cursorPixelX = plotWidth * 2 - 1;
+        }
+        else
         {
             // Resuming - hide cursor
             _cursorActive = false;
