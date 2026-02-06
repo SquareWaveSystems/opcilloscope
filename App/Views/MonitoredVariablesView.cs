@@ -162,7 +162,7 @@ public class MonitoredVariablesView : FrameView
         {
             X = Pos.Center(),
             Y = Pos.Center(),
-            Text = "Select nodes to monitor",
+            Text = "",
             ColorScheme = new ColorScheme
             {
                 Normal = new Attribute(theme.MutedText, theme.Background),
