@@ -10,6 +10,51 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 
 ---
 
+## Quickstart (User)
+
+**Linux / macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.ps1 | iex
+```
+
+Or grab a binary from [GitHub Releases](https://github.com/SquareWaveSystems/opcilloscope/releases).
+
+Then connect to any OPC UA server:
+```bash
+opcilloscope
+```
+
+---
+
+## Quickstart (Developer)
+
+Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+
+```bash
+git clone https://github.com/SquareWaveSystems/opcilloscope.git
+cd opcilloscope
+dotnet build
+dotnet run
+```
+
+Start the built-in test server (Counter, SineWave, RandomValue, writable nodes):
+```bash
+dotnet run --project Tests/Opcilloscope.TestServer
+# Starts at opc.tcp://localhost:4840
+```
+
+Run tests:
+```bash
+dotnet test
+```
+
+---
+
 ## Why opcilloscope?
 
 Cause it was fun to build, but also...
@@ -22,89 +67,26 @@ Cause it was fun to build, but also...
 | Windows-only | Windows, Linux, macOS (x64 & ARM) |
 | Click-heavy workflows | Keyboard driven, mouse support |
 
----
-
-## See It In Action
-
-### Connect & Browse
-
-Connect to any OPC UA server and lazily browse the address space. No loading the entire tree upfront — just expand what you need.
-
-### Real-Time Monitoring
-
-Select variables with `Enter` to subscribe. Values update in real-time via OPC UA subscriptions — not polling. Remove with `Delete`.
-
-### Inspect Node Details
-
-Full attribute visibility: Description, DataType, AccessLevel, ValueRank. See exactly what you're working with.
-
-### Light & Dark Themes
-
-Easy on the eyes in any environment. Toggle themes to match your terminal or preference.
-
-### Export to CSV
-
-Capture a snapshot of your monitored values for documentation, analysis, or handoff.
-
-### Save & Load Configurations
-
-Save your connection and subscriptions to a config file. Load it next time to pick up exactly where you left off — perfect for recurring commissioning tasks.
-
----
-
-## Quick Start
-
-### One-Line Install
-
-**Linux / macOS:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.sh | bash
-```
-
-**Windows (PowerShell):**
-```powershell
-irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.ps1 | iex
-```
-
-### Or Download a Release
-
-Grab the latest from [GitHub Releases](https://github.com/SquareWaveSystems/opcilloscope/releases):
-
-| Platform | File |
-|----------|------|
-| Windows x64 | `opcilloscope-win-x64.zip` |
-| Windows ARM64 | `opcilloscope-win-arm64.zip` |
-| Linux x64 | `opcilloscope-linux-x64.tar.gz` |
-| Linux ARM64 | `opcilloscope-linux-arm64.tar.gz` |
-| macOS Intel | `opcilloscope-osx-x64.tar.gz` |
-| macOS Apple Silicon | `opcilloscope-osx-arm64.tar.gz` |
-
-### Build From Source
-
-```bash
-git clone https://github.com/SquareWaveSystems/opcilloscope.git
-cd opcilloscope
-dotnet build
-dotnet run
-```
-
-Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
-
----
-
-## Use Cases
-
 - **Commissioning**: Quickly verify PLC tags are publishing correctly
 - **Troubleshooting**: Monitor live values during fault diagnosis
 - **Integration Testing**: Validate OPC UA server configurations
 - **Documentation**: Export snapshots for handover reports
-- **Remote Monitoring**: Run on headless servers without GUI dependencies *(coming soon)*
+
+---
+
+## Features
+
+- **Browse** — Lazily explore the OPC UA address space. Expand only what you need.
+- **Monitor** — Subscribe to variables with `Enter`. Real-time updates via OPC UA subscriptions, not polling.
+- **Inspect** — Full node attributes: Description, DataType, AccessLevel, ValueRank.
+- **Scope** — Real-time multi-signal oscilloscope view (up to 5 signals).
+- **Record** — Export monitored values to CSV for analysis or documentation.
+- **Configure** — Save/load connection and subscription configs for recurring tasks.
+- **Themes** — Dark and light themes to match your environment.
 
 ---
 
 ## OPC UA Test Servers
-
-Don't have an OPC UA server handy? Here are some options:
 
 **Public servers** (no setup required):
 
@@ -113,37 +95,11 @@ Don't have an OPC UA server handy? Here are some options:
 | OPC UA Server | `opc.tcp://opcuaserver.com:48010` |
 | Eclipse Milo | `opc.tcp://milo.digitalpetri.com:62541/milo` |
 
-**Built-in test server:**
-
-```bash
-dotnet run --project Tests/Opcilloscope.TestServer
-# Starts at opc.tcp://localhost:4840 with Counter, SineWave, RandomValue, and writable test nodes
-```
-
-**Run your own** with [Microsoft OPC PLC](https://mcr.microsoft.com/iotedge/opc-plc) (Docker):
-
+**Docker** ([Microsoft OPC PLC](https://mcr.microsoft.com/iotedge/opc-plc)):
 ```bash
 docker run -p 50000:50000 mcr.microsoft.com/iotedge/opc-plc:latest \
   --autoaccept --unsecuretransport
 # Connect to opc.tcp://localhost:50000
-```
-
----
-
-## Project Structure
-
-```
-Opcilloscope/
-├── Program.cs                   # Entry point
-├── App/
-│   ├── MainWindow.cs           # Layout orchestration
-│   ├── Views/                  # UI panels
-│   └── Dialogs/                # Connection, settings, etc.
-├── OpcUa/
-│   ├── OpcUaClientWrapper.cs   # Session management
-│   ├── SubscriptionManager.cs  # Real-time subscriptions
-│   └── Models/                 # ViewModels
-└── Utilities/                  # Helpers
 ```
 
 ---
