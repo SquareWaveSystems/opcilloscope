@@ -117,7 +117,7 @@ NAVIGATION
 ADDRESS SPACE
   Enter            Subscribe to selected node
   Space            Expand/collapse tree node
-  R                Refresh
+  F5               Refresh
 
 MONITORED VARIABLES
   Delete           Unsubscribe from item

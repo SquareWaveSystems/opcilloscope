@@ -459,7 +459,7 @@ Automates release builds and publishing.
 | Key | Action |
 |-----|--------|
 | Enter | Subscribe to selected node |
-| R | Refresh address space tree |
+| F5 | Refresh address space tree |
 
 **Monitored Variables:**
 | Key | Action |
