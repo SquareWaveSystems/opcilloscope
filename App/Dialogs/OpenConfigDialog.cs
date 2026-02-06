@@ -73,7 +73,7 @@ public class OpenConfigDialog : Dialog
 
         var openButton = new Button
         {
-            X = Pos.Center() - 12,
+            X = Pos.Center() - 22,
             Y = Pos.AnchorEnd(1),
             Text = $"{theme.ButtonPrefix}Open{theme.ButtonSuffix}",
             IsDefault = true,
@@ -90,7 +90,7 @@ public class OpenConfigDialog : Dialog
 
         var browseButton = new Button
         {
-            X = Pos.Center() - 1,
+            X = Pos.Right(openButton) + 1,
             Y = Pos.AnchorEnd(1),
             Text = $"{theme.ButtonPrefix}Browse...{theme.ButtonSuffix}",
             ColorScheme = theme.ButtonColorScheme
@@ -99,7 +99,7 @@ public class OpenConfigDialog : Dialog
 
         var cancelButton = new Button
         {
-            X = Pos.Center() + 12,
+            X = Pos.Right(browseButton) + 1,
             Y = Pos.AnchorEnd(1),
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
             ColorScheme = theme.ButtonColorScheme
