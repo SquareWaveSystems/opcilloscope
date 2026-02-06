@@ -74,8 +74,9 @@ install() {
     info "Installing to ${INSTALL_DIR}..."
     mkdir -p "${INSTALL_DIR}"
 
-    # Find the binary (handle both 'opcilloscope' and 'Opcilloscope' naming)
-    binary=$(find "${tmp_dir}" -maxdepth 1 -type f -iname 'opcilloscope' -not -name '*.pdb' | head -n 1)
+    # Find the binary (handles both 'opcilloscope' and 'Opcilloscope' from different releases)
+    local binary
+    binary=$(find "${tmp_dir}" -maxdepth 1 -type f -iname 'opcilloscope' | head -n 1)
     if [ -z "$binary" ]; then
         error "Could not find opcilloscope binary in archive"
     fi
