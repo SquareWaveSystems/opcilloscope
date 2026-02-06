@@ -130,7 +130,7 @@ Don't have an OPC UA server handy? Here are some options:
 
 ```bash
 dotnet run --project Tests/Opcilloscope.TestServer
-# Starts at opc.tcp://localhost:4840 with simulation nodes
+# Starts at opc.tcp://localhost:4840 with Counter, SineWave, RandomValue, and writable test nodes
 ```
 
 **Run your own** with [Microsoft OPC PLC](https://mcr.microsoft.com/iotedge/opc-plc) (Docker):
