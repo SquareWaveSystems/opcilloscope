@@ -14,19 +14,21 @@ public class ConnectDialog : Dialog
 {
     private const string ProtocolPrefix = "opc.tcp://";
     private readonly TextField _endpointField;
+    private readonly NumericUpDown<int> _publishIntervalField;
     private bool _confirmed;
     private bool _isProcessingTextChange;
 
     public string EndpointUrl => ProtocolPrefix + (_endpointField.Text?.Trim() ?? string.Empty);
     public bool Confirmed => _confirmed;
+    public int PublishingInterval => _publishIntervalField.Value;
 
-    public ConnectDialog(string? initialEndpoint = null)
+    public ConnectDialog(string? initialEndpoint = null, int publishingInterval = 250)
     {
         var theme = AppThemeManager.Current;
 
         Title = " Connect to Server ";
         Width = 60;
-        Height = 9;
+        Height = 12;
 
         // Apply theme styling - double-line border for emphasis with grey border color
         ColorScheme = theme.DialogColorScheme;
@@ -63,11 +65,27 @@ public class ConnectDialog : Dialog
         // Handle pasted addresses by stripping protocol prefixes
         _endpointField.TextChanged += OnTextChanged;
 
-        var hintLabel = new Label
+        var intervalLabel = new Label
         {
             X = 1,
-            Y = 3,
-            Text = "Enter: server:4840/path (protocol is added automatically)",
+            Y = 4,
+            Text = "Publishing Interval (ms):"
+        };
+
+        _publishIntervalField = new NumericUpDown<int>
+        {
+            X = 1,
+            Y = 5,
+            Width = 20,
+            Value = publishingInterval,
+            Increment = 100
+        };
+
+        var intervalHintLabel = new Label
+        {
+            X = 1,
+            Y = 6,
+            Text = "How often the server sends data updates (100-10000)",
             ColorScheme = theme.MainColorScheme
         };
 
@@ -84,7 +102,7 @@ public class ConnectDialog : Dialog
         var connectButton = new Button
         {
             X = Pos.Center() - 10,
-            Y = 5,
+            Y = 8,
             Text = $"{theme.ButtonPrefix}Connect{theme.ButtonSuffix}",
             IsDefault = true,
             ColorScheme = defaultButtonScheme
@@ -102,7 +120,7 @@ public class ConnectDialog : Dialog
         var cancelButton = new Button
         {
             X = Pos.Center() + 4,
-            Y = 5,
+            Y = 8,
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
             ColorScheme = theme.ButtonColorScheme
         };
@@ -113,7 +131,9 @@ public class ConnectDialog : Dialog
             Application.RequestStop();
         };
 
-        Add(endpointLabel, protocolLabel, _endpointField, hintLabel, connectButton, cancelButton);
+        Add(endpointLabel, protocolLabel, _endpointField,
+            intervalLabel, _publishIntervalField, intervalHintLabel,
+            connectButton, cancelButton);
 
         _endpointField.SetFocus();
     }
@@ -140,6 +160,13 @@ public class ConnectDialog : Dialog
         catch
         {
             MessageBox.ErrorQuery("Error", "Invalid server address format", "OK");
+            return false;
+        }
+
+        var interval = _publishIntervalField.Value;
+        if (interval < 100 || interval > 10000)
+        {
+            MessageBox.ErrorQuery("Error", "Publishing interval must be between 100 and 10000 ms", "OK");
             return false;
         }
 
