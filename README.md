@@ -8,6 +8,10 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Terminal.Gui](https://img.shields.io/badge/UI-Terminal.Gui-blue)](https://github.com/gui-cs/Terminal.Gui)
 
+<p align="center">
+  <img src="docs/opcilloscope-hero.png" alt="opcilloscope scope view showing a live waveform" width="800">
+</p>
+
 ---
 
 ## Why opcilloscope?
