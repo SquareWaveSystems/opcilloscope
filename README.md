@@ -22,6 +22,8 @@ Cause it was fun to build, but also...
 | Windows-only | Windows, Linux, macOS (x64 & ARM) |
 | Click-heavy workflows | Keyboard driven, mouse support |
 
+### Use Cases
+
 - **Commissioning**: Quickly verify PLC tags are publishing correctly
 - **Troubleshooting**: Monitor live values during fault diagnosis
 - **Integration Testing**: Validate OPC UA server configurations
