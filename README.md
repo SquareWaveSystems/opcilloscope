@@ -110,6 +110,12 @@ dotnet test
 
 ## OPC UA Test Servers
 
+**Built-in test server** (Counter, SineWave, RandomValue, writable nodes):
+```bash
+dotnet run --project Tests/Opcilloscope.TestServer
+# Starts at opc.tcp://localhost:4840
+```
+
 **Public servers** (no setup required):
 
 | Server | Endpoint URL |
