@@ -59,7 +59,7 @@ public class ConnectDialog : Dialog
             X = 1 + ProtocolPrefix.Length,
             Y = 2,
             Width = Dim.Fill(1),
-            Text = initialEndpoint ?? string.Empty
+            Text = StripProtocolPrefix(initialEndpoint ?? string.Empty)
         };
 
         // Handle pasted addresses by stripping protocol prefixes
