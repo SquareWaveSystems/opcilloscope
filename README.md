@@ -92,50 +92,6 @@ Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ---
 
-## Keyboard Shortcuts
-
-opcilloscope is designed for keyboard-first workflows:
-
-**Global:**
-
-| Key | Action |
-|-----|--------|
-| `?` | Show help |
-| `Tab` | Switch between panes |
-| `Ctrl+O` | Open configuration |
-| `Ctrl+S` | Save configuration |
-| `Ctrl+Shift+S` | Save configuration as |
-| `Ctrl+R` | Toggle recording (start/stop) |
-| `Ctrl+Q` | Quit |
-
-**Address Space:**
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Subscribe to selected node |
-| `R` | Refresh address space tree |
-
-**Monitored Variables:**
-
-| Key | Action |
-|-----|--------|
-| `Delete` | Unsubscribe from selected variable |
-| `Space` | Toggle selection (for Scope/Recording) |
-| `W` | Write value to selected variable |
-| `T` | Show trend plot |
-| `S` | Open Scope with selected variables |
-
-**Scope/Trend Plot View:**
-
-| Key | Action |
-|-----|--------|
-| `Space` | Pause/resume plotting |
-| `+`/`=` | Zoom in (increase scale) |
-| `-` | Zoom out (decrease scale) |
-| `R` | Reset to auto-scale |
-
----
-
 ## Command Line Usage
 
 ```bash
@@ -145,33 +101,6 @@ opcilloscope --config production.json
 
 # Show help
 opcilloscope --help
-```
-
----
-
-## UI Overview
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ File  Connection  View  Theme  Help                                         │
-├───────────────────────────────┬─────────────────────────────────────────────┤
-│ Address Space                 │ Monitored Variables                         │
-│                               │                                             │
-│ ▾ Root                        │ Name           │ Value    │ Time   │ Status │
-│   ▾ Objects                   │────────────────┼──────────┼────────┼────────│
-│     ▸ Server                  │ Temperature    │ 47.3     │ 12:34  │ Good   │
-│     ▾ MyDevice                │ Pressure       │ 2.41     │ 12:34  │ Good   │
-│       ├─ Temperature [Double] │ FlowRate       │ 124.7    │ 12:34  │ Good   │
-│       ├─ Pressure [Double]    │ MotorRunning   │ True     │ 12:33  │ Good   │
-│       └─ MotorRunning [Bool]  │                │          │        │        │
-├───────────────────────────────┴─────────────────────────────────────────────┤
-│ Node Details                                                                │
-│ DisplayName: Temperature  │  DataType: Double  │  AccessLevel: Read/Write   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Log                                                                         │
-│ [12:30:15] Connected to opc.tcp://localhost:4840                            │
-│ [12:30:16] Subscribed to Temperature (ns=2;s=MyDevice.Temperature)          │
-└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -188,60 +117,29 @@ opcilloscope --help
 
 ## OPC UA Test Servers
 
-Don't have an OPC UA server handy? Here are several options to get started:
+Don't have an OPC UA server handy? Here are some options:
 
-### Public Servers (No Setup Required)
+**Public servers** (no setup required):
 
-These servers are available on the internet for testing — just connect and go:
+| Server | Endpoint URL |
+|--------|--------------|
+| OPC UA Server | `opc.tcp://opcuaserver.com:48010` |
+| Eclipse Milo | `opc.tcp://milo.digitalpetri.com:62541/milo` |
 
-| Server | Endpoint URL | Notes |
-|--------|--------------|-------|
-| OPC UA Server | `opc.tcp://opcuaserver.com:48010` | Great for beginners, no authentication required |
-| Eclipse Milo | `opc.tcp://milo.digitalpetri.com:62541/milo` | Supports secured & unsecured connections |
-| N3uron Demo | `opc.tcp://89.117.59.81:4840` | Username: `certTest`, Password: `n3uron` |
-
-> **Note:** For secured connections to Milo, upload your client certificate at [milo.digitalpetri.com](http://milo.digitalpetri.com).
-
-### Built-in Test Server
-
-opcilloscope includes an in-process OPC UA test server for development and testing:
+**Built-in test server:**
 
 ```bash
-# Run the standalone test server
 dotnet run --project tools/Opcilloscope.TestServer
-
-# Server starts at opc.tcp://localhost:4840
+# Starts at opc.tcp://localhost:4840 with simulation nodes
 ```
 
-The test server provides simulation nodes (Counter, SineWave, RandomValue) and writable nodes for testing write operations.
-
-### Run Your Own Server
-
-**Option 1: Microsoft OPC PLC (Docker)**
-
-Microsoft's OPC PLC container is a full-featured simulation server:
+**Run your own** with [Microsoft OPC PLC](https://mcr.microsoft.com/iotedge/opc-plc) (Docker):
 
 ```bash
 docker run -p 50000:50000 mcr.microsoft.com/iotedge/opc-plc:latest \
   --autoaccept --unsecuretransport
+# Connect to opc.tcp://localhost:50000
 ```
-
-Connect to `opc.tcp://localhost:50000`.
-
-**Option 2: Node-OPCUA (npm)**
-
-Spin up a quick server with Node.js:
-
-```bash
-npm install -g node-opcua-samples
-simple_server
-```
-
-Connect to `opc.tcp://localhost:26543`.
-
-**Option 3: Desktop Simulators**
-
-- [Prosys OPC UA Simulation Server](https://prosysopc.com/products/opc-ua-simulation-server/) — Free, feature-rich, Windows/Linux/macOS
 
 ---
 
