@@ -17,10 +17,10 @@ Cause it was fun to build, but also...
 | Traditional OPC Clients | opcilloscope |
 |------------------------|--------------|
 | Heavy desktop apps with complex licensing | Single portable binary, MIT licensed |
-| Seconds to install | `curl | bash` and you're running |
+| Minutes to install | `curl | bash` and you're running |
 | Resource-hungry GUIs | ~50MB RAM, runs anywhere |
 | Windows-only | Windows, Linux, macOS (x64 & ARM) |
-| Click-heavy workflows | Keyboard-driven, mouse support, terminal-native |
+| Click-heavy workflows | Keyboard driven, mouse support |
 
 ---
 
@@ -92,26 +92,13 @@ Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ---
 
-## Command Line Usage
-
-```bash
-# Launch with a saved configuration
-opcilloscope config.cfg
-opcilloscope --config production.json
-
-# Show help
-opcilloscope --help
-```
-
----
-
 ## Use Cases
 
 - **Commissioning**: Quickly verify PLC tags are publishing correctly
 - **Troubleshooting**: Monitor live values during fault diagnosis
 - **Integration Testing**: Validate OPC UA server configurations
 - **Documentation**: Export snapshots for handover reports
-- **Remote Monitoring**: Run on headless servers without GUI dependencies
+- **Remote Monitoring**: Run on headless servers without GUI dependencies *(coming soon)*
 
 ---
 
