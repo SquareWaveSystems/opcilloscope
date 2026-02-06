@@ -19,7 +19,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     // Reverse lookup: OPC MonitoredItem.ClientHandle -> our ClientHandle for O(1) notification handling
     private readonly Dictionary<uint, uint> _opcHandleToClientHandle = new();
     private uint _nextClientHandle = 1;
-    private int _publishingInterval = 1000;
+    private int _publishingInterval = 250;
     private bool _isInitialized;
     private readonly object _lock = new();
 
@@ -126,7 +126,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 DisplayName = displayName,
                 StartNodeId = nodeId,
                 AttributeId = Attributes.Value,
-                SamplingInterval = 500,
+                SamplingInterval = 250,
                 QueueSize = 10,
                 DiscardOldest = true
             };
@@ -526,7 +526,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                     DisplayName = displayName,
                     StartNodeId = nodeId,
                     AttributeId = Attributes.Value,
-                    SamplingInterval = 500,
+                    SamplingInterval = 250,
                     QueueSize = 10,
                     DiscardOldest = true
                 };

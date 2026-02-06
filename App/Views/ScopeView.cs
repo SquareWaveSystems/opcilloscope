@@ -34,8 +34,8 @@ public class ScopeView : View
 
     private readonly List<SeriesData> _series = new();
     private readonly object _lock = new();
-    private const int MaxSamples = 200;
-    private const double DefaultTimeWindowSeconds = 60.0;
+    private const int MaxSamples = 500;
+    private const double DefaultTimeWindowSeconds = 30.0;
 
     // Distinct colors for up to 5 series (using Terminal.Gui.Color)
     private static readonly Terminal.Gui.Color[] SeriesColors =

@@ -82,7 +82,7 @@ public class SubscriptionSettings
     /// This value is applied when configurations are loaded.
     /// Valid range: 100-10000ms (values outside this range will be clamped by SubscriptionManager).
     /// </summary>
-    public int PublishingIntervalMs { get; set; } = 1000;
+    public int PublishingIntervalMs { get; set; } = 250;
 
     /// <summary>
     /// Default sampling interval (in milliseconds) for monitored variables.
@@ -91,7 +91,7 @@ public class SubscriptionSettings
     /// applied by the configuration loading logic. It is reserved for future use.
     /// </para>
     /// </summary>
-    public int SamplingIntervalMs { get; set; } = 500;
+    public int SamplingIntervalMs { get; set; } = 250;
 
     /// <summary>
     /// Default queue size for monitored variables.
