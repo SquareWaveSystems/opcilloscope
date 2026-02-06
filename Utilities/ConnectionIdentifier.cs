@@ -2,19 +2,19 @@ namespace Opcilloscope.Utilities;
 
 /// <summary>
 /// Utility for generating standardized connection identifier strings.
-/// Format: {host}_{port}_{timestamp} with underscores separating each component.
+/// Format: {host}-{port}_{date}_{time} with hyphen between host/port and underscores for timestamp.
 /// </summary>
 public static class ConnectionIdentifier
 {
     /// <summary>
     /// Generates a standardized connection identifier string from an endpoint URL.
-    /// Format: {host}_{port}_{timestamp}
+    /// Format: {host}-{port}_{date}_{time}
     /// </summary>
     /// <param name="endpointUrl">The OPC UA endpoint URL (e.g., "opc.tcp://192.168.1.67:50000").</param>
     /// <param name="timestamp">Optional timestamp. If null, uses current time.</param>
-    /// <param name="timestampFormat">Format string for the timestamp. Default is "yyyyMMddHHmm".</param>
-    /// <returns>A standardized identifier string (e.g., "192.168.1.67_50000_202601071234").</returns>
-    public static string Generate(string? endpointUrl, DateTime? timestamp = null, string timestampFormat = "yyyyMMddHHmm")
+    /// <param name="timestampFormat">Format string for the timestamp. Default is "yyyyMMdd_HHmm".</param>
+    /// <returns>A standardized identifier string (e.g., "192.168.1.67-50000_20260107_1234").</returns>
+    public static string Generate(string? endpointUrl, DateTime? timestamp = null, string timestampFormat = "yyyyMMdd_HHmm")
     {
         var ts = (timestamp ?? DateTime.Now).ToString(timestampFormat);
 
@@ -27,10 +27,10 @@ public static class ConnectionIdentifier
 
     /// <summary>
     /// Extracts the host and port from an endpoint URL in a filename-safe format.
-    /// Format: {host}_{port}
+    /// Format: {host}-{port}
     /// </summary>
     /// <param name="endpointUrl">The OPC UA endpoint URL.</param>
-    /// <returns>A filename-safe string with host and port separated by underscore.</returns>
+    /// <returns>A filename-safe string with host and port separated by hyphen.</returns>
     public static string ExtractHostPort(string? endpointUrl)
     {
         if (string.IsNullOrEmpty(endpointUrl))
@@ -57,7 +57,7 @@ public static class ConnectionIdentifier
             host = SanitizeComponent(host);
             port = SanitizeComponent(port);
 
-            return $"{host}_{port}";
+            return $"{host}-{port}";
         }
 
         // No port specified, just sanitize the host

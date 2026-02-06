@@ -17,7 +17,6 @@ public static class DefaultKeybindings
         void SwitchPane();
         void ShowHelp();
         void ShowQuickHelp();
-        void OpenMenu();
 
         // Address Space
         void SubscribeSelected();
@@ -70,24 +69,6 @@ public static class DefaultKeybindings
             actions.ShowHelp,
             showInStatusBar: true,
             statusBarPriority: 1,
-            category: "Application");
-
-        manager.RegisterGlobal(
-            (Key)'m',
-            "Menu",
-            "Open menu",
-            actions.OpenMenu,
-            showInStatusBar: true,
-            statusBarPriority: 99,
-            category: "Application");
-
-        manager.RegisterGlobal(
-            (Key)'M',
-            "Menu",
-            "Open menu",
-            actions.OpenMenu,
-            showInStatusBar: false,
-            statusBarPriority: 100,
             category: "Application");
 
         // File operations

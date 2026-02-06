@@ -448,7 +448,6 @@ Automates release builds and publishing.
 | Key | Action |
 |-----|--------|
 | ? | Show help |
-| M | Open menu |
 | Tab | Switch between panes |
 | Ctrl+O | Open configuration |
 | Ctrl+S | Save configuration |

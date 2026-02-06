@@ -491,10 +491,11 @@ public class MonitoredVariablesView : FrameView
     private void HandleMouseClick(object? sender, MouseEventArgs e)
     {
         // Convert screen position to table cell
-        var cellPoint = _tableView.ScreenToCell(e.Position.X, e.Position.Y, out int? columnIndex, out int? rowIndex);
+        _tableView.ScreenToCell(e.Position.X, e.Position.Y, out int? columnIndex, out int? rowIndex);
 
-        // Toggle selection when clicking anywhere on a valid row
-        if (rowIndex.HasValue && rowIndex.Value >= 0 && rowIndex.Value < _dataTable.Rows.Count)
+        // Only toggle selection when clicking on the "Sel" column (column 0)
+        if (columnIndex.HasValue && columnIndex.Value == 0 &&
+            rowIndex.HasValue && rowIndex.Value >= 0 && rowIndex.Value < _dataTable.Rows.Count)
         {
             var row = _dataTable.Rows[rowIndex.Value];
             var variable = row["_VariableRef"] as MonitoredNode;
