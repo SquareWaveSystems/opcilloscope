@@ -10,6 +10,37 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 
 ---
 
+## Why opcilloscope?
+
+Cause it was fun to build, but also...
+
+| Traditional OPC Clients | opcilloscope |
+|------------------------|--------------|
+| Heavy desktop apps with complex licensing | Single portable binary, MIT licensed |
+| Minutes to install | `curl | bash` and you're running |
+| Resource-hungry GUIs | ~50MB RAM, runs anywhere |
+| Windows-only | Windows, Linux, macOS (x64 & ARM) |
+| Click-heavy workflows | Keyboard driven, mouse support |
+
+- **Commissioning**: Quickly verify PLC tags are publishing correctly
+- **Troubleshooting**: Monitor live values during fault diagnosis
+- **Integration Testing**: Validate OPC UA server configurations
+- **Documentation**: Export snapshots for handover reports
+
+---
+
+## Features
+
+- **Browse** — Lazily explore the OPC UA address space. Expand only what you need.
+- **Monitor** — Subscribe to variables with `Enter`. Real-time updates via OPC UA subscriptions, not polling.
+- **Inspect** — Full node attributes: Description, DataType, AccessLevel, ValueRank.
+- **Scope** — Real-time multi-signal oscilloscope view (up to 5 signals).
+- **Record** — Export monitored values to CSV for analysis or documentation.
+- **Configure** — Save/load connection and subscription configs for recurring tasks.
+- **Themes** — Dark and light themes to match your environment.
+
+---
+
 ## Quickstart (User)
 
 **Linux / macOS:**
@@ -72,37 +103,6 @@ Run tests:
 ```bash
 dotnet test
 ```
-
----
-
-## Why opcilloscope?
-
-Cause it was fun to build, but also...
-
-| Traditional OPC Clients | opcilloscope |
-|------------------------|--------------|
-| Heavy desktop apps with complex licensing | Single portable binary, MIT licensed |
-| Minutes to install | `curl | bash` and you're running |
-| Resource-hungry GUIs | ~50MB RAM, runs anywhere |
-| Windows-only | Windows, Linux, macOS (x64 & ARM) |
-| Click-heavy workflows | Keyboard driven, mouse support |
-
-- **Commissioning**: Quickly verify PLC tags are publishing correctly
-- **Troubleshooting**: Monitor live values during fault diagnosis
-- **Integration Testing**: Validate OPC UA server configurations
-- **Documentation**: Export snapshots for handover reports
-
----
-
-## Features
-
-- **Browse** — Lazily explore the OPC UA address space. Expand only what you need.
-- **Monitor** — Subscribe to variables with `Enter`. Real-time updates via OPC UA subscriptions, not polling.
-- **Inspect** — Full node attributes: Description, DataType, AccessLevel, ValueRank.
-- **Scope** — Real-time multi-signal oscilloscope view (up to 5 signals).
-- **Record** — Export monitored values to CSV for analysis or documentation.
-- **Configure** — Save/load connection and subscription configs for recurring tasks.
-- **Themes** — Dark and light themes to match your environment.
 
 ---
 
