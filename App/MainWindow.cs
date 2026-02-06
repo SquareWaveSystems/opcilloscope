@@ -305,8 +305,8 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
                 }),
                 new MenuBarItem("_View", new MenuItem[]
                 {
-                    new MenuItem("_Scope", "S", LaunchScope),
-                    new MenuItem("_Refresh Tree", "R", RefreshTree),
+                    new MenuItem("_Scope", "s", LaunchScope),
+                    new MenuItem("_Refresh Tree", "r", RefreshTree),
                     new MenuItem("_Clear Log", "", () => _logView.Clear()),
                     _themeToggleItem,
                     null!, // Separator
