@@ -100,7 +100,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         ThemeManager.ThemeChanged += OnThemeChanged;
 
         // Set initial window title (status shown in status bar)
-        Title = "opcilloscope";
+        Title = " opcilloscope ";
 
         // Create menu bar
         _menuBar = CreateMenuBar();
@@ -755,7 +755,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         var theme = ThemeManager.Current;
 
         // Update title (plain text)
-        Title = "opcilloscope";
+        Title = " opcilloscope ";
 
         // Update colored status label in status bar
         _connectionStatusLabel.Text = isConnected
@@ -1211,8 +1211,8 @@ License: MIT
         var unsavedMarker = _configService.HasUnsavedChanges ? "*" : "";
 
         Title = string.IsNullOrEmpty(_configService.CurrentFilePath) && !_configService.HasUnsavedChanges
-            ? "opcilloscope"
-            : $"opcilloscope - {configName}{unsavedMarker}";
+            ? " opcilloscope "
+            : $" opcilloscope - {configName}{unsavedMarker} ";
 
         SetNeedsLayout();
     }
