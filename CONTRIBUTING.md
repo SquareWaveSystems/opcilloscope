@@ -54,17 +54,23 @@ When reporting issues, please include:
 
 ```
 Opcilloscope/
-├── App/           # UI components (Terminal.Gui)
-│   ├── Views/     # View panels
-│   └── Dialogs/   # Modal dialogs
-├── OpcUa/         # OPC UA client logic
-│   └── Models/    # Data models
-├── Utilities/     # Helpers (logging, threading)
-└── tests/         # Unit and integration tests
+├── App/              # UI (Terminal.Gui v2)
+│   ├── Views/        # View panels
+│   ├── Dialogs/      # Modal dialogs
+│   ├── Keybindings/  # Key binding system
+│   └── Themes/       # Theme system
+├── Configuration/    # Config file load/save
+├── OpcUa/            # OPC UA client logic
+│   └── Models/       # Data models
+├── Utilities/        # Helpers (logging, threading, CSV)
+└── Tests/            # Unit and integration tests
+    ├── Opcilloscope.TestServer/  # In-process OPC UA test server
+    └── Opcilloscope.Tests/       # xUnit tests
 ```
 
 ### Key Patterns
 
-- **Thread marshalling**: Use `Application.Invoke()` for UI updates from background threads
+- **Thread marshalling**: Use `Application.Invoke()` or `UiThread.Run()` for UI updates from background threads
 - **Lazy loading**: Address space tree loads children on-demand
 - **Subscriptions**: Uses OPC UA Publish/Subscribe (not polling)
+- **Integration tests**: Run against an in-process OPC UA test server (no external dependencies needed)
