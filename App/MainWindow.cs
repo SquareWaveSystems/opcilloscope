@@ -443,17 +443,12 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
         try
         {
-            var success = await _connectionManager.ConnectAsync(endpoint);
+            var success = await _connectionManager.ConnectAsync(endpoint, publishingInterval);
 
             if (success)
             {
                 _lastEndpoint = endpoint;
                 _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
-
-                if (_connectionManager.SubscriptionManager != null)
-                {
-                    _connectionManager.SubscriptionManager.PublishingInterval = publishingInterval;
-                }
             }
         }
         finally
@@ -1070,7 +1065,7 @@ License: MIT
             // Connect to server and subscribe to nodes
             if (!string.IsNullOrEmpty(config.Server.EndpointUrl))
             {
-                var connected = await _connectionManager.ConnectAsync(config.Server.EndpointUrl);
+                var connected = await _connectionManager.ConnectAsync(config.Server.EndpointUrl, config.Settings.PublishingIntervalMs);
 
                 if (connected)
                 {
@@ -1082,12 +1077,6 @@ License: MIT
                     _nodeDetailsView.Clear();
 
                     _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
-
-                    // Apply publishing interval to the newly created subscription manager
-                    if (_connectionManager.SubscriptionManager != null)
-                    {
-                        _connectionManager.SubscriptionManager.PublishingInterval = config.Settings.PublishingIntervalMs;
-                    }
 
                     // Subscribe to saved nodes
                     foreach (var node in config.MonitoredNodes.Where(n => n.Enabled))
