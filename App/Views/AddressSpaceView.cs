@@ -65,7 +65,7 @@ public class AddressSpaceView : FrameView
         {
             X = Pos.Center(),
             Y = Pos.Center(),
-            Text = "Connect to browse address space",
+            Text = "Connect to browse",
             ColorScheme = new ColorScheme
             {
                 Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
@@ -226,11 +226,6 @@ public class AddressSpaceView : FrameView
                 NodeSubscribeRequested?.Invoke(selected);
                 e.Handled = true;
             }
-        }
-        else if (e == (Key)'r' || e == (Key)'R')
-        {
-            Refresh();
-            e.Handled = true;
         }
     }
 

@@ -528,10 +528,10 @@ public class ConfigurationServiceTests : IDisposable
         var result = ConfigurationService.GenerateDefaultFilename("opc.tcp://192.168.1.100:4840");
 
         // Assert
-        Assert.Contains("192.168.1.100_4840", result);
+        Assert.Contains("192.168.1.100-4840", result);
         Assert.EndsWith(ConfigurationService.ConfigFileExtension, result);
-        // Should contain a timestamp pattern (yyyyMMddHHmm)
-        Assert.Matches(@"\d{12}\.cfg$", result);
+        // Should contain a timestamp pattern (yyyyMMdd_HHmm)
+        Assert.Matches(@"\d{8}_\d{4}\.cfg$", result);
     }
 
     [Fact]

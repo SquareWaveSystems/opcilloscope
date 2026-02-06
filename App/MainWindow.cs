@@ -154,9 +154,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
             Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
 
-        // Minimal status bar: only essential shortcuts
-        _statusBar.Add(new Shortcut((Key)'?', "Help", ShowHelp));
-        _statusBar.Add(new Shortcut((Key)'r', "Refresh", RefreshTree));
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
         // We position it dynamically based on text width
         _connectionStatusLabel = new Label
@@ -193,14 +190,14 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         _addressSpaceView.NodeSelected += OnNodeSelected;
         _addressSpaceView.NodeSubscribeRequested += OnSubscribeRequested;
         _monitoredVariablesView.UnsubscribeRequested += OnUnsubscribeRequested;
-        _monitoredVariablesView.WriteRequested += OnWriteRequested;
-        _monitoredVariablesView.TrendPlotRequested += OnTrendPlotRequested;
-        _monitoredVariablesView.ScopeRequested += LaunchScope;
         _monitoredVariablesView.RecordToggleRequested += ToggleRecording;
 
         // Initialize lazygit-inspired keybinding system
         _keybindingManager = new KeybindingManager();
         DefaultKeybindings.Configure(_keybindingManager, this);
+
+        // Intercept letter/symbol keys at application level before views consume them
+        Application.KeyDown += OnApplicationKeyDown;
 
         // Focus tracking using polling-based FocusManager (workaround for Terminal.Gui v2 Enter event instability)
         // Only track the two interactive panes (AddressSpace and MonitoredVariables)
@@ -538,15 +535,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         }
     }
 
-    private void WriteSelected()
-    {
-        var variable = _monitoredVariablesView.SelectedVariable;
-        if (variable != null)
-        {
-            OnWriteRequested(variable);
-        }
-    }
-
     private void OnNodeSelected(BrowsedNode node)
     {
         _nodeDetailsView.ShowNodeAsync(node).FireAndForget(_logger);
@@ -627,18 +615,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     }
 
     /// <summary>
-    /// Shows trend plot for the selected variable in the monitored view.
-    /// </summary>
-    private void ShowTrendForSelected()
-    {
-        var variable = _monitoredVariablesView.SelectedVariable;
-        if (variable != null)
-        {
-            OnTrendPlotRequested(variable);
-        }
-    }
-
-    /// <summary>
     /// Shows context-sensitive quick help overlay (lazygit-inspired ? menu).
     /// </summary>
     private void ShowQuickHelp()
@@ -652,7 +628,36 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     #region Global Keyboard Shortcuts
 
     /// <summary>
-    /// Handles global keyboard shortcuts using lazygit-inspired keybinding manager.
+    /// Application-level key handler that intercepts letter/symbol keys before
+    /// any view (TreeView, TableView) can consume them for type-ahead search.
+    /// Navigation keys (Enter, Space, arrows, etc.) are excluded so that local
+    /// view handlers continue to work for those.
+    /// </summary>
+    private void OnApplicationKeyDown(object? sender, Key e)
+    {
+        if (e.Handled) return;
+        if (Application.Top != this) return; // Don't fire during dialogs
+
+        if (IsViewNavigationKey(e)) return; // Let Enter/Space/etc reach local handlers
+
+        if (_keybindingManager.TryHandle(e))
+            e.Handled = true;
+    }
+
+    private static bool IsViewNavigationKey(Key key)
+    {
+        var baseCode = key.KeyCode & ~KeyCode.ShiftMask & ~KeyCode.CtrlMask & ~KeyCode.AltMask;
+        return baseCode is KeyCode.Enter or KeyCode.Space or KeyCode.Tab or
+               KeyCode.Delete or KeyCode.Backspace or KeyCode.Esc or
+               KeyCode.CursorUp or KeyCode.CursorDown or
+               KeyCode.CursorLeft or KeyCode.CursorRight or
+               KeyCode.Home or KeyCode.End or
+               KeyCode.PageUp or KeyCode.PageDown
+            || (baseCode >= KeyCode.F1 && baseCode <= KeyCode.F12);
+    }
+
+    /// <summary>
+    /// Fallback handler for navigation keys that aren't intercepted at application level.
     /// All keybindings are centralized in <see cref="Keybindings.DefaultKeybindings"/>.
     /// </summary>
     protected override bool OnKeyDown(Key key)
@@ -688,100 +693,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     private void OnUnsubscribeRequested(MonitoredNode item)
     {
         _connectionManager.UnsubscribeAsync(item.ClientHandle).FireAndForget(_logger);
-    }
-
-    private void OnTrendPlotRequested(MonitoredNode item)
-    {
-        if (_connectionManager.SubscriptionManager == null)
-        {
-            _logger.Warning("Cannot open trend plot: not connected");
-            return;
-        }
-
-        var dialog = new TrendPlotDialog(_connectionManager.SubscriptionManager, item);
-        Application.Run(dialog);
-    }
-
-    private void OnWriteRequested(MonitoredNode item)
-    {
-        if (!_connectionManager.IsConnected)
-        {
-            _logger.Warning("Cannot write: not connected");
-            return;
-        }
-
-        // Check if node is writable
-        if (!item.IsWritable)
-        {
-            _logger.Warning($"Cannot write to {item.DisplayName}: node is read-only");
-            MessageBox.Query("Write", $"Node '{item.DisplayName}' is read-only", "OK");
-            return;
-        }
-
-        // Check if data type is supported for writing
-        if (!Utilities.OpcValueConverter.IsWriteSupported(item.DataType))
-        {
-            _logger.Warning($"Write not supported for data type: {item.DataTypeName}");
-            MessageBox.Query("Write", $"Write not supported for data type: {item.DataTypeName}", "OK");
-            return;
-        }
-
-        // Show write dialog
-        var dialog = new WriteValueDialog(
-            item.NodeId,
-            item.DisplayName,
-            item.DataType,
-            item.DataTypeName,
-            item.Value);
-
-        Application.Run(dialog);
-
-        if (dialog.Confirmed && dialog.ParsedValue != null)
-        {
-            _ = WriteValueAsync(item, dialog.ParsedValue);
-        }
-    }
-
-    private async Task WriteValueAsync(MonitoredNode item, object value)
-    {
-        try
-        {
-            ShowActivity("Writing...");
-
-            var statusCode = await _connectionManager.Client!.WriteValueAsync(item.NodeId, value);
-
-            UiThread.Run(() =>
-            {
-                HideActivity();
-
-                if (Opc.Ua.StatusCode.IsGood(statusCode))
-                {
-                    _logger.Info($"Wrote {FormatValueForLog(value)} to {item.NodeId}");
-                }
-                else
-                {
-                    var statusName = $"0x{statusCode.Code:X8}";
-                    _logger.Error($"Write failed ({statusName}): {item.NodeId}");
-                    MessageBox.ErrorQuery("Write Failed", $"Write failed: {statusName}", "OK");
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            UiThread.Run(() =>
-            {
-                HideActivity();
-                _logger.Error($"Write error: {ex.Message}");
-                MessageBox.ErrorQuery("Write Error", ex.Message, "OK");
-            });
-        }
-    }
-
-    private static string FormatValueForLog(object value)
-    {
-        if (value is string s)
-            return $"\"{s}\"";
-        return value.ToString() ?? "null";
     }
 
     private void OnValueChanged(MonitoredNode variable)
@@ -1109,26 +1020,13 @@ License: MIT
         if (_configService.HasUnsavedChanges && !ConfirmDiscardChanges())
             return;
 
-        // Start in the default config directory
-        var defaultDir = ConfigurationService.GetDefaultConfigDirectory();
-
-        using var dialog = new OpenDialog
-        {
-            Title = "Open Configuration",
-            AllowedTypes = new List<IAllowedType>
-            {
-                new AllowedType("opcilloscope Config", ConfigurationService.ConfigFileExtension),
-                new AllowedType("Legacy opcilloscope Config", ".opcilloscope"),
-                new AllowedType("JSON Files", ".json")
-            },
-            Path = defaultDir
-        };
+        using var dialog = new Dialogs.OpenConfigDialog();
 
         Application.Run(dialog);
 
-        if (!dialog.Canceled && dialog.Path != null)
+        if (dialog.Confirmed && dialog.SelectedFilePath != null)
         {
-            LoadConfigurationAsync(dialog.Path.ToString()!).FireAndForget(_logger);
+            LoadConfigurationAsync(dialog.SelectedFilePath).FireAndForget(_logger);
         }
     }
 
@@ -1358,8 +1256,6 @@ License: MIT
     void DefaultKeybindings.IKeybindingActions.RefreshTree() => RefreshTree();
     void DefaultKeybindings.IKeybindingActions.UnsubscribeSelected() => UnsubscribeSelected();
     void DefaultKeybindings.IKeybindingActions.ToggleScopeSelection() { /* Handled by MonitoredVariablesView */ }
-    void DefaultKeybindings.IKeybindingActions.WriteToSelected() => WriteSelected();
-    void DefaultKeybindings.IKeybindingActions.ShowTrendPlot() => ShowTrendForSelected();
     void DefaultKeybindings.IKeybindingActions.OpenScope() => LaunchScope();
     void DefaultKeybindings.IKeybindingActions.OpenConfig() => OpenConfig();
     void DefaultKeybindings.IKeybindingActions.SaveConfig() => SaveConfig();
@@ -1380,7 +1276,6 @@ License: MIT
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _monitoredVariablesView.RecordToggleRequested -= ToggleRecording;
-            _monitoredVariablesView.ScopeRequested -= LaunchScope;
 
             // Stop focus tracking
             if (_focusManager != null)
@@ -1388,6 +1283,8 @@ License: MIT
                 _focusManager.StopTracking();
                 _focusManager.FocusChanged -= OnPanelFocusChanged;
             }
+
+            Application.KeyDown -= OnApplicationKeyDown;
 
             _connectionManager.Dispose();
         }

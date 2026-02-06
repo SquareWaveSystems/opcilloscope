@@ -128,26 +128,26 @@ public class NodeDetailsView : FrameView
                 return;
             }
 
-            // Build a cleaner inline format for the details bar
-            var parts = new List<string>
-            {
-                $"NodeId: {attrs.NodeId}",
-                $"Class: {attrs.NodeClass}",
-                $"Name: {attrs.DisplayName ?? attrs.BrowseName ?? "N/A"}"
-            };
-
+            // Line 1: Value (with type/access info for variables)
+            var line1Parts = new List<string>();
             if (attrs.NodeClass == NodeClass.Variable)
             {
-                parts.Add($"Type: {attrs.DataType ?? "N/A"}");
-                parts.Add($"Access: {attrs.AccessLevelString}");
+                line1Parts.Add($"Value: {attrs.Value ?? "N/A"}");
+                line1Parts.Add($"Type: {attrs.DataType ?? "N/A"}");
+                line1Parts.Add($"Access: {attrs.AccessLevelString}");
             }
-
-            if (!string.IsNullOrEmpty(attrs.Description))
+            else
             {
-                parts.Add($"Desc: {TruncateString(attrs.Description, 40)}");
+                line1Parts.Add($"Name: {attrs.DisplayName ?? attrs.BrowseName ?? "N/A"}");
+                line1Parts.Add($"Class: {attrs.NodeClass}");
             }
+            line1Parts.Add($"NodeId: {attrs.NodeId}");
 
-            _detailsLabel.Text = string.Join("  │  ", parts);
+            // Line 2: Description
+            var desc = !string.IsNullOrEmpty(attrs.Description) ? attrs.Description : "";
+            var line2 = $"Desc: {desc}";
+
+            _detailsLabel.Text = string.Join("  │  ", line1Parts) + "\n" + line2;
             _copyButton.Enabled = true;
             SetNormalColor();
         });

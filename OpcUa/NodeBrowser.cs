@@ -193,7 +193,8 @@ public class NodeBrowser
                 Attributes.DataType,
                 Attributes.ValueRank,
                 Attributes.AccessLevel,
-                Attributes.UserAccessLevel
+                Attributes.UserAccessLevel,
+                Attributes.Value
             );
 
             // Check if the node exists by verifying the NodeId attribute read was successful
@@ -212,7 +213,8 @@ public class NodeBrowser
                 DataType = attrs.Count > 5 && attrs[5].Value is NodeId dt ? await GetDataTypeNameByIdAsync(dt) : null,
                 ValueRank = attrs.Count > 6 && attrs[6].Value is int vr ? vr : null,
                 AccessLevel = attrs.Count > 7 && attrs[7].Value is byte al ? al : null,
-                UserAccessLevel = attrs.Count > 8 && attrs[8].Value is byte ual ? ual : null
+                UserAccessLevel = attrs.Count > 8 && attrs[8].Value is byte ual ? ual : null,
+                Value = attrs.Count > 9 && StatusCode.IsGood(attrs[9].StatusCode) ? FormatValue(attrs[9].Value) : null
             };
         }
         catch (Exception ex)
@@ -385,6 +387,14 @@ public class NodeBrowser
         };
     }
 
+    private static string FormatValue(object? value)
+    {
+        if (value == null) return "null";
+        if (value is byte[] bytes) return $"[{bytes.Length} bytes]";
+        if (value is Array arr) return $"[{arr.Length} elements]";
+        return value.ToString() ?? "null";
+    }
+
     private async Task<string?> GetDataTypeNameByIdAsync(NodeId dataTypeId)
     {
         if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == IdType.Numeric)
@@ -421,6 +431,7 @@ public class NodeAttributes
     public int? ValueRank { get; init; }
     public byte? AccessLevel { get; init; }
     public byte? UserAccessLevel { get; init; }
+    public string? Value { get; init; }
 
     public string AccessLevelString
     {
