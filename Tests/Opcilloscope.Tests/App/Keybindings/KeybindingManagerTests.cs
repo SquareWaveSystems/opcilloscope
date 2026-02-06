@@ -41,7 +41,6 @@ public class KeybindingManagerTests
     {
         // Arrange
         var manager = new KeybindingManager();
-        var executed = false;
 
         // Act
         manager.Register(
@@ -49,7 +48,7 @@ public class KeybindingManagerTests
             Key.Enter,
             "Subscribe",
             "Subscribe to node",
-            () => executed = true);
+            () => { });
 
         // Assert
         var bindings = manager.GetBindingsForContext(KeybindingContext.AddressSpace);
