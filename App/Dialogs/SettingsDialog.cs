@@ -21,8 +21,8 @@ public class SettingsDialog : Dialog
         var theme = ThemeManager.Current;
 
         Title = " Settings ";
-        Width = 45;
-        Height = 10;
+        Width = 55;
+        Height = 14;
         PublishingInterval = currentInterval;
 
         // Apply theme styling - double-line border for emphasis with grey border color
@@ -49,10 +49,18 @@ public class SettingsDialog : Dialog
             Increment = 100
         };
 
-        var hintLabel = new Label
+        var descriptionLabel = new Label
         {
             X = 1,
             Y = 4,
+            Text = "How often the OPC UA server sends data updates.\nAffects data resolution for Scope, Trend, and CSV.",
+            ColorScheme = theme.MainColorScheme
+        };
+
+        var hintLabel = new Label
+        {
+            X = 1,
+            Y = 7,
             Text = "Range: 100 - 10000 ms (use +/- or type)",
             ColorScheme = theme.MainColorScheme
         };
@@ -70,7 +78,7 @@ public class SettingsDialog : Dialog
         var applyButton = new Button
         {
             X = Pos.Center() - 10,
-            Y = 6,
+            Y = 9,
             Text = $"{theme.ButtonPrefix}Apply{theme.ButtonSuffix}",
             IsDefault = true,
             ColorScheme = defaultButtonScheme
@@ -88,7 +96,7 @@ public class SettingsDialog : Dialog
         var cancelButton = new Button
         {
             X = Pos.Center() + 4,
-            Y = 6,
+            Y = 9,
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
             ColorScheme = theme.ButtonColorScheme
         };
@@ -99,7 +107,7 @@ public class SettingsDialog : Dialog
             Application.RequestStop();
         };
 
-        Add(intervalLabel, _publishIntervalField, hintLabel, applyButton, cancelButton);
+        Add(intervalLabel, _publishIntervalField, descriptionLabel, hintLabel, applyButton, cancelButton);
 
         _publishIntervalField.SetFocus();
     }
