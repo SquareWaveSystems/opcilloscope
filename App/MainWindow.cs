@@ -338,10 +338,10 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         ColorScheme = theme.MainColorScheme;
         BorderStyle = theme.EmphasizedBorderStyle;
 
-        // Apply grey border color to main window border (consistent across terminals)
+        // Apply highlight title color to main window border so "opcilloscope" stands out
         if (Border != null)
         {
-            Border.ColorScheme = theme.BorderColorScheme;
+            Border.ColorScheme = theme.HighlightTitleBorderColorScheme;
         }
 
         // Apply styling to menu bar

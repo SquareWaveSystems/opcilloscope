@@ -123,6 +123,7 @@ public abstract class AppTheme
     private ColorScheme? _frameColorScheme;
     private ColorScheme? _borderColorScheme;
     private ColorScheme? _focusedBorderColorScheme;
+    private ColorScheme? _highlightTitleBorderColorScheme;
 
     public virtual ColorScheme MainColorScheme => _mainColorScheme ??= new()
     {
@@ -179,6 +180,19 @@ public abstract class AppTheme
         Focus = BorderAttr,
         HotNormal = AccentAttr,  // Title text uses accent color
         HotFocus = AccentAttr,
+        Disabled = BorderAttr
+    };
+
+    /// <summary>
+    /// Color scheme for the main window border - uses bright accent for the title
+    /// so "opcilloscope" stands out prominently from sub-panel titles.
+    /// </summary>
+    public virtual ColorScheme HighlightTitleBorderColorScheme => _highlightTitleBorderColorScheme ??= new()
+    {
+        Normal = BorderAttr,
+        Focus = BorderAttr,
+        HotNormal = AccentBrightAttr,  // Title text uses bright accent to stand out
+        HotFocus = AccentBrightAttr,
         Disabled = BorderAttr
     };
 
