@@ -29,6 +29,26 @@ Then connect to any OPC UA server:
 opcilloscope
 ```
 
+### Uninstall
+
+**Linux / macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/uninstall.sh | bash
+```
+
+Or manually:
+```bash
+rm ~/.local/bin/opcilloscope
+rm -rf ~/.config/opcilloscope/  # optional: remove config files
+```
+
+**Windows (PowerShell):**
+```powershell
+Remove-Item "$env:LOCALAPPDATA\Opcilloscope" -Recurse -Force
+```
+
+If you installed to a custom directory (`OPCILLOSCOPE_INSTALL_DIR`), replace the paths above with your custom install location.
+
 ---
 
 ## Quickstart (Developer)
