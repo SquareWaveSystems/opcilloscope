@@ -51,19 +51,30 @@ public class HelpDialog : Dialog
             ? GenerateHelpFromBindings(keybindingManager)
             : GetStaticHelpText();
 
-        // OK button
+        // OK button - highlighted with accent color (default action)
+        var defaultButtonScheme = new ColorScheme
+        {
+            Normal = new Attribute(theme.Accent, theme.Background),
+            Focus = new Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        };
+
         var okButton = new Button
         {
             Text = "OK",
             X = Pos.Center(),
             Y = Pos.AnchorEnd(1),
             IsDefault = true,
-            ColorScheme = theme.ButtonColorScheme
+            ColorScheme = defaultButtonScheme
         };
         okButton.Accepting += (_, _) => RequestStop();
 
         Add(contentView);
         Add(okButton);
+
+        okButton.SetFocus();
 
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
@@ -117,7 +128,7 @@ NAVIGATION
 ADDRESS SPACE
   Enter            Subscribe to selected node
   Space            Expand/collapse tree node
-  R                Refresh
+  F5               Refresh
 
 MONITORED VARIABLES
   Delete           Unsubscribe from item

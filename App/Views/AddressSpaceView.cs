@@ -65,7 +65,7 @@ public class AddressSpaceView : FrameView
         {
             X = Pos.Center(),
             Y = Pos.Center(),
-            Text = "Connect to browse",
+            Text = "Connect to browse nodes",
             ColorScheme = new ColorScheme
             {
                 Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
