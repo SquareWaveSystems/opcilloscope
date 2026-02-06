@@ -16,7 +16,7 @@ Cause it was fun to build, but also...
 
 | Traditional OPC Clients | opcilloscope |
 |------------------------|--------------|
-| Heavy desktop apps with complex licensing | Single portable binary, MIT licensed |
+| Heavy desktop apps, potentially with licensing | Single portable binary, MIT licensed |
 | Minutes to install | `curl | bash` and you're running |
 | Resource-hungry GUIs | ~50MB RAM, runs anywhere |
 | Windows-only | Windows, Linux, macOS (x64 & ARM) |
@@ -109,6 +109,12 @@ dotnet test
 ---
 
 ## OPC UA Test Servers
+
+**Built-in test server** (Counter, SineWave, RandomValue, writable nodes):
+```bash
+dotnet run --project Tests/Opcilloscope.TestServer
+# Starts at opc.tcp://localhost:4840
+```
 
 **Public servers** (no setup required):
 
