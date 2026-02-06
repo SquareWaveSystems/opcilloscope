@@ -14,7 +14,7 @@ public sealed class ConnectionManager : IDisposable
     private SubscriptionManager? _subscriptionManager;
     private string? _lastEndpoint;
     private bool _disposed;
-    private bool _isReconnecting;
+    private int _isReconnecting;
 
     // Stored event handler references for proper unsubscription
     private Action<Models.MonitoredNode>? _valueChangedHandler;
@@ -153,13 +153,11 @@ public sealed class ConnectionManager : IDisposable
             return false;
         }
 
-        if (_isReconnecting)
+        if (Interlocked.CompareExchange(ref _isReconnecting, 1, 0) != 0)
         {
             _logger.Warning("Reconnection already in progress");
             return false;
         }
-
-        _isReconnecting = true;
         StateChanged?.Invoke(ConnectionState.Reconnecting);
 
         // Mark all monitored variables as stale during reconnection
@@ -190,7 +188,7 @@ public sealed class ConnectionManager : IDisposable
         }
         finally
         {
-            _isReconnecting = false;
+            Interlocked.Exchange(ref _isReconnecting, 0);
         }
     }
 
@@ -296,7 +294,7 @@ public sealed class ConnectionManager : IDisposable
 
     private void OnClientDisconnected()
     {
-        if (!_isReconnecting)
+        if (Interlocked.CompareExchange(ref _isReconnecting, 0, 0) == 0)
         {
             StateChanged?.Invoke(ConnectionState.Disconnected);
         }
@@ -309,7 +307,7 @@ public sealed class ConnectionManager : IDisposable
 
     private void OnReconnectRequired()
     {
-        if (_isReconnecting)
+        if (Interlocked.CompareExchange(ref _isReconnecting, 0, 0) != 0)
             return;
 
         _logger.Warning("Connection lost - automatic reconnection triggered");

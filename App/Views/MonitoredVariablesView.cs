@@ -578,6 +578,7 @@ public class MonitoredVariablesView : FrameView
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _recordButton.Accepting -= OnRecordButtonClicked;
             _tableView.MouseClick -= HandleMouseClick;
+            _tableView.KeyDown -= HandleKeyDown;
         }
         base.Dispose(disposing);
     }

@@ -236,4 +236,15 @@ public class AddressSpaceView : FrameView
             NodeSubscribeRequested?.Invoke(e.ActivatedObject);
         }
     }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            ThemeManager.ThemeChanged -= OnThemeChanged;
+            _treeView.KeyDown -= HandleKeyDown;
+            _treeView.ObjectActivated -= HandleObjectActivated;
+        }
+        base.Dispose(disposing);
+    }
 }

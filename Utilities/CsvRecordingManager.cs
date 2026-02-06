@@ -421,7 +421,7 @@ public class CsvRecordingManager : IDisposable
     {
         lock (_lock)
         {
-            if (_writer == null)
+            if (_writer == null || !_isRecording)
             {
                 return;
             }
