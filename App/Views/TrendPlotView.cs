@@ -483,7 +483,7 @@ public class TrendPlotView : View
             }
         }
 
-        _statusLabel.Text = $"<SPACE> Pause  <+/-> Scale  <R> Auto    VALUE: {currentValue:F2}";
+        _statusLabel.Text = $"SPACE Pause  +/- Scale  R Auto    VALUE: {currentValue:F2}";
 
         // Clear previous annotations
         _graphView.Annotations.Clear();

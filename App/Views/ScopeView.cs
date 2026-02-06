@@ -657,6 +657,11 @@ public class ScopeView : View
         }
     }
 
+    /// <summary>
+    /// A segment of status bar text with an associated color attribute.
+    /// </summary>
+    private record StatusSegment(string Text, bool IsKey);
+
     private void DrawStatusBar(AppTheme theme, List<SeriesData> seriesCopy,
                                 List<List<TimestampedSample>> samplesCopy,
                                 int totalWidth, int totalHeight,
@@ -664,7 +669,6 @@ public class ScopeView : View
                                 int canvasPixelW)
     {
         int statusY = totalHeight - StatusRows;
-        Driver!.SetAttribute(theme.DimAttr);
 
         string scaleInfo = _autoScale ? "AUTO" : $"{_scaleMultiplier:F1}X";
         int totalSamples = samplesCopy.Sum(s => s.Count);
@@ -672,10 +676,9 @@ public class ScopeView : View
         string timeInfo = FormatElapsedTime(elapsed);
         string windowInfo = FormatElapsedTime(_timeWindowSeconds);
 
-        string statusText;
+        List<StatusSegment> segments;
         if (_isPaused && _cursorActive)
         {
-            // Cursor mode status
             double cursorFraction = canvasPixelW > 1
                 ? (double)_cursorPixelX / (canvasPixelW - 1)
                 : 0;
@@ -691,17 +694,38 @@ public class ScopeView : View
                 cursorValues.Add($"{colorName}:{FormatAxisValue(interpolated)}");
             }
 
-            statusText = $"<LEFT/RIGHT> Cursor  <SPACE> Resume  CURSOR @ {cursorTime}  {string.Join("  ", cursorValues)}";
+            segments =
+            [
+                new("LEFT/RIGHT", true), new(" Cursor  ", false),
+                new("SPACE", true), new(" Resume  ", false),
+                new($"CURSOR @ {cursorTime}  {string.Join("  ", cursorValues)}", false)
+            ];
         }
         else
         {
-            statusText = $"<SPACE> Pause  <+/-> VScale  <R> Auto  <[/]> Time" +
-                         $"  SCALE:{scaleInfo}  WIN:{windowInfo}  TIME:{timeInfo}  SAMPLES:{totalSamples}";
+            segments =
+            [
+                new("SPACE", true), new(" Pause  ", false),
+                new("+/-", true), new(" VScale  ", false),
+                new("R", true), new(" Auto  ", false),
+                new("[/]", true), new(" Time  ", false),
+                new($"SCALE:{scaleInfo}  WIN:{windowInfo}  TIME:{timeInfo}  SAMPLES:{totalSamples}", false)
+            ];
         }
 
-        int statusX = Math.Max(0, (totalWidth - statusText.Length) / 2);
+        // Calculate total length for centering
+        int totalLen = segments.Sum(s => s.Text.Length);
+        int statusX = Math.Max(0, (totalWidth - totalLen) / 2);
         Move(statusX, statusY);
-        Driver!.AddStr(statusText.Length <= totalWidth ? statusText : statusText[..totalWidth]);
+
+        var keyAttr = theme.AccentAttr;
+        var labelAttr = theme.DimAttr;
+
+        foreach (var seg in segments)
+        {
+            Driver!.SetAttribute(seg.IsKey ? keyAttr : labelAttr);
+            Driver!.AddStr(seg.Text);
+        }
     }
 
     /// <summary>
