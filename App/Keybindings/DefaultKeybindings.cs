@@ -274,6 +274,26 @@ public static class DefaultKeybindings
 
         manager.Register(
             KeybindingContext.Scope,
+            Key.CursorUp,
+            "PanUp",
+            "Pan view up",
+            () => { }, // Documentation only - handled by ScopeView
+            showInStatusBar: false,
+            statusBarPriority: 45,
+            category: "Scope View");
+
+        manager.Register(
+            KeybindingContext.Scope,
+            Key.CursorDown,
+            "PanDn",
+            "Pan view down",
+            () => { }, // Documentation only - handled by ScopeView
+            showInStatusBar: false,
+            statusBarPriority: 46,
+            category: "Scope View");
+
+        manager.Register(
+            KeybindingContext.Scope,
             Key.CursorLeft,
             "CurL",
             "Move cursor left (when paused)",

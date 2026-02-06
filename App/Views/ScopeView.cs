@@ -66,6 +66,7 @@ public class ScopeView : View
     // Auto-scale tracking
     private bool _autoScale = true;
     private float _scaleMultiplier = 1.0f;
+    private float _verticalOffset = 0f; // Fraction of visible range to shift vertically
 
     // State
     private bool _isPaused;
@@ -386,8 +387,9 @@ public class ScopeView : View
             float center = (globalMin + globalMax) / 2;
             float range = (globalMax - globalMin) / 2;
             range = Math.Max(range, 1f) / _scaleMultiplier;
-            visibleMin = center - range;
-            visibleMax = center + range;
+            float offset = _verticalOffset * range * 2;
+            visibleMin = center - range + offset;
+            visibleMax = center + range + offset;
         }
 
         if (visibleMax <= visibleMin)
@@ -707,6 +709,7 @@ public class ScopeView : View
             [
                 new("SPACE", true), new(" Pause/Cursor  ", false),
                 new("+/-", true), new(" VertScale  ", false),
+                new("↑/↓", true), new(" VertPan  ", false),
                 new("[", true), new("/", false), new("]", true), new(" HorizScale  ", false),
                 new("R", true), new(" Auto  ", false),
                 new($"SCALE:{scaleInfo}  WIN:{windowInfo}  TIME:{timeInfo}  SAMPLES:{totalSamples}", false)
@@ -823,12 +826,33 @@ public class ScopeView : View
     }
 
     /// <summary>
+    /// Pans the view up (shifts visible range upward).
+    /// </summary>
+    public void PanUp()
+    {
+        _autoScale = false;
+        _verticalOffset += 0.2f;
+        SetNeedsLayout();
+    }
+
+    /// <summary>
+    /// Pans the view down (shifts visible range downward).
+    /// </summary>
+    public void PanDown()
+    {
+        _autoScale = false;
+        _verticalOffset -= 0.2f;
+        SetNeedsLayout();
+    }
+
+    /// <summary>
     /// Resets to auto-scale mode.
     /// </summary>
     public void ResetScale()
     {
         _autoScale = true;
         _scaleMultiplier = 1.0f;
+        _verticalOffset = 0f;
         SetNeedsLayout();
     }
 
@@ -906,6 +930,14 @@ public class ScopeView : View
 
             case (KeyCode)']':
                 NarrowTimeWindow();
+                return true;
+
+            case KeyCode.CursorUp:
+                PanUp();
+                return true;
+
+            case KeyCode.CursorDown:
+                PanDown();
                 return true;
 
             case KeyCode.CursorLeft:
