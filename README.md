@@ -12,13 +12,13 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
   <em>install → run → connect → browse → subscribe → select → scope in ~15 seconds</em>
 </p>
 <p align="center">
-  <img src="docs/opcilloscope-hero.webp" alt="opcilloscope demo: install, connect, browse, subscribe, scope view" width="600">
+  <img src="docs/opcilloscope-hero.webp" alt="opcilloscope demo: install, connect, browse, subscribe, scope view" width="500">
 </p>
 <p align="center">
   <em>a soothing sine wave</em>
 </p>
 <p align="center">
-  <img src="docs/opcilloscope-demo2.webp" alt="opcilloscope scope view with live sine wave" width="600">
+  <img src="docs/opcilloscope-demo2.webp" alt="opcilloscope scope view with live sine wave" width="500">
 </p>
 
 ---
