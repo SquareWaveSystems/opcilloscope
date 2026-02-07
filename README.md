@@ -145,7 +145,7 @@ dotnet run --project Tests/Opcilloscope.TestServer
 | OPC UA Server | `opc.tcp://opcuaserver.com:48010` |
 | Eclipse Milo | `opc.tcp://milo.digitalpetri.com:62541/milo` |
 
-**Docker** ([Microsoft OPC PLC](https://mcr.microsoft.com/iotedge/opc-plc)):
+**Docker** ([Microsoft OPC PLC](https://github.com/Azure-Samples/iot-edge-opc-plc)):
 ```bash
 docker run -p 50000:50000 mcr.microsoft.com/iotedge/opc-plc:latest \
   --autoaccept --unsecuretransport
