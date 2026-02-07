@@ -64,7 +64,7 @@ irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/instal
 
 Or grab a binary from [GitHub Releases](https://github.com/SquareWaveSystems/opcilloscope/releases).
 
-Then connect to any OPC UA server:
+Then to run:
 ```bash
 opcilloscope
 ```
