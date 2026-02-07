@@ -153,6 +153,120 @@ public class OpcUaIntegrationTests : IntegrationTestBase
 
         Assert.True(counter2 > counter1, $"Counter should increment: {counter1} -> {counter2}");
     }
+
+    [Fact]
+    public async Task CanReadSineFrequency()
+    {
+        var nodeId = new NodeId("SineFrequency", (ushort)GetNamespaceIndex());
+        var value = await Client!.ReadValueAsync(nodeId);
+
+        Assert.NotNull(value);
+        Assert.IsType<double>(value.Value);
+        Assert.Equal(0.1, (double)value.Value);
+    }
+
+    [Fact]
+    public async Task CanWriteAndReadSineFrequency()
+    {
+        var nodeId = new NodeId("SineFrequency", (ushort)GetNamespaceIndex());
+        var testValue = 0.5;
+
+        // Write
+        var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
+        Assert.True(StatusCode.IsGood(writeResult));
+
+        // Read back and verify
+        var readValue = await Client!.ReadValueAsync(nodeId);
+        Assert.Equal(testValue, (double)readValue!.Value);
+    }
+
+    [Fact]
+    public async Task CanReadTriangleWave()
+    {
+        var nodeId = new NodeId("TriangleWave", (ushort)GetNamespaceIndex());
+        var value = await Client!.ReadValueAsync(nodeId);
+
+        Assert.NotNull(value);
+        Assert.IsType<double>(value.Value);
+        var doubleValue = (double)value.Value;
+        Assert.InRange(doubleValue, 0, 100);
+    }
+
+    [Fact]
+    public async Task CanWriteAndReadTriangleFrequency()
+    {
+        var nodeId = new NodeId("TriangleFrequency", (ushort)GetNamespaceIndex());
+        var testValue = 0.3;
+
+        var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
+        Assert.True(StatusCode.IsGood(writeResult));
+
+        var readValue = await Client!.ReadValueAsync(nodeId);
+        Assert.Equal(testValue, (double)readValue!.Value);
+    }
+
+    [Fact]
+    public async Task CanReadSquareWave()
+    {
+        var nodeId = new NodeId("SquareWave", (ushort)GetNamespaceIndex());
+        var value = await Client!.ReadValueAsync(nodeId);
+
+        Assert.NotNull(value);
+        Assert.IsType<double>(value.Value);
+        var doubleValue = (double)value.Value;
+        Assert.True(doubleValue == 0 || doubleValue == 100, $"Square wave should be 0 or 100, got {doubleValue}");
+    }
+
+    [Fact]
+    public async Task CanWriteAndReadSquareFrequency()
+    {
+        var nodeId = new NodeId("SquareFrequency", (ushort)GetNamespaceIndex());
+        var testValue = 0.2;
+
+        var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
+        Assert.True(StatusCode.IsGood(writeResult));
+
+        var readValue = await Client!.ReadValueAsync(nodeId);
+        Assert.Equal(testValue, (double)readValue!.Value);
+    }
+
+    [Fact]
+    public async Task CanWriteAndReadSquareDutyCycle()
+    {
+        var nodeId = new NodeId("SquareDutyCycle", (ushort)GetNamespaceIndex());
+        var testValue = 0.75;
+
+        var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
+        Assert.True(StatusCode.IsGood(writeResult));
+
+        var readValue = await Client!.ReadValueAsync(nodeId);
+        Assert.Equal(testValue, (double)readValue!.Value);
+    }
+
+    [Fact]
+    public async Task CanReadSawtoothWave()
+    {
+        var nodeId = new NodeId("SawtoothWave", (ushort)GetNamespaceIndex());
+        var value = await Client!.ReadValueAsync(nodeId);
+
+        Assert.NotNull(value);
+        Assert.IsType<double>(value.Value);
+        var doubleValue = (double)value.Value;
+        Assert.InRange(doubleValue, 0, 100);
+    }
+
+    [Fact]
+    public async Task CanWriteAndReadSawtoothFrequency()
+    {
+        var nodeId = new NodeId("SawtoothFrequency", (ushort)GetNamespaceIndex());
+        var testValue = 0.4;
+
+        var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
+        Assert.True(StatusCode.IsGood(writeResult));
+
+        var readValue = await Client!.ReadValueAsync(nodeId);
+        Assert.Equal(testValue, (double)readValue!.Value);
+    }
 }
 
 /// <summary>
