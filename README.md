@@ -9,6 +9,9 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 [![Terminal.Gui](https://img.shields.io/badge/UI-Terminal.Gui-blue)](https://github.com/gui-cs/Terminal.Gui)
 
 <p align="center">
+  <em>install → run → connect → browse → subscribe → select → scope in ~15 seconds</em>
+</p>
+<p align="center">
   <img src="docs/opcilloscope-hero.webp" alt="opcilloscope demo: install, connect, browse, subscribe, scope view" width="800">
 </p>
 
