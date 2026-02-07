@@ -132,6 +132,7 @@ dotnet test
 
 **Built-in test server** (Counter, SineWave, RandomValue, writable nodes):
 ```bash
+# Start the built-in test server
 dotnet run --project Tests/Opcilloscope.TestServer
 # Starts at opc.tcp://localhost:4840
 ```
