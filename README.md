@@ -156,7 +156,7 @@ docker run -p 50000:50000 mcr.microsoft.com/iotedge/opc-plc:latest \
 
 ## Contributing
 
-Contributions welcome! Please submit a Pull Request.
+Contributions welcome! Please submit an issue or a pull request.
 
 ---
 
