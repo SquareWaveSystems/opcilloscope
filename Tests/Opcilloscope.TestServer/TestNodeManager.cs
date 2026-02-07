@@ -21,10 +21,34 @@ public class TestNodeManager : CustomNodeManager2
     private BaseDataVariableState<int>? _counterNode;
     private BaseDataVariableState<double>? _randomNode;
     private BaseDataVariableState<double>? _sineNode;
+    private BaseDataVariableState<double>? _sineFrequencyNode;
 
     private Timer? _simulationTimer;
     private int _tick;
+    private double _sineFrequency = 0.1;
     private readonly Random _random = new();
+
+    /// <summary>
+    /// Gets or sets the sine wave frequency factor.
+    /// Default is 0.1. Higher values produce faster oscillation.
+    /// </summary>
+    public double SineFrequency
+    {
+        get => _sineFrequency;
+        set
+        {
+            _sineFrequency = value;
+            lock (Lock)
+            {
+                if (_sineFrequencyNode != null)
+                {
+                    _sineFrequencyNode.Value = value;
+                    _sineFrequencyNode.Timestamp = DateTime.UtcNow;
+                    _sineFrequencyNode.ClearChangeMasks(SystemContext, false);
+                }
+            }
+        }
+    }
 
     public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration)
         : base(server, configuration, NamespaceUri)
@@ -113,6 +137,12 @@ public class TestNodeManager : CustomNodeManager2
         _sineNode.Value = _sineValue;
         _sineNode.AccessLevel = AccessLevels.CurrentRead;
         _sineNode.UserAccessLevel = AccessLevels.CurrentRead;
+
+        _sineFrequencyNode = CreateVariable<double>(folder, "SineFrequency", "SineFrequency", DataTypeIds.Double, ValueRanks.Scalar);
+        _sineFrequencyNode.Value = _sineFrequency;
+        _sineFrequencyNode.AccessLevel = AccessLevels.CurrentReadOrWrite;
+        _sineFrequencyNode.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
+        _sineFrequencyNode.OnSimpleWriteValue = OnWriteSineFrequency;
 
         var writableString = CreateVariable(folder, "WritableString", "WritableString", DataTypeIds.String, ValueRanks.Scalar);
         writableString.Value = _writableString;
@@ -244,7 +274,7 @@ public class TestNodeManager : CustomNodeManager2
                 _tick++;
                 _counterValue++;
                 _randomValue = _random.NextDouble() * 100;
-                _sineValue = Math.Sin(_tick * 0.1) * 50 + 50;
+                _sineValue = Math.Sin(_tick * _sineFrequency) * 50 + 50;
 
                 if (_counterNode != null)
                 {
@@ -310,6 +340,19 @@ public class TestNodeManager : CustomNodeManager2
             return StatusCodes.BadTypeMismatch;
         }
         _writableNumber = intValue;
+        return ServiceResult.Good;
+    }
+
+    private ServiceResult OnWriteSineFrequency(
+        ISystemContext context,
+        NodeState node,
+        ref object value)
+    {
+        if (value is not double doubleValue)
+        {
+            return StatusCodes.BadTypeMismatch;
+        }
+        _sineFrequency = doubleValue;
         return ServiceResult.Good;
     }
 

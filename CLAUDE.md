@@ -379,6 +379,7 @@ Available test nodes:
 - `Counter` - Int32, increments every second
 - `RandomValue` - Double, random 0-100
 - `SineWave` - Double, oscillating value
+- `SineFrequency` - Double, writable (controls SineWave frequency factor, default 0.1)
 - `WritableString` - String, writable
 - `ToggleBoolean` - Boolean, writable
 - `WritableNumber` - Int32, writable

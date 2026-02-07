@@ -153,6 +153,32 @@ public class OpcUaIntegrationTests : IntegrationTestBase
 
         Assert.True(counter2 > counter1, $"Counter should increment: {counter1} -> {counter2}");
     }
+
+    [Fact]
+    public async Task CanReadSineFrequency()
+    {
+        var nodeId = new NodeId("SineFrequency", (ushort)GetNamespaceIndex());
+        var value = await Client!.ReadValueAsync(nodeId);
+
+        Assert.NotNull(value);
+        Assert.IsType<double>(value.Value);
+        Assert.Equal(0.1, (double)value.Value);
+    }
+
+    [Fact]
+    public async Task CanWriteAndReadSineFrequency()
+    {
+        var nodeId = new NodeId("SineFrequency", (ushort)GetNamespaceIndex());
+        var testValue = 0.5;
+
+        // Write
+        var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
+        Assert.True(StatusCode.IsGood(writeResult));
+
+        // Read back and verify
+        var readValue = await Client!.ReadValueAsync(nodeId);
+        Assert.Equal(testValue, (double)readValue!.Value);
+    }
 }
 
 /// <summary>
