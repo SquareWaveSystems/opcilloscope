@@ -160,3 +160,7 @@ MIT License — use it however you want.
   <strong>Built by <a href="https://squarewavesystems.com">Square Wave Systems</a></strong><br>
   Modern automation software
 </p>
+
+<p align="center">
+  <em>Inspired by <a href="https://github.com/jesseduffield/lazygit">lazygit</a></em>
+</p>
