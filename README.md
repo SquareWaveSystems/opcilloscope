@@ -96,6 +96,12 @@ rm -rf ~/.local/share/opcilloscope/  # optional: remove OPC UA certificates
 
 **Windows (PowerShell):**
 ```powershell
+irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/uninstall.ps1 | iex
+```
+
+Or manually:
+```powershell
+Remove-Item "$env:LOCALAPPDATA\Opcilloscope" -Recurse -Force   # binary
 Remove-Item "$env:LOCALAPPDATA\opcilloscope" -Recurse -Force   # OPC UA certificates
 Remove-Item "$env:APPDATA\opcilloscope" -Recurse -Force        # config files
 ```
