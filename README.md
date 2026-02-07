@@ -115,6 +115,7 @@ If you installed to a custom directory (`OPCILLOSCOPE_INSTALL_DIR`), replace the
 Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ```bash
+# Clone repo, cd, build
 git clone https://github.com/SquareWaveSystems/opcilloscope.git
 cd opcilloscope
 dotnet build
