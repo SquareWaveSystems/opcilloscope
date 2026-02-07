@@ -70,7 +70,7 @@ public class TestServer : IAsyncDisposable, IDisposable
     {
         var pkiPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Opcilloscope",
+            "opcilloscope",
             "TestServer",
             "pki");
 

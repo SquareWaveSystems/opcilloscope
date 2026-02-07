@@ -20,7 +20,7 @@ public class RecentFilesManager
     {
         _settingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Opcilloscope",
+            "opcilloscope",
             "recent-files.json"
         );
         Load();

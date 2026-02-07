@@ -65,7 +65,7 @@ public class OpcUaClientWrapper : IDisposable
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Opcilloscope", "pki", "own"),
+                        "opcilloscope", "pki", "own"),
                     SubjectName = "CN=Opcilloscope, O=Opcilloscope, DC=localhost"
                 },
                 TrustedIssuerCertificates = new CertificateTrustList
@@ -73,21 +73,21 @@ public class OpcUaClientWrapper : IDisposable
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Opcilloscope", "pki", "issuer")
+                        "opcilloscope", "pki", "issuer")
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Opcilloscope", "pki", "trusted")
+                        "opcilloscope", "pki", "trusted")
                 },
                 RejectedCertificateStore = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Opcilloscope", "pki", "rejected")
+                        "opcilloscope", "pki", "rejected")
                 },
                 AutoAcceptUntrustedCertificates = true,
                 AddAppCertToTrustedStore = false

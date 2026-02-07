@@ -90,12 +90,14 @@ curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main
 Or manually:
 ```bash
 rm ~/.local/bin/opcilloscope
-rm -rf ~/.config/opcilloscope/  # optional: remove config files
+rm -rf ~/.config/opcilloscope/       # optional: remove config files
+rm -rf ~/.local/share/opcilloscope/  # optional: remove OPC UA certificates
 ```
 
 **Windows (PowerShell):**
 ```powershell
-Remove-Item "$env:LOCALAPPDATA\Opcilloscope" -Recurse -Force
+Remove-Item "$env:LOCALAPPDATA\opcilloscope" -Recurse -Force   # OPC UA certificates
+Remove-Item "$env:APPDATA\opcilloscope" -Recurse -Force        # config files
 ```
 
 If you installed to a custom directory (`OPCILLOSCOPE_INSTALL_DIR`), replace the paths above with your custom install location.
