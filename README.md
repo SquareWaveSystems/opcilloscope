@@ -61,7 +61,7 @@ Cause it was fun to build, but also...
 
 ---
 
-## Quickstart (User)
+## Install (User)
 
 **Linux / macOS:**
 ```bash
