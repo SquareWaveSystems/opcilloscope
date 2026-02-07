@@ -54,6 +54,11 @@ Cause it was fun to build, but also...
 - **Configure** — Save/load connection and subscription configs for recurring tasks.
 - **Themes** — Dark and light themes to match your environment.
 
+<p align="center">
+  <img src="docs/theme-dark.png" alt="Dark theme" width="49%">
+  <img src="docs/theme-light.png" alt="Light theme" width="49%">
+</p>
+
 ---
 
 ## Quickstart (User)
