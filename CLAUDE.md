@@ -378,8 +378,15 @@ Available test nodes:
 **Simulation folder** (values update every second):
 - `Counter` - Int32, increments every second
 - `RandomValue` - Double, random 0-100
-- `SineWave` - Double, oscillating value
+- `SineWave` - Double, sine oscillation (0-100)
 - `SineFrequency` - Double, writable (controls SineWave frequency factor, default 0.1)
+- `TriangleWave` - Double, triangle oscillation (0-100)
+- `TriangleFrequency` - Double, writable (controls TriangleWave frequency factor, default 0.1)
+- `SquareWave` - Double, square/pulse oscillation (0 or 100)
+- `SquareFrequency` - Double, writable (controls SquareWave frequency factor, default 0.1)
+- `SquareDutyCycle` - Double, writable (controls SquareWave duty cycle, 0.0-1.0, default 0.5)
+- `SawtoothWave` - Double, sawtooth ramp (0-100)
+- `SawtoothFrequency` - Double, writable (controls SawtoothWave frequency factor, default 0.1)
 - `WritableString` - String, writable
 - `ToggleBoolean` - Boolean, writable
 - `WritableNumber` - Int32, writable

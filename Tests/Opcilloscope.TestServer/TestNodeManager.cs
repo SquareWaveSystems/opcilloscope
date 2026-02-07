@@ -14,6 +14,9 @@ public class TestNodeManager : CustomNodeManager2
     private int _counterValue;
     private double _randomValue;
     private double _sineValue;
+    private double _triangleValue;
+    private double _squareValue;
+    private double _sawtoothValue;
     private string _writableString = "Hello Opcilloscope";
     private bool _toggleBoolean;
     private int _writableNumber = 42;
@@ -22,10 +25,21 @@ public class TestNodeManager : CustomNodeManager2
     private BaseDataVariableState<double>? _randomNode;
     private BaseDataVariableState<double>? _sineNode;
     private BaseDataVariableState<double>? _sineFrequencyNode;
+    private BaseDataVariableState<double>? _triangleNode;
+    private BaseDataVariableState<double>? _triangleFrequencyNode;
+    private BaseDataVariableState<double>? _squareNode;
+    private BaseDataVariableState<double>? _squareFrequencyNode;
+    private BaseDataVariableState<double>? _squareDutyCycleNode;
+    private BaseDataVariableState<double>? _sawtoothNode;
+    private BaseDataVariableState<double>? _sawtoothFrequencyNode;
 
     private Timer? _simulationTimer;
     private int _tick;
     private double _sineFrequency = 0.1;
+    private double _triangleFrequency = 0.1;
+    private double _squareFrequency = 0.1;
+    private double _squareDutyCycle = 0.5;
+    private double _sawtoothFrequency = 0.1;
     private readonly Random _random = new();
 
     /// <summary>
@@ -45,6 +59,94 @@ public class TestNodeManager : CustomNodeManager2
                     _sineFrequencyNode.Value = value;
                     _sineFrequencyNode.Timestamp = DateTime.UtcNow;
                     _sineFrequencyNode.ClearChangeMasks(SystemContext, false);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the triangle wave frequency factor.
+    /// Default is 0.1. Higher values produce faster oscillation.
+    /// </summary>
+    public double TriangleFrequency
+    {
+        get => _triangleFrequency;
+        set
+        {
+            _triangleFrequency = value;
+            lock (Lock)
+            {
+                if (_triangleFrequencyNode != null)
+                {
+                    _triangleFrequencyNode.Value = value;
+                    _triangleFrequencyNode.Timestamp = DateTime.UtcNow;
+                    _triangleFrequencyNode.ClearChangeMasks(SystemContext, false);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the square wave frequency factor.
+    /// Default is 0.1. Higher values produce faster oscillation.
+    /// </summary>
+    public double SquareFrequency
+    {
+        get => _squareFrequency;
+        set
+        {
+            _squareFrequency = value;
+            lock (Lock)
+            {
+                if (_squareFrequencyNode != null)
+                {
+                    _squareFrequencyNode.Value = value;
+                    _squareFrequencyNode.Timestamp = DateTime.UtcNow;
+                    _squareFrequencyNode.ClearChangeMasks(SystemContext, false);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the square wave duty cycle (0.0 to 1.0).
+    /// Default is 0.5 (50% duty cycle).
+    /// </summary>
+    public double SquareDutyCycle
+    {
+        get => _squareDutyCycle;
+        set
+        {
+            _squareDutyCycle = Math.Clamp(value, 0.0, 1.0);
+            lock (Lock)
+            {
+                if (_squareDutyCycleNode != null)
+                {
+                    _squareDutyCycleNode.Value = _squareDutyCycle;
+                    _squareDutyCycleNode.Timestamp = DateTime.UtcNow;
+                    _squareDutyCycleNode.ClearChangeMasks(SystemContext, false);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the sawtooth wave frequency factor.
+    /// Default is 0.1. Higher values produce faster oscillation.
+    /// </summary>
+    public double SawtoothFrequency
+    {
+        get => _sawtoothFrequency;
+        set
+        {
+            _sawtoothFrequency = value;
+            lock (Lock)
+            {
+                if (_sawtoothFrequencyNode != null)
+                {
+                    _sawtoothFrequencyNode.Value = value;
+                    _sawtoothFrequencyNode.Timestamp = DateTime.UtcNow;
+                    _sawtoothFrequencyNode.ClearChangeMasks(SystemContext, false);
                 }
             }
         }
@@ -143,6 +245,45 @@ public class TestNodeManager : CustomNodeManager2
         _sineFrequencyNode.AccessLevel = AccessLevels.CurrentReadOrWrite;
         _sineFrequencyNode.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
         _sineFrequencyNode.OnSimpleWriteValue = OnWriteSineFrequency;
+
+        _triangleNode = CreateVariable<double>(folder, "TriangleWave", "TriangleWave", DataTypeIds.Double, ValueRanks.Scalar);
+        _triangleNode.Value = _triangleValue;
+        _triangleNode.AccessLevel = AccessLevels.CurrentRead;
+        _triangleNode.UserAccessLevel = AccessLevels.CurrentRead;
+
+        _triangleFrequencyNode = CreateVariable<double>(folder, "TriangleFrequency", "TriangleFrequency", DataTypeIds.Double, ValueRanks.Scalar);
+        _triangleFrequencyNode.Value = _triangleFrequency;
+        _triangleFrequencyNode.AccessLevel = AccessLevels.CurrentReadOrWrite;
+        _triangleFrequencyNode.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
+        _triangleFrequencyNode.OnSimpleWriteValue = OnWriteTriangleFrequency;
+
+        _squareNode = CreateVariable<double>(folder, "SquareWave", "SquareWave", DataTypeIds.Double, ValueRanks.Scalar);
+        _squareNode.Value = _squareValue;
+        _squareNode.AccessLevel = AccessLevels.CurrentRead;
+        _squareNode.UserAccessLevel = AccessLevels.CurrentRead;
+
+        _squareFrequencyNode = CreateVariable<double>(folder, "SquareFrequency", "SquareFrequency", DataTypeIds.Double, ValueRanks.Scalar);
+        _squareFrequencyNode.Value = _squareFrequency;
+        _squareFrequencyNode.AccessLevel = AccessLevels.CurrentReadOrWrite;
+        _squareFrequencyNode.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
+        _squareFrequencyNode.OnSimpleWriteValue = OnWriteSquareFrequency;
+
+        _squareDutyCycleNode = CreateVariable<double>(folder, "SquareDutyCycle", "SquareDutyCycle", DataTypeIds.Double, ValueRanks.Scalar);
+        _squareDutyCycleNode.Value = _squareDutyCycle;
+        _squareDutyCycleNode.AccessLevel = AccessLevels.CurrentReadOrWrite;
+        _squareDutyCycleNode.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
+        _squareDutyCycleNode.OnSimpleWriteValue = OnWriteSquareDutyCycle;
+
+        _sawtoothNode = CreateVariable<double>(folder, "SawtoothWave", "SawtoothWave", DataTypeIds.Double, ValueRanks.Scalar);
+        _sawtoothNode.Value = _sawtoothValue;
+        _sawtoothNode.AccessLevel = AccessLevels.CurrentRead;
+        _sawtoothNode.UserAccessLevel = AccessLevels.CurrentRead;
+
+        _sawtoothFrequencyNode = CreateVariable<double>(folder, "SawtoothFrequency", "SawtoothFrequency", DataTypeIds.Double, ValueRanks.Scalar);
+        _sawtoothFrequencyNode.Value = _sawtoothFrequency;
+        _sawtoothFrequencyNode.AccessLevel = AccessLevels.CurrentReadOrWrite;
+        _sawtoothFrequencyNode.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
+        _sawtoothFrequencyNode.OnSimpleWriteValue = OnWriteSawtoothFrequency;
 
         var writableString = CreateVariable(folder, "WritableString", "WritableString", DataTypeIds.String, ValueRanks.Scalar);
         writableString.Value = _writableString;
@@ -276,25 +417,60 @@ public class TestNodeManager : CustomNodeManager2
                 _randomValue = _random.NextDouble() * 100;
                 _sineValue = Math.Sin(_tick * _sineFrequency) * 50 + 50;
 
+                // Triangle wave: linear ramp up then down, range 0-100
+                var trianglePhase = (_tick * _triangleFrequency) % (2 * Math.PI);
+                _triangleValue = (2 * Math.Abs(trianglePhase / Math.PI - 1) - 1) * -50 + 50;
+
+                // Square wave: high/low based on duty cycle, range 0-100
+                var squarePhase = (_tick * _squareFrequency) % (2 * Math.PI);
+                _squareValue = (squarePhase / (2 * Math.PI)) < _squareDutyCycle ? 100 : 0;
+
+                // Sawtooth wave: linear ramp up then reset, range 0-100
+                var sawtoothPhase = (_tick * _sawtoothFrequency) % (2 * Math.PI);
+                _sawtoothValue = (sawtoothPhase / (2 * Math.PI)) * 100;
+
+                var now = DateTime.UtcNow;
+
                 if (_counterNode != null)
                 {
                     _counterNode.Value = _counterValue;
-                    _counterNode.Timestamp = DateTime.UtcNow;
+                    _counterNode.Timestamp = now;
                     _counterNode.ClearChangeMasks(SystemContext, false);
                 }
 
                 if (_randomNode != null)
                 {
                     _randomNode.Value = _randomValue;
-                    _randomNode.Timestamp = DateTime.UtcNow;
+                    _randomNode.Timestamp = now;
                     _randomNode.ClearChangeMasks(SystemContext, false);
                 }
 
                 if (_sineNode != null)
                 {
                     _sineNode.Value = _sineValue;
-                    _sineNode.Timestamp = DateTime.UtcNow;
+                    _sineNode.Timestamp = now;
                     _sineNode.ClearChangeMasks(SystemContext, false);
+                }
+
+                if (_triangleNode != null)
+                {
+                    _triangleNode.Value = _triangleValue;
+                    _triangleNode.Timestamp = now;
+                    _triangleNode.ClearChangeMasks(SystemContext, false);
+                }
+
+                if (_squareNode != null)
+                {
+                    _squareNode.Value = _squareValue;
+                    _squareNode.Timestamp = now;
+                    _squareNode.ClearChangeMasks(SystemContext, false);
+                }
+
+                if (_sawtoothNode != null)
+                {
+                    _sawtoothNode.Value = _sawtoothValue;
+                    _sawtoothNode.Timestamp = now;
+                    _sawtoothNode.ClearChangeMasks(SystemContext, false);
                 }
             }
         }
@@ -353,6 +529,58 @@ public class TestNodeManager : CustomNodeManager2
             return StatusCodes.BadTypeMismatch;
         }
         _sineFrequency = doubleValue;
+        return ServiceResult.Good;
+    }
+
+    private ServiceResult OnWriteTriangleFrequency(
+        ISystemContext context,
+        NodeState node,
+        ref object value)
+    {
+        if (value is not double doubleValue)
+        {
+            return StatusCodes.BadTypeMismatch;
+        }
+        _triangleFrequency = doubleValue;
+        return ServiceResult.Good;
+    }
+
+    private ServiceResult OnWriteSquareFrequency(
+        ISystemContext context,
+        NodeState node,
+        ref object value)
+    {
+        if (value is not double doubleValue)
+        {
+            return StatusCodes.BadTypeMismatch;
+        }
+        _squareFrequency = doubleValue;
+        return ServiceResult.Good;
+    }
+
+    private ServiceResult OnWriteSquareDutyCycle(
+        ISystemContext context,
+        NodeState node,
+        ref object value)
+    {
+        if (value is not double doubleValue)
+        {
+            return StatusCodes.BadTypeMismatch;
+        }
+        _squareDutyCycle = Math.Clamp(doubleValue, 0.0, 1.0);
+        return ServiceResult.Good;
+    }
+
+    private ServiceResult OnWriteSawtoothFrequency(
+        ISystemContext context,
+        NodeState node,
+        ref object value)
+    {
+        if (value is not double doubleValue)
+        {
+            return StatusCodes.BadTypeMismatch;
+        }
+        _sawtoothFrequency = doubleValue;
         return ServiceResult.Good;
     }
 
