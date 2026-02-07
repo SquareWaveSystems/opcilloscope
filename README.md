@@ -15,7 +15,10 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
   <img src="docs/opcilloscope-hero.webp" alt="opcilloscope demo: install, connect, browse, subscribe, scope view" width="800">
 </p>
 <p align="center">
-  <img src="docs/opcilloscope-demo2.webp" alt="opcilloscope demo continued" width="800">
+  <em>a soothing sine wave</em>
+</p>
+<p align="center">
+  <img src="docs/opcilloscope-demo2.webp" alt="opcilloscope scope view with live sine wave" width="800">
 </p>
 
 ---
