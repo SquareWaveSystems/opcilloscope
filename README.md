@@ -31,7 +31,7 @@ Cause it was fun to build, but also...
 |------------------------|--------------|
 | Heavy desktop apps | Single portable binary, MIT licensed |
 | Minutes to install | `curl | bash` and you're running |
-| Resource-hungry GUIs | ~40MB RAM, runs anywhere |
+| Resource-hungry GUIs | ~50% less RAM, runs anywhere |
 | Windows-only | Windows, Linux, macOS (x64 & ARM) |
 | Click-heavy workflows | Keyboard driven, mouse support |
 
