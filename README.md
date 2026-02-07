@@ -14,6 +14,9 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 <p align="center">
   <img src="docs/opcilloscope-hero.webp" alt="opcilloscope demo: install, connect, browse, subscribe, scope view" width="800">
 </p>
+<p align="center">
+  <img src="docs/opcilloscope-demo2.webp" alt="opcilloscope demo continued" width="800">
+</p>
 
 ---
 
