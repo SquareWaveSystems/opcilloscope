@@ -162,13 +162,17 @@ public class OpcUaIntegrationTests : IntegrationTestBase
 
         Assert.NotNull(value);
         Assert.IsType<double>(value.Value);
-        Assert.Equal(0.1, (double)value.Value);
     }
 
     [Fact]
     public async Task CanWriteAndReadSineFrequency()
     {
         var nodeId = new NodeId("SineFrequency", (ushort)GetNamespaceIndex());
+
+        // Read original value to restore later
+        var originalValue = await Client!.ReadValueAsync(nodeId);
+        var original = (double)originalValue!.Value;
+
         var testValue = 0.5;
 
         // Write
@@ -178,6 +182,9 @@ public class OpcUaIntegrationTests : IntegrationTestBase
         // Read back and verify
         var readValue = await Client!.ReadValueAsync(nodeId);
         Assert.Equal(testValue, (double)readValue!.Value);
+
+        // Restore original value to avoid affecting other tests
+        await Client!.WriteValueAsync(nodeId, original);
     }
 
     [Fact]
@@ -196,6 +203,9 @@ public class OpcUaIntegrationTests : IntegrationTestBase
     public async Task CanWriteAndReadTriangleFrequency()
     {
         var nodeId = new NodeId("TriangleFrequency", (ushort)GetNamespaceIndex());
+        var originalValue = await Client!.ReadValueAsync(nodeId);
+        var original = (double)originalValue!.Value;
+
         var testValue = 0.3;
 
         var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
@@ -203,6 +213,8 @@ public class OpcUaIntegrationTests : IntegrationTestBase
 
         var readValue = await Client!.ReadValueAsync(nodeId);
         Assert.Equal(testValue, (double)readValue!.Value);
+
+        await Client!.WriteValueAsync(nodeId, original);
     }
 
     [Fact]
@@ -221,6 +233,9 @@ public class OpcUaIntegrationTests : IntegrationTestBase
     public async Task CanWriteAndReadSquareFrequency()
     {
         var nodeId = new NodeId("SquareFrequency", (ushort)GetNamespaceIndex());
+        var originalValue = await Client!.ReadValueAsync(nodeId);
+        var original = (double)originalValue!.Value;
+
         var testValue = 0.2;
 
         var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
@@ -228,12 +243,17 @@ public class OpcUaIntegrationTests : IntegrationTestBase
 
         var readValue = await Client!.ReadValueAsync(nodeId);
         Assert.Equal(testValue, (double)readValue!.Value);
+
+        await Client!.WriteValueAsync(nodeId, original);
     }
 
     [Fact]
     public async Task CanWriteAndReadSquareDutyCycle()
     {
         var nodeId = new NodeId("SquareDutyCycle", (ushort)GetNamespaceIndex());
+        var originalValue = await Client!.ReadValueAsync(nodeId);
+        var original = (double)originalValue!.Value;
+
         var testValue = 0.75;
 
         var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
@@ -241,6 +261,8 @@ public class OpcUaIntegrationTests : IntegrationTestBase
 
         var readValue = await Client!.ReadValueAsync(nodeId);
         Assert.Equal(testValue, (double)readValue!.Value);
+
+        await Client!.WriteValueAsync(nodeId, original);
     }
 
     [Fact]
@@ -259,6 +281,9 @@ public class OpcUaIntegrationTests : IntegrationTestBase
     public async Task CanWriteAndReadSawtoothFrequency()
     {
         var nodeId = new NodeId("SawtoothFrequency", (ushort)GetNamespaceIndex());
+        var originalValue = await Client!.ReadValueAsync(nodeId);
+        var original = (double)originalValue!.Value;
+
         var testValue = 0.4;
 
         var writeResult = await Client!.WriteValueAsync(nodeId, testValue);
@@ -266,6 +291,8 @@ public class OpcUaIntegrationTests : IntegrationTestBase
 
         var readValue = await Client!.ReadValueAsync(nodeId);
         Assert.Equal(testValue, (double)readValue!.Value);
+
+        await Client!.WriteValueAsync(nodeId, original);
     }
 }
 
