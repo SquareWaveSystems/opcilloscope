@@ -122,6 +122,25 @@ main() {
     command -v curl >/dev/null 2>&1 || error "curl is required but not installed"
     command -v tar >/dev/null 2>&1 || error "tar is required but not installed"
 
+    # Check for ICU libraries (required at runtime by .NET for globalization)
+    if [ "$(uname -s)" = "Linux" ]; then
+        local icu_found=false
+        if command -v ldconfig >/dev/null 2>&1; then
+            ldconfig -p 2>/dev/null | grep -q libicu && icu_found=true
+        elif compgen -G '/usr/lib/*/libicu*.so*' >/dev/null 2>&1 \
+          || compgen -G '/usr/lib/libicu*.so*' >/dev/null 2>&1 \
+          || compgen -G '/usr/lib64/libicu*.so*' >/dev/null 2>&1; then
+            icu_found=true
+        fi
+        if [ "$icu_found" = false ]; then
+            warn "ICU libraries not found. opcilloscope requires libicu at runtime."
+            echo "  Install with:"
+            echo "    Debian/Ubuntu: sudo apt install libicu72  (or libicu-dev)"
+            echo "    Fedora/RHEL:   sudo dnf install libicu"
+            echo ""
+        fi
+    fi
+
     install
 }
 
