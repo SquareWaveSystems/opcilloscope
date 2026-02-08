@@ -75,6 +75,12 @@ irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/instal
 
 Or grab a binary from [GitHub Releases](https://github.com/SquareWaveSystems/opcilloscope/releases).
 
+**Linux dependency:** The .NET runtime requires ICU libraries for globalization support. On Debian/Ubuntu, install them with:
+```bash
+sudo apt install libicu-dev
+```
+On Fedora/RHEL: `sudo dnf install libicu-devel`
+
 Then to run:
 ```bash
 opcilloscope

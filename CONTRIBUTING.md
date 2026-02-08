@@ -17,6 +17,7 @@ Thank you for your interest in contributing to Opcilloscope!
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- **Linux only:** ICU libraries (`sudo apt install libicu-dev` on Debian/Ubuntu, `sudo dnf install libicu-devel` on Fedora/RHEL)
 
 ### Building and Testing
 
