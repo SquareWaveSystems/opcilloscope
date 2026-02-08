@@ -127,7 +127,9 @@ main() {
         local icu_found=false
         if command -v ldconfig >/dev/null 2>&1; then
             ldconfig -p 2>/dev/null | grep -q libicu && icu_found=true
-        elif compgen -G "/usr/lib/*/libicu*.so*" >/dev/null 2>&1 || compgen -G "/usr/lib/libicu*.so*" >/dev/null 2>&1; then
+        elif compgen -G '/usr/lib/*/libicu*.so*' >/dev/null 2>&1 \
+          || compgen -G '/usr/lib/libicu*.so*' >/dev/null 2>&1 \
+          || compgen -G '/usr/lib64/libicu*.so*' >/dev/null 2>&1; then
             icu_found=true
         fi
         if [ "$icu_found" = false ]; then
