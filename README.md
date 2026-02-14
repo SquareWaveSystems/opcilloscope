@@ -61,6 +61,32 @@ Cause it was fun to build, but also...
 
 ---
 
+## How Signal Sampling Works
+
+opcilloscope does **not** poll your OPC UA server. The server *pushes* value updates to the client using OPC UA's built-in publish/subscribe mechanism.
+
+```
+OPC UA Server
+  │  pushes values every 250ms (configurable 100ms–10s)
+  ▼
+opcilloscope receives value change events
+  ├─→ Scope View     — stores every sample (up to 2,000 per signal)
+  ├─→ Trend Plot     — stores last 200 samples in a ring buffer
+  └─→ CSV Recording  — writes every sample to disk (zero data loss)
+```
+
+**Data capture** and **screen rendering** are decoupled:
+
+| What | How fast | Details |
+|------|----------|---------|
+| Server → Client updates | ~4 Hz (every 250ms) | Default publishing + sampling interval, adjustable in the connect dialog |
+| Scope / Trend Plot redraw | 10 FPS (every 100ms) | Renders whatever samples arrived since last frame |
+| CSV recording | Every update | Captures 100% of server-pushed values, flushes to disk every 10 records |
+
+The scope view holds a sliding **30-second window** (zoomable from 5s to 300s). Display resolution is limited by your terminal size — each character cell is one data point on screen.
+
+---
+
 ## Install (User)
 
 **Linux / macOS:**
