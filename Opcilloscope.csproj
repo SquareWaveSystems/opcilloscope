@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Opcilloscope</RootNamespace>
     <AssemblyName>opcilloscope</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
 
     <!-- Package metadata (Version is driven by MinVer from Git tags) -->
     <Authors>Brett Kinny</Authors>
