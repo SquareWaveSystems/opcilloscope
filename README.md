@@ -106,8 +106,9 @@ Or grab a binary from [GitHub Releases](https://github.com/SquareWaveSystems/opc
 sudo apt install libicu72    # Debian 13 / Ubuntu 24.04+
 # or: sudo apt install libicu-dev   # installs any available version
 ```
+Or
 ```bash
-On Fedora/RHEL: `sudo dnf install libicu`
+sudo dnf install libicu    # On Fedora/RHEL
 ```
 
 Then to run:
