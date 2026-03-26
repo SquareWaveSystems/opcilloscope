@@ -25,3 +25,16 @@ test-server/node_modules/
 # Logs
 *.log
 nul
+
+# Secrets and credentials
+*.env
+.env*
+*.pem
+*.key
+*.pfx
+*.p12
+credentials.json
+appsettings.*.json
+
+# Claude Code local settings
+.claude/settings.local.json
