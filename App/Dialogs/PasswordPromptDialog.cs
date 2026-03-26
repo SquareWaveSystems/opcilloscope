@@ -24,12 +24,7 @@ public class PasswordPromptDialog : Dialog
         Width = 55;
         Height = 10;
 
-        ColorScheme = theme.DialogColorScheme;
-        BorderStyle = LineStyle.Double;
-        if (Border != null)
-        {
-            Border.ColorScheme = theme.BorderColorScheme;
-        }
+        ThemeStyler.ApplyToDialog(this, theme);
 
         var promptLabel = new Label
         {

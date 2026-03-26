@@ -1081,7 +1081,8 @@ License: MIT
             {
                 // Build credentials from config (prompt for password if needed)
                 ConnectionCredentials? credentials = null;
-                if (string.Equals(config.Server.Authentication.Type, "UserName", StringComparison.OrdinalIgnoreCase)
+                var authType = ConnectionCredentials.ParseAuthType(config.Server.Authentication.Type);
+                if (authType == AuthenticationType.UserName
                     && !string.IsNullOrEmpty(config.Server.Authentication.Username))
                 {
                     var pwDialog = new PasswordPromptDialog(

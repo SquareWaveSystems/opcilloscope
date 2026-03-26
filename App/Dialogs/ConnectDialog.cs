@@ -1,7 +1,6 @@
 using Terminal.Gui;
 using Opcilloscope.App.Themes;
 using Opcilloscope.OpcUa;
-using System.Collections.ObjectModel;
 using AppThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
 namespace Opcilloscope.App.Dialogs;
@@ -21,8 +20,6 @@ public class ConnectDialog : Dialog
     private readonly TextField _usernameField;
     private readonly Label _passwordLabel;
     private readonly TextField _passwordField;
-    private readonly Button _connectButton;
-    private readonly Button _cancelButton;
     private bool _confirmed;
     private bool _isProcessingTextChange;
 
@@ -48,13 +45,7 @@ public class ConnectDialog : Dialog
         Width = 60;
         Height = 18;
 
-        // Apply theme styling - double-line border for emphasis with grey border color
-        ColorScheme = theme.DialogColorScheme;
-        BorderStyle = LineStyle.Double;
-        if (Border != null)
-        {
-            Border.ColorScheme = theme.BorderColorScheme;
-        }
+        ThemeStyler.ApplyToDialog(this, theme);
 
         var endpointLabel = new Label
         {
@@ -177,7 +168,7 @@ public class ConnectDialog : Dialog
             Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
 
-        _connectButton = new Button
+        var connectButton = new Button
         {
             X = Pos.Center() - 10,
             Y = 14,
@@ -186,7 +177,7 @@ public class ConnectDialog : Dialog
             ColorScheme = defaultButtonScheme
         };
 
-        _connectButton.Accepting += (_, _) =>
+        connectButton.Accepting += (_, _) =>
         {
             if (ValidateInput())
             {
@@ -195,7 +186,7 @@ public class ConnectDialog : Dialog
             }
         };
 
-        _cancelButton = new Button
+        var cancelButton = new Button
         {
             X = Pos.Center() + 4,
             Y = 14,
@@ -203,7 +194,7 @@ public class ConnectDialog : Dialog
             ColorScheme = theme.ButtonColorScheme
         };
 
-        _cancelButton.Accepting += (_, _) =>
+        cancelButton.Accepting += (_, _) =>
         {
             _confirmed = false;
             Application.RequestStop();
@@ -213,7 +204,7 @@ public class ConnectDialog : Dialog
             intervalLabel, _publishIntervalField, intervalHintLabel,
             authLabel, _authTypeRadio,
             _usernameLabel, _usernameField, _passwordLabel, _passwordField,
-            _connectButton, _cancelButton);
+            connectButton, cancelButton);
 
         _endpointField.SetFocus();
     }

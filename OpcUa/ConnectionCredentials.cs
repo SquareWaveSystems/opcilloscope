@@ -19,4 +19,12 @@ public record ConnectionCredentials(
     string? Password = null)
 {
     public static readonly ConnectionCredentials Anonymous = new(AuthenticationType.Anonymous);
+
+    /// <summary>
+    /// Parses a string (from config) into an AuthenticationType, defaulting to Anonymous.
+    /// </summary>
+    public static AuthenticationType ParseAuthType(string? value) =>
+        string.Equals(value, nameof(AuthenticationType.UserName), StringComparison.OrdinalIgnoreCase)
+            ? AuthenticationType.UserName
+            : AuthenticationType.Anonymous;
 }
