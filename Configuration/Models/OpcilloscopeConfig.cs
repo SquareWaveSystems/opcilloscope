@@ -46,12 +46,8 @@ public class ServerConfig
 
     /// <summary>
     /// Authentication settings for the OPC UA server.
-    /// <para>
-    /// Warning: As of version 1.0, these authentication settings are not
-    /// yet applied when sessions are created. They are included for
-    /// future support of non-anonymous authentication and to document
-    /// the intended credentials strategy.
-    /// </para>
+    /// Supports Anonymous and UserName authentication types.
+    /// Passwords are never stored in config files; they are prompted at runtime.
     /// </summary>
     public AuthenticationConfig Authentication { get; set; } = new();
 }

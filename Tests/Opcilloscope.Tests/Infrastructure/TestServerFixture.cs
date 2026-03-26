@@ -63,10 +63,10 @@ public class TestServerFixture : IAsyncLifetime
     /// <summary>
     /// Creates a connected OpcUaClientWrapper for testing.
     /// </summary>
-    public async Task<OpcUaClientWrapper> CreateConnectedClientAsync()
+    public async Task<OpcUaClientWrapper> CreateConnectedClientAsync(ConnectionCredentials? credentials = null)
     {
         var client = new OpcUaClientWrapper();
-        await client.ConnectAsync(EndpointUrl);
+        await client.ConnectAsync(EndpointUrl, credentials);
         return client;
     }
 }

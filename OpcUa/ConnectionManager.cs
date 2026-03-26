@@ -13,6 +13,7 @@ public sealed class ConnectionManager : IDisposable
     private readonly Logger _logger;
     private SubscriptionManager? _subscriptionManager;
     private string? _lastEndpoint;
+    private ConnectionCredentials _credentials = ConnectionCredentials.Anonymous;
     private bool _disposed;
     private int _isReconnecting;
 
@@ -35,6 +36,11 @@ public sealed class ConnectionManager : IDisposable
     /// Gets the last attempted endpoint URL.
     /// </summary>
     public string? LastEndpoint => _lastEndpoint;
+
+    /// <summary>
+    /// Gets the credentials used for the current or last connection.
+    /// </summary>
+    public ConnectionCredentials Credentials => _credentials;
 
     /// <summary>
     /// Gets the OPC UA client wrapper for direct session access.
@@ -98,17 +104,19 @@ public sealed class ConnectionManager : IDisposable
     /// </summary>
     /// <param name="endpoint">The endpoint URL to connect to.</param>
     /// <param name="publishingInterval">Publishing interval in milliseconds for the subscription.</param>
+    /// <param name="credentials">Authentication credentials (defaults to anonymous).</param>
     /// <returns>True if connection succeeded, false otherwise.</returns>
-    public async Task<bool> ConnectAsync(string endpoint, int publishingInterval = 250)
+    public async Task<bool> ConnectAsync(string endpoint, int publishingInterval = 250, ConnectionCredentials? credentials = null)
     {
         Disconnect();
 
         _lastEndpoint = endpoint;
+        _credentials = credentials ?? ConnectionCredentials.Anonymous;
         StateChanged?.Invoke(ConnectionState.Connecting);
 
         try
         {
-            var success = await _client.ConnectAsync(endpoint);
+            var success = await _client.ConnectAsync(endpoint, _credentials);
 
             if (success)
             {

@@ -17,6 +17,7 @@ public class OpcUaClientWrapper : IDisposable
     private bool _disposed;
     private ApplicationConfiguration? _appConfig;
     private ConfiguredEndpoint? _lastConfiguredEndpoint;
+    private ConnectionCredentials _credentials = ConnectionCredentials.Anonymous;
 
     public bool IsConnected => _session?.Connected ?? false;
     public string? CurrentEndpoint => _currentEndpoint;
@@ -106,17 +107,21 @@ public class OpcUaClientWrapper : IDisposable
         return _appConfig;
     }
 
-    public async Task<bool> ConnectAsync(string endpointUrl)
+    public async Task<bool> ConnectAsync(string endpointUrl, ConnectionCredentials? credentials = null)
     {
         try
         {
             Disconnect();
 
+            _credentials = credentials ?? ConnectionCredentials.Anonymous;
             _logger.Info($"Connecting to {endpointUrl}...");
 
             var config = await GetApplicationConfigAsync();
 
             // Discover endpoints
+            // Note: useSecurity is false by default. When AutoAcceptUntrustedCertificates is true
+            // (development mode), secure channels may fail due to untrusted certs. Production
+            // deployments should configure proper certificates and set useSecurity: true.
             var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, endpointUrl, useSecurity: false);
 
             // Create session
@@ -131,7 +136,7 @@ public class OpcUaClientWrapper : IDisposable
                 false,
                 "Opcilloscope Session",
                 60000,
-                new UserIdentity(new AnonymousIdentityToken()),
+                CreateUserIdentity(),
                 null
             );
 #pragma warning restore CS0618
@@ -146,6 +151,19 @@ public class OpcUaClientWrapper : IDisposable
             _logger.Info($"Connected to {endpointUrl}");
             Connected?.Invoke();
             return true;
+        }
+        catch (ServiceResultException sre) when (
+            sre.StatusCode == StatusCodes.BadUserAccessDenied ||
+            sre.StatusCode == StatusCodes.BadIdentityTokenInvalid ||
+            sre.StatusCode == StatusCodes.BadIdentityTokenRejected)
+        {
+            var msg = sre.StatusCode == StatusCodes.BadUserAccessDenied
+                ? "Authentication failed: invalid username or password."
+                : "Authentication rejected by server: " + sre.Message;
+            _logger.Error(msg);
+            ConnectionError?.Invoke(msg);
+            Disconnect();
+            return false;
         }
         catch (Exception ex)
         {
@@ -341,7 +359,7 @@ public class OpcUaClientWrapper : IDisposable
                 false,
                 "Opcilloscope Session",
                 60000,
-                new UserIdentity(new AnonymousIdentityToken()),
+                CreateUserIdentity(),
                 null
             );
 #pragma warning restore CS0618
@@ -499,6 +517,21 @@ public class OpcUaClientWrapper : IDisposable
             _disposed = true;
             Disconnect();
         }
+    }
+
+    private UserIdentity CreateUserIdentity()
+    {
+        if (_credentials.Type == AuthenticationType.UserName)
+        {
+            var token = new UserNameIdentityToken
+            {
+                UserName = _credentials.Username,
+                DecryptedPassword = System.Text.Encoding.UTF8.GetBytes(_credentials.Password ?? string.Empty)
+            };
+            return new UserIdentity(token);
+        }
+
+        return new UserIdentity(new AnonymousIdentityToken());
     }
 
     private async Task<EndpointDescription> DiscoverAndSelectEndpointAsync(

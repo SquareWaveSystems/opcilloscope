@@ -425,16 +425,24 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     private void ShowConnectDialog()
     {
         var currentInterval = _connectionManager.SubscriptionManager?.PublishingInterval ?? 250;
-        var dialog = new ConnectDialog(_lastEndpoint, currentInterval);
+        var currentCredentials = _connectionManager.Credentials;
+        var dialog = new ConnectDialog(
+            _lastEndpoint,
+            currentInterval,
+            currentCredentials.Type,
+            currentCredentials.Username);
         Application.Run(dialog);
 
         if (dialog.Confirmed)
         {
-            ConnectAsync(dialog.EndpointUrl, dialog.PublishingInterval).FireAndForget(_logger);
+            var credentials = dialog.SelectedAuthType == AuthenticationType.UserName
+                ? new ConnectionCredentials(AuthenticationType.UserName, dialog.Username, dialog.Password)
+                : ConnectionCredentials.Anonymous;
+            ConnectAsync(dialog.EndpointUrl, dialog.PublishingInterval, credentials).FireAndForget(_logger);
         }
     }
 
-    private async Task ConnectAsync(string endpoint, int publishingInterval = 250)
+    private async Task ConnectAsync(string endpoint, int publishingInterval = 250, ConnectionCredentials? credentials = null)
     {
         // Disconnect if already connected
         Disconnect();
@@ -444,7 +452,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
         try
         {
-            var success = await _connectionManager.ConnectAsync(endpoint, publishingInterval);
+            var success = await _connectionManager.ConnectAsync(endpoint, publishingInterval, credentials);
 
             if (success)
             {
@@ -1071,7 +1079,29 @@ License: MIT
             // Connect to server and subscribe to nodes
             if (!string.IsNullOrEmpty(config.Server.EndpointUrl))
             {
-                var connected = await _connectionManager.ConnectAsync(config.Server.EndpointUrl, config.Settings.PublishingIntervalMs);
+                // Build credentials from config (prompt for password if needed)
+                ConnectionCredentials? credentials = null;
+                if (string.Equals(config.Server.Authentication.Type, "UserName", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrEmpty(config.Server.Authentication.Username))
+                {
+                    var pwDialog = new PasswordPromptDialog(
+                        config.Server.Authentication.Username,
+                        config.Server.EndpointUrl);
+                    Application.Run(pwDialog);
+
+                    if (!pwDialog.Confirmed)
+                    {
+                        _logger.Info("Password prompt cancelled - skipping connection");
+                        return;
+                    }
+
+                    credentials = new ConnectionCredentials(
+                        AuthenticationType.UserName,
+                        config.Server.Authentication.Username,
+                        pwDialog.Password);
+                }
+
+                var connected = await _connectionManager.ConnectAsync(config.Server.EndpointUrl, config.Settings.PublishingIntervalMs, credentials);
 
                 if (connected)
                 {
@@ -1156,7 +1186,8 @@ License: MIT
                 _connectionManager.CurrentEndpoint,
                 _connectionManager.SubscriptionManager?.PublishingInterval ?? 1000,
                 monitoredVariables,
-                _currentMetadata
+                _currentMetadata,
+                _connectionManager.Credentials
             );
 
             // Update metadata name from filename if not set

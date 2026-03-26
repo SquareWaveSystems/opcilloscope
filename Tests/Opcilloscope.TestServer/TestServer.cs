@@ -137,12 +137,18 @@ public class TestServer : IAsyncDisposable, IDisposable
                     {
                         SecurityMode = MessageSecurityMode.None,
                         SecurityPolicyUri = SecurityPolicies.None
+                    },
+                    new ServerSecurityPolicy
+                    {
+                        SecurityMode = MessageSecurityMode.SignAndEncrypt,
+                        SecurityPolicyUri = SecurityPolicies.Basic256Sha256
                     }
                 },
 
                 UserTokenPolicies = new UserTokenPolicyCollection
                 {
-                    new UserTokenPolicy(UserTokenType.Anonymous)
+                    new UserTokenPolicy(UserTokenType.Anonymous),
+                    new UserTokenPolicy(UserTokenType.UserName)
                 },
 
                 DiagnosticsEnabled = false,
@@ -217,6 +223,30 @@ public class TestServer : IAsyncDisposable, IDisposable
 /// </summary>
 internal class TestOpcUaServer : StandardServer
 {
+    public const string TestUsername = "testuser";
+    public const string TestPassword = "testpass";
+
+    protected override void OnServerStarted(IServerInternal server)
+    {
+        base.OnServerStarted(server);
+
+        // Register a handler for user identity validation
+        server.SessionManager.ImpersonateUser += (session, args) =>
+        {
+            if (args.NewIdentity is UserNameIdentityToken userNameToken)
+            {
+                var password = System.Text.Encoding.UTF8.GetString(userNameToken.DecryptedPassword);
+                if (userNameToken.UserName == TestUsername &&
+                    password == TestPassword)
+                {
+                    return;
+                }
+
+                args.IdentityValidationError = StatusCodes.BadUserAccessDenied;
+            }
+        };
+    }
+
     protected override MasterNodeManager CreateMasterNodeManager(
         IServerInternal server,
         ApplicationConfiguration configuration)
