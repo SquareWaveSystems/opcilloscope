@@ -1,5 +1,6 @@
 using Opc.Ua;
 using Opc.Ua.Client;
+using Opc.Ua.Configuration;
 using Opcilloscope.Utilities;
 
 namespace Opcilloscope.OpcUa;
@@ -102,6 +103,14 @@ public class OpcUaClientWrapper : IDisposable
 
         await _appConfig.ValidateAsync(ApplicationType.Client);
 
+        // Create client application certificate if it doesn't exist (needed for secure channels)
+        var appInstance = new ApplicationInstance(_appConfig, null);
+        var hasCertificate = await appInstance.CheckApplicationInstanceCertificatesAsync(silent: true);
+        if (!hasCertificate)
+        {
+            _logger.Warning("Client certificate could not be created. Secure channel connections may fail.");
+        }
+
         _logger.Warning("Certificate validation disabled (AutoAcceptUntrustedCertificates=true). Not recommended for production.");
 
         return _appConfig;
@@ -118,11 +127,9 @@ public class OpcUaClientWrapper : IDisposable
 
             var config = await GetApplicationConfigAsync();
 
-            // Discover endpoints
-            // Note: useSecurity is false by default. When AutoAcceptUntrustedCertificates is true
-            // (development mode), secure channels may fail due to untrusted certs. Production
-            // deployments should configure proper certificates and set useSecurity: true.
-            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, endpointUrl, useSecurity: false);
+            // Discover endpoints — prefer secure endpoints when using credentials
+            var useSecurity = _credentials.Type == AuthenticationType.UserName;
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, endpointUrl, useSecurity);
 
             // Create session
             var endpointConfig = EndpointConfiguration.Create(config);
@@ -346,7 +353,8 @@ public class OpcUaClientWrapper : IDisposable
             }
 
             // Rediscover endpoint in case server configuration changed
-            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, _currentEndpoint, useSecurity: false);
+            var useSecurity = _credentials.Type == AuthenticationType.UserName;
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, _currentEndpoint, useSecurity);
             var endpointConfig = EndpointConfiguration.Create(config);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
             _lastConfiguredEndpoint = endpoint;
@@ -523,15 +531,12 @@ public class OpcUaClientWrapper : IDisposable
     {
         if (_credentials.Type == AuthenticationType.UserName)
         {
-            var token = new UserNameIdentityToken
-            {
-                UserName = _credentials.Username,
-                DecryptedPassword = System.Text.Encoding.UTF8.GetBytes(_credentials.Password ?? string.Empty)
-            };
-            return new UserIdentity(token);
+            return new UserIdentity(
+                _credentials.Username,
+                System.Text.Encoding.UTF8.GetBytes(_credentials.Password ?? string.Empty));
         }
 
-        return new UserIdentity(new AnonymousIdentityToken());
+        return new UserIdentity();
     }
 
     private async Task<EndpointDescription> DiscoverAndSelectEndpointAsync(

@@ -250,6 +250,14 @@ public class ConnectDialog : Dialog
                 _usernameField.SetFocus();
                 return false;
             }
+
+            var password = _passwordField.Text ?? string.Empty;
+            if (string.IsNullOrEmpty(password))
+            {
+                MessageBox.ErrorQuery("Error", "Please enter a password", "OK");
+                _passwordField.SetFocus();
+                return false;
+            }
         }
 
         return true;
