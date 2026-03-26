@@ -1,5 +1,6 @@
 using Opcilloscope.Configuration;
 using Opcilloscope.Configuration.Models;
+using Opcilloscope.OpcUa;
 using Opcilloscope.OpcUa.Models;
 using Opc.Ua;
 
@@ -601,6 +602,118 @@ public class ConfigurationServiceTests : IDisposable
     {
         // Assert
         Assert.Equal(".cfg", ConfigurationService.ConfigFileExtension);
+    }
+
+    #endregion
+
+    #region Authentication Config Tests
+
+    [Fact]
+    public async Task SaveAsync_ThenLoadAsync_PreservesAuthenticationType()
+    {
+        var config = CreateTestConfig();
+        config.Server.Authentication = new AuthenticationConfig
+        {
+            Type = "UserName",
+            Username = "admin"
+        };
+        var filePath = Path.Combine(_tempDir, "auth.cfg");
+
+        await _service.SaveAsync(config, filePath);
+        var loaded = await _service.LoadAsync(filePath);
+
+        Assert.Equal("UserName", loaded.Server.Authentication.Type);
+        Assert.Equal("admin", loaded.Server.Authentication.Username);
+    }
+
+    [Fact]
+    public async Task SaveAsync_ThenLoadAsync_AnonymousAuth_HasNoUsername()
+    {
+        var config = CreateTestConfig();
+        config.Server.Authentication = new AuthenticationConfig
+        {
+            Type = "Anonymous",
+            Username = null
+        };
+        var filePath = Path.Combine(_tempDir, "anon.cfg");
+
+        await _service.SaveAsync(config, filePath);
+        var loaded = await _service.LoadAsync(filePath);
+
+        Assert.Equal("Anonymous", loaded.Server.Authentication.Type);
+        Assert.Null(loaded.Server.Authentication.Username);
+    }
+
+    [Fact]
+    public void CaptureCurrentState_WithUserNameCredentials_PersistsAuthTypeAndUsername()
+    {
+        var credentials = new ConnectionCredentials(
+            AuthenticationType.UserName,
+            "myuser",
+            "secretpassword");
+
+        var config = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            1000,
+            new List<MonitoredNode>(),
+            credentials: credentials);
+
+        Assert.Equal("UserName", config.Server.Authentication.Type);
+        Assert.Equal("myuser", config.Server.Authentication.Username);
+    }
+
+    [Fact]
+    public void CaptureCurrentState_WithAnonymousCredentials_DoesNotPersistUsername()
+    {
+        var config = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            1000,
+            new List<MonitoredNode>(),
+            credentials: ConnectionCredentials.Anonymous);
+
+        Assert.Equal("Anonymous", config.Server.Authentication.Type);
+        Assert.Null(config.Server.Authentication.Username);
+    }
+
+    [Fact]
+    public async Task SaveAsync_ThenLoadAsync_PasswordNeverPersisted()
+    {
+        var credentials = new ConnectionCredentials(
+            AuthenticationType.UserName,
+            "admin",
+            "supersecret");
+
+        var config = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            1000,
+            new List<MonitoredNode>(),
+            credentials: credentials);
+
+        var filePath = Path.Combine(_tempDir, "nopwd.cfg");
+        await _service.SaveAsync(config, filePath);
+
+        // Verify the raw file does not contain the password
+        var fileContent = await File.ReadAllTextAsync(filePath);
+        Assert.DoesNotContain("supersecret", fileContent);
+
+        // Verify the loaded config has no password field
+        var loaded = await _service.LoadAsync(filePath);
+        Assert.Equal("UserName", loaded.Server.Authentication.Type);
+        Assert.Equal("admin", loaded.Server.Authentication.Username);
+    }
+
+    [Fact]
+    public void ParseAuthType_RoundtripsWithCaptureCurrentState()
+    {
+        var credentials = new ConnectionCredentials(AuthenticationType.UserName, "user1");
+
+        var config = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840", 1000,
+            new List<MonitoredNode>(),
+            credentials: credentials);
+
+        var parsed = ConnectionCredentials.ParseAuthType(config.Server.Authentication.Type);
+        Assert.Equal(AuthenticationType.UserName, parsed);
     }
 
     #endregion

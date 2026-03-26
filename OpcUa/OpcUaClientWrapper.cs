@@ -1,5 +1,6 @@
 using Opc.Ua;
 using Opc.Ua.Client;
+using Opc.Ua.Configuration;
 using Opcilloscope.Utilities;
 
 namespace Opcilloscope.OpcUa;
@@ -17,6 +18,7 @@ public class OpcUaClientWrapper : IDisposable
     private bool _disposed;
     private ApplicationConfiguration? _appConfig;
     private ConfiguredEndpoint? _lastConfiguredEndpoint;
+    private ConnectionCredentials _credentials = ConnectionCredentials.Anonymous;
 
     public bool IsConnected => _session?.Connected ?? false;
     public string? CurrentEndpoint => _currentEndpoint;
@@ -101,23 +103,33 @@ public class OpcUaClientWrapper : IDisposable
 
         await _appConfig.ValidateAsync(ApplicationType.Client);
 
+        // Create client application certificate if it doesn't exist (needed for secure channels)
+        var appInstance = new ApplicationInstance(_appConfig, null);
+        var hasCertificate = await appInstance.CheckApplicationInstanceCertificatesAsync(silent: true);
+        if (!hasCertificate)
+        {
+            _logger.Warning("Client certificate could not be created. Secure channel connections may fail.");
+        }
+
         _logger.Warning("Certificate validation disabled (AutoAcceptUntrustedCertificates=true). Not recommended for production.");
 
         return _appConfig;
     }
 
-    public async Task<bool> ConnectAsync(string endpointUrl)
+    public async Task<bool> ConnectAsync(string endpointUrl, ConnectionCredentials? credentials = null)
     {
         try
         {
             Disconnect();
 
+            _credentials = credentials ?? ConnectionCredentials.Anonymous;
             _logger.Info($"Connecting to {endpointUrl}...");
 
             var config = await GetApplicationConfigAsync();
 
-            // Discover endpoints
-            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, endpointUrl, useSecurity: false);
+            // Discover endpoints — prefer secure endpoints when using credentials
+            var useSecurity = _credentials.Type == AuthenticationType.UserName;
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, endpointUrl, useSecurity);
 
             // Create session
             var endpointConfig = EndpointConfiguration.Create(config);
@@ -131,7 +143,7 @@ public class OpcUaClientWrapper : IDisposable
                 false,
                 "Opcilloscope Session",
                 60000,
-                new UserIdentity(new AnonymousIdentityToken()),
+                CreateUserIdentity(),
                 null
             );
 #pragma warning restore CS0618
@@ -146,6 +158,19 @@ public class OpcUaClientWrapper : IDisposable
             _logger.Info($"Connected to {endpointUrl}");
             Connected?.Invoke();
             return true;
+        }
+        catch (ServiceResultException sre) when (
+            sre.StatusCode == StatusCodes.BadUserAccessDenied ||
+            sre.StatusCode == StatusCodes.BadIdentityTokenInvalid ||
+            sre.StatusCode == StatusCodes.BadIdentityTokenRejected)
+        {
+            var msg = sre.StatusCode == StatusCodes.BadUserAccessDenied
+                ? "Authentication failed: invalid username or password."
+                : "Authentication rejected by server: " + sre.Message;
+            _logger.Error(msg);
+            ConnectionError?.Invoke(msg);
+            Disconnect();
+            return false;
         }
         catch (Exception ex)
         {
@@ -328,7 +353,8 @@ public class OpcUaClientWrapper : IDisposable
             }
 
             // Rediscover endpoint in case server configuration changed
-            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, _currentEndpoint, useSecurity: false);
+            var useSecurity = _credentials.Type == AuthenticationType.UserName;
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, _currentEndpoint, useSecurity);
             var endpointConfig = EndpointConfiguration.Create(config);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
             _lastConfiguredEndpoint = endpoint;
@@ -341,7 +367,7 @@ public class OpcUaClientWrapper : IDisposable
                 false,
                 "Opcilloscope Session",
                 60000,
-                new UserIdentity(new AnonymousIdentityToken()),
+                CreateUserIdentity(),
                 null
             );
 #pragma warning restore CS0618
@@ -499,6 +525,18 @@ public class OpcUaClientWrapper : IDisposable
             _disposed = true;
             Disconnect();
         }
+    }
+
+    private UserIdentity CreateUserIdentity()
+    {
+        if (_credentials.Type == AuthenticationType.UserName)
+        {
+            return new UserIdentity(
+                _credentials.Username,
+                System.Text.Encoding.UTF8.GetBytes(_credentials.Password ?? string.Empty));
+        }
+
+        return new UserIdentity();
     }
 
     private async Task<EndpointDescription> DiscoverAndSelectEndpointAsync(

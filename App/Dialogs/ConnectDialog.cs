@@ -1,6 +1,6 @@
 using Terminal.Gui;
 using Opcilloscope.App.Themes;
-using System.Collections.ObjectModel;
+using Opcilloscope.OpcUa;
 using AppThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
 namespace Opcilloscope.App.Dialogs;
@@ -15,28 +15,37 @@ public class ConnectDialog : Dialog
     private const string ProtocolPrefix = "opc.tcp://";
     private readonly TextField _endpointField;
     private readonly NumericUpDown<int> _publishIntervalField;
+    private readonly RadioGroup _authTypeRadio;
+    private readonly Label _usernameLabel;
+    private readonly TextField _usernameField;
+    private readonly Label _passwordLabel;
+    private readonly TextField _passwordField;
     private bool _confirmed;
     private bool _isProcessingTextChange;
 
     public string EndpointUrl => ProtocolPrefix + (_endpointField.Text?.Trim() ?? string.Empty);
     public bool Confirmed => _confirmed;
     public int PublishingInterval => _publishIntervalField.Value;
+    public AuthenticationType SelectedAuthType =>
+        _authTypeRadio.SelectedItem == 1 ? AuthenticationType.UserName : AuthenticationType.Anonymous;
+    public string? Username => SelectedAuthType == AuthenticationType.UserName
+        ? _usernameField.Text?.Trim() : null;
+    public string? Password => SelectedAuthType == AuthenticationType.UserName
+        ? _passwordField.Text : null;
 
-    public ConnectDialog(string? initialEndpoint = null, int publishingInterval = 250)
+    public ConnectDialog(
+        string? initialEndpoint = null,
+        int publishingInterval = 250,
+        AuthenticationType authType = AuthenticationType.Anonymous,
+        string? username = null)
     {
         var theme = AppThemeManager.Current;
 
         Title = " Connect to Server ";
         Width = 60;
-        Height = 12;
+        Height = 18;
 
-        // Apply theme styling - double-line border for emphasis with grey border color
-        ColorScheme = theme.DialogColorScheme;
-        BorderStyle = LineStyle.Double;
-        if (Border != null)
-        {
-            Border.ColorScheme = theme.BorderColorScheme;
-        }
+        ThemeStyler.ApplyToDialog(this, theme);
 
         var endpointLabel = new Label
         {
@@ -89,6 +98,66 @@ public class ConnectDialog : Dialog
             ColorScheme = theme.MainColorScheme
         };
 
+        // Authentication section
+        var authLabel = new Label
+        {
+            X = 1,
+            Y = 8,
+            Text = "Authentication:"
+        };
+
+        _authTypeRadio = new RadioGroup
+        {
+            X = 1,
+            Y = 9,
+            RadioLabels = ["Anonymous", "Username/Password"],
+            Orientation = Orientation.Horizontal,
+            SelectedItem = authType == AuthenticationType.UserName ? 1 : 0
+        };
+
+        _usernameLabel = new Label
+        {
+            X = 1,
+            Y = 11,
+            Text = "Username:",
+            Visible = authType == AuthenticationType.UserName
+        };
+
+        _usernameField = new TextField
+        {
+            X = 12,
+            Y = 11,
+            Width = Dim.Fill(1),
+            Text = username ?? string.Empty,
+            Visible = authType == AuthenticationType.UserName
+        };
+
+        _passwordLabel = new Label
+        {
+            X = 1,
+            Y = 12,
+            Text = "Password:",
+            Visible = authType == AuthenticationType.UserName
+        };
+
+        _passwordField = new TextField
+        {
+            X = 12,
+            Y = 12,
+            Width = Dim.Fill(1),
+            Secret = true,
+            Visible = authType == AuthenticationType.UserName
+        };
+
+        _authTypeRadio.SelectedItemChanged += (_, _) =>
+        {
+            var showCredentials = _authTypeRadio.SelectedItem == 1;
+            _usernameLabel.Visible = showCredentials;
+            _usernameField.Visible = showCredentials;
+            _passwordLabel.Visible = showCredentials;
+            _passwordField.Visible = showCredentials;
+        };
+
         // Default button highlighted with amber
         var defaultButtonScheme = new ColorScheme
         {
@@ -102,7 +171,7 @@ public class ConnectDialog : Dialog
         var connectButton = new Button
         {
             X = Pos.Center() - 10,
-            Y = 8,
+            Y = 14,
             Text = $"{theme.ButtonPrefix}Connect{theme.ButtonSuffix}",
             IsDefault = true,
             ColorScheme = defaultButtonScheme
@@ -110,7 +179,7 @@ public class ConnectDialog : Dialog
 
         connectButton.Accepting += (_, _) =>
         {
-            if (ValidateEndpoint())
+            if (ValidateInput())
             {
                 _confirmed = true;
                 Application.RequestStop();
@@ -120,7 +189,7 @@ public class ConnectDialog : Dialog
         var cancelButton = new Button
         {
             X = Pos.Center() + 4,
-            Y = 8,
+            Y = 14,
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
             ColorScheme = theme.ButtonColorScheme
         };
@@ -133,12 +202,14 @@ public class ConnectDialog : Dialog
 
         Add(endpointLabel, protocolLabel, _endpointField,
             intervalLabel, _publishIntervalField, intervalHintLabel,
+            authLabel, _authTypeRadio,
+            _usernameLabel, _usernameField, _passwordLabel, _passwordField,
             connectButton, cancelButton);
 
         _endpointField.SetFocus();
     }
 
-    private bool ValidateEndpoint()
+    private bool ValidateInput()
     {
         var serverAddress = _endpointField.Text?.Trim() ?? string.Empty;
 
@@ -168,6 +239,25 @@ public class ConnectDialog : Dialog
         {
             MessageBox.ErrorQuery("Error", "Publishing interval must be between 100 and 10000 ms", "OK");
             return false;
+        }
+
+        if (SelectedAuthType == AuthenticationType.UserName)
+        {
+            var username = _usernameField.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(username))
+            {
+                MessageBox.ErrorQuery("Error", "Please enter a username", "OK");
+                _usernameField.SetFocus();
+                return false;
+            }
+
+            var password = _passwordField.Text ?? string.Empty;
+            if (string.IsNullOrEmpty(password))
+            {
+                MessageBox.ErrorQuery("Error", "Please enter a password", "OK");
+                _passwordField.SetFocus();
+                return false;
+            }
         }
 
         return true;

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Opcilloscope.Configuration.Models;
+using Opcilloscope.OpcUa;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.Utilities;
 
@@ -141,18 +142,25 @@ public class ConfigurationService
     /// <param name="publishingInterval">The current publishing interval in ms.</param>
     /// <param name="monitoredVariables">The current monitored variables.</param>
     /// <param name="existingMetadata">Optional existing metadata to preserve.</param>
+    /// <param name="credentials">Current connection credentials (password is never persisted).</param>
     /// <returns>A new configuration object representing the current state.</returns>
     public OpcilloscopeConfig CaptureCurrentState(
         string? endpointUrl,
         int publishingInterval,
         IEnumerable<MonitoredNode> monitoredVariables,
-        ConfigMetadata? existingMetadata = null)
+        ConfigMetadata? existingMetadata = null,
+        ConnectionCredentials? credentials = null)
     {
         return new OpcilloscopeConfig
         {
             Server = new ServerConfig
             {
-                EndpointUrl = endpointUrl ?? string.Empty
+                EndpointUrl = endpointUrl ?? string.Empty,
+                Authentication = new AuthenticationConfig
+                {
+                    Type = (credentials?.Type ?? AuthenticationType.Anonymous).ToString(),
+                    Username = credentials?.Type == AuthenticationType.UserName ? credentials.Username : null
+                }
             },
             Settings = new SubscriptionSettings
             {
