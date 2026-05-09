@@ -259,6 +259,20 @@ public sealed class ConnectionManager : IDisposable
         return _subscriptionManager?.RemoveNodeAsync(clientHandle) ?? Task.FromResult(false);
     }
 
+    /// <summary>
+    /// Writes a value to an OPC UA node's Value attribute.
+    /// </summary>
+    public Task<Opc.Ua.StatusCode> WriteValueAsync(Opc.Ua.NodeId nodeId, object value)
+    {
+        if (!_client.IsConnected)
+        {
+            _logger.Warning("Cannot write: not connected");
+            return Task.FromResult((Opc.Ua.StatusCode)Opc.Ua.StatusCodes.BadNotConnected);
+        }
+
+        return _client.WriteValueAsync(nodeId, value);
+    }
+
     private async Task InitializeSubscriptionAsync(int publishingInterval = 250)
     {
         _subscriptionManager = new SubscriptionManager(_client, _logger);

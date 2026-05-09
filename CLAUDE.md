@@ -467,6 +467,7 @@ Automates release builds and publishing.
 |-----|--------|
 | Enter | Subscribe to selected node |
 | F5 | Refresh address space tree |
+| W | Write value to selected node |
 
 **Monitored Variables:**
 | Key | Action |
