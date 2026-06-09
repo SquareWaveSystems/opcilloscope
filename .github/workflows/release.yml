@@ -61,8 +61,12 @@ jobs:
         if: matrix.smoke && runner.os != 'Windows'
         run: |
           chmod +x ./publish/opcilloscope
-          ./publish/opcilloscope --help
-          echo "Published binary exited with code $?"
+          # Run under a pseudo-tty so Terminal.Gui's Application.Init can initialize even on
+          # a headless runner; `script -e` propagates the binary's exit code.
+          TERM=xterm script -qec "./publish/opcilloscope --help" /dev/null
+          code=$?
+          echo "Published binary exited with code $code"
+          test "$code" -eq 0
 
       - name: Smoke test published binary (Windows)
         if: matrix.smoke && runner.os == 'Windows'

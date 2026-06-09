@@ -37,5 +37,10 @@ jobs:
       - name: Smoke test published binary
         run: |
           chmod +x ./publish/opcilloscope
-          ./publish/opcilloscope --help
-          echo "Published binary exited with code $?"
+          # Run --help under a pseudo-tty: this exercises Terminal.Gui's Application.Init
+          # (catching trim/startup regressions in the self-contained binary) and then exits
+          # via the --help path. `script -e` propagates the binary's exit code.
+          TERM=xterm script -qec "./publish/opcilloscope --help" /dev/null
+          code=$?
+          echo "Published binary exited with code $code"
+          test "$code" -eq 0
