@@ -10,6 +10,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
 
     <!-- Package metadata (Version is driven by MinVer from Git tags) -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
     <Authors>Brett Kinny</Authors>
     <Description>A lightweight terminal-based OPC UA client for browsing, monitoring, and subscribing to industrial automation data.</Description>
     <PackageProjectUrl>https://github.com/SquareWaveSystems/opcilloscope</PackageProjectUrl>
@@ -22,8 +23,11 @@
     <!-- Publishing options -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <PublishTrimmed>true</PublishTrimmed>
-    <TrimMode>partial</TrimMode>
+    <!-- Trimming is disabled: the OPC Foundation and Terminal.Gui stack relies
+         heavily on reflection and is not trim-safe. PublishTrimmed produced 23 trim
+         warnings and a runtime "$schema" deserialization failure on launch, leaving a
+         broken binary. Keep SelfContained + PublishSingleFile for distribution. -->
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
   <ItemGroup>
