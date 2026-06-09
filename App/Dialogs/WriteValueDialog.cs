@@ -30,13 +30,8 @@ public class WriteValueDialog : Dialog
         Width = 60;
         Height = 14;
 
-        // Apply theme styling - double-line border for emphasis with grey border color
-        ColorScheme = theme.DialogColorScheme;
-        BorderStyle = LineStyle.Double;
-        if (Border != null)
-        {
-            Border.ColorScheme = theme.BorderColorScheme;
-        }
+        // Apply theme styling consistently via the shared helper
+        ThemeStyler.ApplyToDialog(this, theme);
 
         // Node information section (read-only)
         var nodeIdLabel = new Label

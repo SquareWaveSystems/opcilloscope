@@ -53,7 +53,7 @@ dotnet test
 Usage: opcilloscope [options] [file]
 
 Options:
-  -f, --config <file>   Load configuration file (.cfg or .json)
+  -f, --config <file>   Load configuration file (.cfg, .opcilloscope, or .json)
   -h, --help            Show help message
 
 Examples:
@@ -79,13 +79,11 @@ Opcilloscope/
 │   │   ├── MonitoredVariablesView.cs # TableView for subscribed variables with selection
 │   │   ├── NodeDetailsView.cs      # Node attribute display panel
 │   │   ├── LogView.cs              # Application log display
-│   │   ├── ScopeView.cs            # Real-time multi-signal oscilloscope view
-│   │   └── TrendPlotView.cs        # Single-signal trend plot view
+│   │   └── ScopeView.cs            # Real-time multi-signal oscilloscope view
 │   ├── Dialogs/
 │   │   ├── ConnectDialog.cs        # Server connection dialog with publishing interval
 │   │   ├── WriteValueDialog.cs     # Write value to node dialog
 │   │   ├── ScopeDialog.cs          # Multi-signal scope dialog (up to 5 signals)
-│   │   ├── TrendPlotDialog.cs      # Single-signal trend plot dialog
 │   │   ├── SaveConfigDialog.cs     # Save configuration file dialog
 │   │   ├── SaveRecordingDialog.cs  # Save CSV recording dialog
 │   │   ├── HelpDialog.cs           # Full help/documentation dialog
@@ -475,16 +473,20 @@ Automates release builds and publishing.
 | Delete | Unsubscribe from selected variable |
 | Space | Toggle selection (for Scope/Recording) |
 | W | Write value to selected variable |
-| T | Show trend plot |
+| R | Toggle CSV recording |
 | S | Open Scope with selected variables |
 
-**Scope/Trend Plot View:**
+**Scope View:**
 | Key | Action |
 |-----|--------|
 | Space | Pause/resume plotting |
 | +/= | Zoom in (increase scale) |
 | - | Zoom out (decrease scale) |
 | R | Reset to auto-scale |
+| [ | Widen time window (show more) |
+| ] | Narrow time window (zoom in) |
+| Cursor Up/Down | Pan view up/down |
+| Cursor Left/Right | Move cursor left/right (when paused) |
 
 ## Rules
 Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
