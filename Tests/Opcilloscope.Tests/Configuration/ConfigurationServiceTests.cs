@@ -718,6 +718,102 @@ public class ConfigurationServiceTests : IDisposable
 
     #endregion
 
+    #region Field Preservation Tests
+
+    [Fact]
+    public async Task LoadThenCaptureThenSave_PreservesSecurityAndSamplingFields()
+    {
+        // Arrange: a config with non-default security and sampling settings.
+        var config = CreateTestConfig();
+        config.Server.SecurityMode = "SignAndEncrypt";
+        config.Server.SecurityPolicy = "Basic256Sha256";
+        config.Settings.SamplingIntervalMs = 750;
+        config.Settings.QueueSize = 42;
+        var filePath = Path.Combine(_tempDir, "preserve.cfg");
+        await _service.SaveAsync(config, filePath);
+
+        // Act: simulate the app load -> capture current state -> save round-trip.
+        await _service.LoadAsync(filePath);
+        var captured = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            1000,
+            new List<MonitoredNode>());
+        var roundTripPath = Path.Combine(_tempDir, "preserve-roundtrip.cfg");
+        await _service.SaveAsync(captured, roundTripPath);
+        var loaded = await _service.LoadAsync(roundTripPath);
+
+        // Assert: fields not surfaced by the UI survived the round-trip.
+        Assert.Equal("SignAndEncrypt", loaded.Server.SecurityMode);
+        Assert.Equal("Basic256Sha256", loaded.Server.SecurityPolicy);
+        Assert.Equal(750, loaded.Settings.SamplingIntervalMs);
+        Assert.Equal((uint)42, loaded.Settings.QueueSize);
+    }
+
+    [Fact]
+    public void CaptureCurrentState_WithExplicitExistingServerAndSettings_PreservesFields()
+    {
+        // Arrange
+        var existingServer = new ServerConfig
+        {
+            SecurityMode = "Sign",
+            SecurityPolicy = "Aes128_Sha256_RsaOaep"
+        };
+        var existingSettings = new SubscriptionSettings
+        {
+            SamplingIntervalMs = 333,
+            QueueSize = 7
+        };
+
+        // Act
+        var config = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            1000,
+            new List<MonitoredNode>(),
+            existingServer: existingServer,
+            existingSettings: existingSettings);
+
+        // Assert
+        Assert.Equal("Sign", config.Server.SecurityMode);
+        Assert.Equal("Aes128_Sha256_RsaOaep", config.Server.SecurityPolicy);
+        Assert.Equal(333, config.Settings.SamplingIntervalMs);
+        Assert.Equal((uint)7, config.Settings.QueueSize);
+        // Publishing interval still comes from the explicit argument.
+        Assert.Equal(1000, config.Settings.PublishingIntervalMs);
+    }
+
+    [Fact]
+    public void CaptureCurrentState_NoLoadedConfig_UsesModelDefaults()
+    {
+        // Act: fresh service, no load and no explicit existing values.
+        var config = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            1000,
+            new List<MonitoredNode>());
+
+        // Assert: model defaults are used rather than throwing or nulling fields.
+        Assert.Equal("None", config.Server.SecurityMode);
+        Assert.Equal(250, config.Settings.SamplingIntervalMs);
+        Assert.Equal((uint)10, config.Settings.QueueSize);
+    }
+
+    [Fact]
+    public async Task SaveAsync_OverwritingExistingFile_LeavesNoTempFile()
+    {
+        // Arrange
+        var config = CreateTestConfig();
+        var filePath = Path.Combine(_tempDir, "atomic.cfg");
+
+        // Act: save twice to exercise the temp-file replace path.
+        await _service.SaveAsync(config, filePath);
+        await _service.SaveAsync(config, filePath);
+
+        // Assert: the atomic write left no stray temp file behind.
+        Assert.True(File.Exists(filePath));
+        Assert.False(File.Exists(filePath + ".tmp"));
+    }
+
+    #endregion
+
     private static OpcilloscopeConfig CreateTestConfig()
     {
         return new OpcilloscopeConfig

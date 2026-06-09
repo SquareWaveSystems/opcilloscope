@@ -17,9 +17,20 @@ public class RecentFilesManager
     public event Action? FilesChanged;
 
     public RecentFilesManager()
+        : this(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData))
+    {
+    }
+
+    /// <summary>
+    /// Creates a manager that stores its settings under the given base directory.
+    /// The recent-files list is written to <c>{baseDirectory}/opcilloscope/recent-files.json</c>.
+    /// This overload exists primarily to allow tests to use an isolated directory.
+    /// </summary>
+    /// <param name="baseDirectory">Base directory under which settings are stored.</param>
+    public RecentFilesManager(string baseDirectory)
     {
         _settingsPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            baseDirectory,
             "opcilloscope",
             "recent-files.json"
         );
@@ -133,7 +144,12 @@ public class RecentFilesManager
             {
                 Directory.CreateDirectory(directory);
             }
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(_recentFiles, OpcilloscopeJsonContext.Default.ListString));
+
+            // Write atomically: write to a temp file then replace the target so a
+            // crash mid-write cannot corrupt the recent-files list.
+            var tempPath = _settingsPath + ".tmp";
+            File.WriteAllText(tempPath, JsonSerializer.Serialize(_recentFiles, OpcilloscopeJsonContext.Default.ListString));
+            File.Move(tempPath, _settingsPath, overwrite: true);
         }
         catch (Exception ex)
         {
