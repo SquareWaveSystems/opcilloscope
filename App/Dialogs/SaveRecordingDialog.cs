@@ -41,13 +41,8 @@ public class SaveRecordingDialog : Dialog
         Width = Dim.Percent(80);
         Height = Dim.Percent(80);
 
-        // Apply theme styling
-        ColorScheme = theme.DialogColorScheme;
-        BorderStyle = LineStyle.Double;
-        if (Border != null)
-        {
-            Border.ColorScheme = theme.BorderColorScheme;
-        }
+        // Apply theme styling consistently via the shared helper
+        ThemeStyler.ApplyToDialog(this, theme);
 
         _currentDirectory = defaultDirectory;
 

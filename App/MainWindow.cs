@@ -36,6 +36,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     private readonly Label _activityLabel;
     private readonly CsvRecordingManager _csvRecordingManager;
     private object? _recordingStatusTimer;
+    private object? _startupStatusTimer;
     private readonly MenuItem _themeToggleItem;
 
     // Connecting animation state
@@ -256,7 +257,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         };
         UpdateConnectionStatusLabelPosition();
 
-        Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+        _startupStatusTimer = Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
         {
             step++;
             if (step == 1)
@@ -274,6 +275,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
             {
                 // Final state - show disconnected
                 UpdateConnectionStatus(isConnected: false);
+                _startupStatusTimer = null; // Timer self-removes after returning false
                 return false; // Stop
             }
         });
@@ -301,7 +303,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
                 new MenuBarItem("_Connection", new MenuItem[]
                 {
                     new MenuItem("_Connect...", "", ShowConnectDialog),
-                    new MenuItem("_Disconnect", "", Disconnect),
+                    new MenuItem("_Disconnect", "", () => DisconnectAsync().FireAndForget(_logger)),
                     new MenuItem("_Reconnect", "", () => ReconnectAsync().FireAndForget(_logger))
                 }),
                 new MenuBarItem("_View", new MenuItem[]
@@ -426,7 +428,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     {
         var currentInterval = _connectionManager.SubscriptionManager?.PublishingInterval ?? 250;
         var currentCredentials = _connectionManager.Credentials;
-        var dialog = new ConnectDialog(
+        using var dialog = new ConnectDialog(
             _lastEndpoint,
             currentInterval,
             currentCredentials.Type,
@@ -445,7 +447,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     private async Task ConnectAsync(string endpoint, int publishingInterval = 250, ConnectionCredentials? credentials = null)
     {
         // Disconnect if already connected
-        Disconnect();
+        await DisconnectAsync();
 
         StartConnectingAnimation();
         ShowActivity("Connecting...");
@@ -467,7 +469,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         }
     }
 
-    private void Disconnect()
+    private async Task DisconnectAsync()
     {
         // Stop recording if active
         if (_csvRecordingManager.IsRecording)
@@ -475,13 +477,19 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
             OnStopRecordingRequested();
         }
 
-        _connectionManager.Disconnect();
+        // Async close avoids blocking the UI thread on the OPC UA round-trip.
+        await _connectionManager.DisconnectAsync();
 
-        _addressSpaceView.Clear();
-        _monitoredVariablesView.Clear();
-        _nodeDetailsView.Clear();
+        // The disconnect continuation may resume off the UI thread, so marshal
+        // the view updates back onto it.
+        UiThread.Run(() =>
+        {
+            _addressSpaceView.Clear();
+            _monitoredVariablesView.Clear();
+            _nodeDetailsView.Clear();
 
-        UpdateConnectionStatus(isConnected: false);
+            UpdateConnectionStatus(isConnected: false);
+        });
     }
 
     private async Task ReconnectAsync()
@@ -647,7 +655,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
     private void OpenWriteDialogAndWrite(Opc.Ua.NodeId nodeId, string displayName, Opc.Ua.BuiltInType dataType, string dataTypeName, string? currentValue)
     {
-        var dialog = new WriteValueDialog(nodeId, displayName, dataType, dataTypeName, currentValue);
+        using var dialog = new WriteValueDialog(nodeId, displayName, dataType, dataTypeName, currentValue);
         Application.Run(dialog);
 
         if (!dialog.Confirmed || dialog.ParsedValue == null) return;
@@ -758,7 +766,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     /// </summary>
     private void ShowQuickHelp()
     {
-        var dialog = new QuickHelpDialog(_keybindingManager);
+        using var dialog = new QuickHelpDialog(_keybindingManager);
         Application.Run(dialog);
     }
 
@@ -1005,7 +1013,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
             return;
         }
 
-        var dialog = new ScopeDialog(selectedNodes, _connectionManager.SubscriptionManager);
+        using var dialog = new ScopeDialog(selectedNodes, _connectionManager.SubscriptionManager);
         Application.Run(dialog);
     }
 
@@ -1097,7 +1105,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
     private void ShowHelp()
     {
-        var dialog = new HelpDialog(_keybindingManager);
+        using var dialog = new HelpDialog(_keybindingManager);
         Application.Run(dialog);
     }
 
@@ -1211,7 +1219,7 @@ License: MIT
                 if (authType == AuthenticationType.UserName
                     && !string.IsNullOrEmpty(config.Server.Authentication.Username))
                 {
-                    var pwDialog = new PasswordPromptDialog(
+                    using var pwDialog = new PasswordPromptDialog(
                         config.Server.Authentication.Username,
                         config.Server.EndpointUrl);
                     Application.Run(pwDialog);
@@ -1274,7 +1282,7 @@ License: MIT
                 // No endpoint URL, just clear views and apply settings
                 if (_connectionManager.IsConnected)
                 {
-                    _connectionManager.Disconnect();
+                    await _connectionManager.DisconnectAsync();
                 }
 
                 _addressSpaceView.Clear();
@@ -1311,7 +1319,7 @@ License: MIT
 
             var config = _configService.CaptureCurrentState(
                 _connectionManager.CurrentEndpoint,
-                _connectionManager.SubscriptionManager?.PublishingInterval ?? 1000,
+                _connectionManager.SubscriptionManager?.PublishingInterval ?? 250,
                 monitoredVariables,
                 _currentMetadata,
                 _connectionManager.Credentials
@@ -1403,7 +1411,7 @@ License: MIT
     void DefaultKeybindings.IKeybindingActions.SaveConfigAs() => SaveConfigAs();
     void DefaultKeybindings.IKeybindingActions.ToggleRecording() => ToggleRecording();
     void DefaultKeybindings.IKeybindingActions.Connect() => ShowConnectDialog();
-    void DefaultKeybindings.IKeybindingActions.Disconnect() => Disconnect();
+    void DefaultKeybindings.IKeybindingActions.Disconnect() => DisconnectAsync().FireAndForget(_logger);
     void DefaultKeybindings.IKeybindingActions.Quit() => RequestStop();
 
     #endregion
@@ -1414,6 +1422,14 @@ License: MIT
         {
             StopRecordingStatusUpdates();
             StopConnectingAnimation();
+
+            // Remove the startup status timer if it hasn't yet self-removed.
+            if (_startupStatusTimer != null)
+            {
+                Application.RemoveTimeout(_startupStatusTimer);
+                _startupStatusTimer = null;
+            }
+
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _monitoredVariablesView.RecordToggleRequested -= ToggleRecording;

@@ -28,9 +28,8 @@ public class ScopeDialog : Dialog
         Width = Dim.Percent(90);
         Height = Dim.Percent(90);
 
-        // Apply theme-based styling
-        ColorScheme = Theme.DialogColorScheme;
-        BorderStyle = Theme.BorderLineStyle;
+        // Apply theme-based styling consistently via the shared helper
+        ThemeStyler.ApplyToDialog(this, Theme);
 
         // Create the scope view - takes up most of the dialog
         _scopeView = new ScopeView
@@ -105,8 +104,7 @@ public class ScopeDialog : Dialog
         Application.Invoke(() =>
         {
             Title = $"{theme.TitleDecoration}[ SCOPE ]{theme.TitleDecoration}";
-            ColorScheme = theme.DialogColorScheme;
-            BorderStyle = theme.BorderLineStyle;
+            ThemeStyler.ApplyToDialog(this, theme);
 
             _pauseButton.Text = _scopeView.IsPaused
                 ? $"{theme.ButtonPrefix}RESUME{theme.ButtonSuffix}"

@@ -35,12 +35,7 @@ public class OpenConfigDialog : Dialog
         Width = 70;
         Height = Dim.Fill(2);
 
-        ColorScheme = theme.DialogColorScheme;
-        BorderStyle = LineStyle.Double;
-        if (Border != null)
-        {
-            Border.ColorScheme = theme.BorderColorScheme;
-        }
+        ThemeStyler.ApplyToDialog(this, theme);
 
         _directoryLabel = new Label
         {

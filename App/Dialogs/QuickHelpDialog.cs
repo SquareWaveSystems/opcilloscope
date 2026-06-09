@@ -104,13 +104,22 @@ public class QuickHelpDialog : Dialog
         }
         else
         {
-            // Group by category
+            // Group by category, deduping identical key rows (e.g. r/R variants
+            // where only the status-bar variant carries ShowInStatusBar). Ordering
+            // by priority keeps the status-bar variant.
             var groups = bindings.GroupBy(b => b.Category);
 
             foreach (var group in groups)
             {
-                foreach (var binding in group)
+                var seen = new HashSet<string>();
+                foreach (var binding in group.OrderBy(b => b.StatusBarPriority))
                 {
+                    var rowKey = $"{binding.KeyDisplay} {binding.Description}";
+                    if (!seen.Add(rowKey))
+                    {
+                        continue;
+                    }
+
                     var key = binding.KeyDisplay.PadRight(keyWidth + 2);
                     lines.Add($"  {key}{binding.Description}");
                 }

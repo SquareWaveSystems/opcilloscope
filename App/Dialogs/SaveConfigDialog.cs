@@ -48,13 +48,8 @@ public class SaveConfigDialog : Dialog
         Width = 70;
         Height = 14;
 
-        // Apply theme styling
-        ColorScheme = theme.DialogColorScheme;
-        BorderStyle = LineStyle.Double;
-        if (Border != null)
-        {
-            Border.ColorScheme = theme.BorderColorScheme;
-        }
+        // Apply theme styling consistently via the shared helper
+        ThemeStyler.ApplyToDialog(this, theme);
 
         // Directory section
         var directoryLabel = new Label

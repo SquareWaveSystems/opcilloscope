@@ -30,7 +30,6 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 - **Monitor** — Subscribe to variables with `Enter`. Real-time updates via OPC UA pub/sub, not polling.
 - **Inspect** — Full node attributes: Description, DataType, AccessLevel, ValueRank.
 - **Scope** — Real-time multi-signal oscilloscope (up to 5 signals, 30 s sliding window).
-- **Trend Plot** — Single-signal trend view with auto-scaling.
 - **Record** — Export monitored values to CSV. Zero data loss — every server-pushed sample is captured.
 - **Configure** — Save/load connection and subscription configs (`.cfg` JSON files).
 - **Themes** — Dark (default) and light.
@@ -56,7 +55,6 @@ OPC UA Server
   ▼
 opcilloscope receives value change events
   ├─→ Scope View     — stores every sample (up to 2,000 per signal)
-  ├─→ Trend Plot     — stores last 200 samples in a ring buffer
   └─→ CSV Recording  — writes every sample to disk (zero data loss)
 ```
 
@@ -65,7 +63,7 @@ Data capture and screen rendering are decoupled:
 | What | Rate | Details |
 |------|------|---------|
 | Server → Client updates | ~4 Hz (250 ms) | Default publishing + sampling interval, adjustable in connect dialog |
-| Scope / Trend Plot redraw | 10 FPS (100 ms) | Renders whatever samples arrived since last frame |
+| Scope redraw | 10 FPS (100 ms) | Renders whatever samples arrived since last frame |
 | CSV recording | Every update | Captures 100% of server-pushed values, flushes every 10 records |
 
 The scope view holds a sliding **30-second window** (zoomable 5 s – 300 s). Display resolution is limited by terminal width — each character cell is one data point.
@@ -78,11 +76,12 @@ The scope view holds a sliding **30-second window** (zoomable 5 s – 300 s). Di
 |-----|--------|
 | `Tab` | Cycle between panes |
 | `Enter` | Subscribe to selected node |
+| `F5` | Refresh address space tree |
 | `Delete` | Unsubscribe from selected variable |
 | `Space` | Toggle selection / pause scope |
 | `S` | Open scope with selected variables |
-| `T` | Show trend plot |
 | `W` | Write value to node |
+| `R` | Toggle CSV recording (monitored variables) |
 | `+` / `-` | Zoom in / out (scope) |
 | `Ctrl+O` / `Ctrl+S` | Open / save configuration |
 | `Ctrl+R` | Toggle CSV recording |
