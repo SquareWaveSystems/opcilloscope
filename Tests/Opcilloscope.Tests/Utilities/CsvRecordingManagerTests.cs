@@ -447,4 +447,91 @@ public class CsvRecordingManagerTests : IDisposable
         // Verify it's in ISO 8601 format with T
         Assert.Contains("T", timestamp);
     }
+
+    [Fact]
+    public void RecordValue_SnapshotsValueAtEnqueueTime_NotLiveReference()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        var node = new MonitoredNode
+        {
+            DisplayName = "SnapNode",
+            NodeId = new NodeId(1234),
+            Value = "original",
+            StatusCode = 0
+        };
+
+        // Act - enqueue, then mutate the live node in place (as the OPC thread would).
+        // The snapshot is captured synchronously inside RecordValue, so the writer
+        // must serialize "original", never the later "mutated" state.
+        _manager.RecordValue(node);
+        node.Value = "mutated";
+        node.StatusCode = 0x80020000;
+        Thread.Sleep(200); // Give the background writer time to process
+        _manager.StopRecording();
+
+        // Assert
+        var content = File.ReadAllText(filePath);
+        Assert.Contains("original", content);
+        Assert.DoesNotContain("mutated", content);
+        // Status was Good at enqueue time; the later Bad mutation must not appear.
+        Assert.DoesNotContain("Bad", content);
+    }
+
+    [Fact]
+    public void StopRecording_FlushesQueuedRecordsBeforeClosing()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        const int count = 50;
+        for (int i = 0; i < count; i++)
+        {
+            _manager.RecordValue(new MonitoredNode
+            {
+                DisplayName = $"Node{i}",
+                NodeId = new NodeId((uint)i),
+                Value = $"v{i}"
+            });
+        }
+
+        // Act - stop immediately without waiting. The in-flight tail must still be
+        // flushed (StopRecording waits for the writer, which drains the queue).
+        _manager.StopRecording();
+
+        // Assert
+        Assert.Equal(count, _manager.RecordCount);
+        var lines = File.ReadAllLines(filePath);
+        Assert.Equal(count + 1, lines.Length); // header + all records
+    }
+
+    [Fact]
+    public void StartRecording_ClearsStaleQueueFromPreviousSession()
+    {
+        // Arrange - first session leaves a record queued but is stopped.
+        var filePath1 = Path.Combine(_testDirectory, "session1.csv");
+        _manager.StartRecording(filePath1);
+        _manager.StopRecording();
+
+        // Enqueue while not recording (dropped at RecordValue, but be defensive).
+        _manager.RecordValue(new MonitoredNode
+        {
+            DisplayName = "StaleNode",
+            NodeId = new NodeId(999),
+            Value = "stale"
+        });
+
+        // Act - a fresh session must not pick up anything from before.
+        var filePath2 = Path.Combine(_testDirectory, "session2.csv");
+        _manager.StartRecording(filePath2);
+        Thread.Sleep(100);
+        _manager.StopRecording();
+
+        // Assert
+        var content = File.ReadAllText(filePath2);
+        Assert.DoesNotContain("StaleNode", content);
+        Assert.DoesNotContain("stale", content);
+        Assert.Equal(0, _manager.RecordCount);
+    }
 }

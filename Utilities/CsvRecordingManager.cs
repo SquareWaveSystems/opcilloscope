@@ -174,6 +174,18 @@ public class CsvRecordingManager : IDisposable
         return filename;
     }
 
+    /// <summary>
+    /// Immutable snapshot of a monitored value captured at enqueue time.
+    /// Decouples the background writer from the live <see cref="MonitoredNode"/>,
+    /// which the OPC notification thread mutates in place.
+    /// </summary>
+    private readonly record struct RecordSnapshot(
+        DateTime? Timestamp,
+        string DisplayName,
+        string NodeId,
+        string Value,
+        string Status);
+
     private readonly Logger _logger;
     private StreamWriter? _writer;
     private string? _filePath;
@@ -181,7 +193,7 @@ public class CsvRecordingManager : IDisposable
     private readonly object _lock = new();
     private DateTime _recordingStartTime;
     private long _recordCount;
-    private readonly ConcurrentQueue<MonitoredNode> _recordQueue = new();
+    private readonly ConcurrentQueue<RecordSnapshot> _recordQueue = new();
     private readonly SemaphoreSlim _queueSemaphore = new(0);
     private Task? _writeTask;
     private CancellationTokenSource? _cancellationTokenSource;
@@ -239,6 +251,10 @@ public class CsvRecordingManager : IDisposable
                 _writer.WriteLine("Timestamp,DisplayName,NodeId,Value,Status");
                 _writer.Flush();
 
+                // Discard any stale snapshots left over from a previous session
+                // so they cannot cross-contaminate the new recording.
+                while (_recordQueue.TryDequeue(out _)) { }
+
                 _isRecording = true;
                 _recordingStartTime = DateTime.Now;
                 _recordCount = 0;
@@ -248,8 +264,6 @@ public class CsvRecordingManager : IDisposable
                 _writeTask = Task.Run(() => WriteQueuedRecordsAsync(_cancellationTokenSource.Token));
 
                 _logger.Info($"Started recording to {_filePath}");
-                RecordingStateChanged?.Invoke(true);
-                return true;
             }
             catch (Exception ex)
             {
@@ -260,6 +274,11 @@ public class CsvRecordingManager : IDisposable
                 return false;
             }
         }
+
+        // Raise the event after releasing the lock to avoid invoking
+        // subscriber callbacks while holding it.
+        RecordingStateChanged?.Invoke(true);
+        return true;
     }
 
     /// <summary>
@@ -338,9 +357,12 @@ public class CsvRecordingManager : IDisposable
                 ctsToDispose?.Dispose();
                 _cancellationTokenSource = null;
                 _writeTask = null;
-                RecordingStateChanged?.Invoke(false);
             }
         }
+
+        // Raise the event after releasing the lock to avoid invoking
+        // subscriber callbacks while holding it.
+        RecordingStateChanged?.Invoke(false);
     }
 
     /// <summary>
@@ -354,8 +376,19 @@ public class CsvRecordingManager : IDisposable
             return;
         }
 
-        // Queue the item for background writing (non-blocking)
-        _recordQueue.Enqueue(item);
+        // Capture an immutable snapshot at enqueue time. The OPC notification
+        // thread mutates the live MonitoredNode in place, so queuing the
+        // reference would let the writer serialize a newer state than was
+        // sampled (duplicated/skipped rows under load).
+        var snapshot = new RecordSnapshot(
+            item.Timestamp,
+            item.DisplayName,
+            item.NodeId.ToString(),
+            item.Value,
+            item.StatusString);
+
+        // Queue the snapshot for background writing (non-blocking)
+        _recordQueue.Enqueue(snapshot);
         _queueSemaphore.Release();
     }
 
@@ -417,11 +450,14 @@ public class CsvRecordingManager : IDisposable
     /// <summary>
     /// Write a single record to the CSV file.
     /// </summary>
-    private void WriteRecord(MonitoredNode item)
+    private void WriteRecord(RecordSnapshot item)
     {
         lock (_lock)
         {
-            if (_writer == null || !_isRecording)
+            // Only the writer guard here: _isRecording is cleared before the
+            // shutdown drain, so checking it would discard the in-flight tail
+            // (flush-on-stop and re-queue-on-cancel records).
+            if (_writer == null)
             {
                 return;
             }
@@ -434,9 +470,9 @@ public class CsvRecordingManager : IDisposable
 
                 // Escape values for CSV (handle quotes and commas)
                 var displayName = EscapeCsvField(item.DisplayName);
-                var nodeId = EscapeCsvField(item.NodeId.ToString());
+                var nodeId = EscapeCsvField(item.NodeId);
                 var value = EscapeCsvField(item.Value);
-                var status = EscapeCsvField(item.StatusString);
+                var status = EscapeCsvField(item.Status);
 
                 _writer.WriteLine($"{timestamp},{displayName},{nodeId},{value},{status}");
 
