@@ -13,6 +13,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # MinVer needs the full commit history (and tags) to compute versions.
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -27,3 +30,12 @@ jobs:
 
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: Publish (smoke)
+        run: dotnet publish Opcilloscope.csproj -c Release -r linux-x64 -o ./publish
+
+      - name: Smoke test published binary
+        run: |
+          chmod +x ./publish/opcilloscope
+          ./publish/opcilloscope --help
+          echo "Published binary exited with code $?"

@@ -16,12 +16,15 @@ jobs:
           - os: ubuntu-latest
             rid: linux-x64
             artifact: opcilloscope-linux-x64
+            # smoke: runs the published binary natively on the host runner
+            smoke: true
           - os: ubuntu-latest
             rid: linux-arm64
             artifact: opcilloscope-linux-arm64
           - os: windows-latest
             rid: win-x64
             artifact: opcilloscope-win-x64
+            smoke: true
           - os: windows-latest
             rid: win-arm64
             artifact: opcilloscope-win-arm64
@@ -31,12 +34,16 @@ jobs:
           - os: macos-latest
             rid: osx-arm64
             artifact: opcilloscope-osx-arm64
+            smoke: true
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # MinVer needs the full commit history (and tags) to compute versions.
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -49,6 +56,19 @@ jobs:
       - name: Publish
         run: |
           dotnet publish Opcilloscope.csproj -c Release -r ${{ matrix.rid }} -o ./publish
+
+      - name: Smoke test published binary (Linux/macOS)
+        if: matrix.smoke && runner.os != 'Windows'
+        run: |
+          chmod +x ./publish/opcilloscope
+          ./publish/opcilloscope --help
+          echo "Published binary exited with code $?"
+
+      - name: Smoke test published binary (Windows)
+        if: matrix.smoke && runner.os == 'Windows'
+        run: |
+          ./publish/opcilloscope.exe --help
+          if ($LASTEXITCODE -ne 0) { throw "Published binary exited with code $LASTEXITCODE" }
 
       - name: Create archive (Linux/macOS)
         if: runner.os != 'Windows'
