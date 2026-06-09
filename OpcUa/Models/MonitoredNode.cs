@@ -8,7 +8,6 @@ namespace Opcilloscope.OpcUa.Models;
 public class MonitoredNode
 {
     public uint ClientHandle { get; init; }
-    public uint MonitoredItemId { get; set; }
     public NodeId NodeId { get; init; } = ObjectIds.RootFolder;
     public string DisplayName { get; init; } = string.Empty;
     public string Value { get; set; } = string.Empty;

@@ -140,6 +140,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             if (ServiceResult.IsBad(monitoredItem.Status.Error))
             {
                 _logger.Error($"Failed to create monitored item for {displayName}: {monitoredItem.Status.Error}");
+                monitoredItem.Notification -= MonitoredItem_Notification;
                 _subscription.RemoveItem(monitoredItem);
                 return null;
             }
@@ -148,18 +149,33 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             var variable = new MonitoredNode
             {
                 ClientHandle = clientHandle,
-                MonitoredItemId = monitoredItem.ClientHandle,
                 NodeId = nodeId,
                 DisplayName = displayName,
                 Value = "(pending)",
                 StatusCode = 0 // Good
             };
 
+            // Re-check membership after the await to close the TOCTOU window: a concurrent
+            // AddNodeAsync may have added the same node while we awaited ApplyChangesAsync.
+            bool duplicate;
             lock (_lock)
             {
-                _monitoredVariables[clientHandle] = variable;
-                _opcMonitoredItems[clientHandle] = monitoredItem;
-                _opcHandleToClientHandle[monitoredItem.ClientHandle] = clientHandle;
+                duplicate = _monitoredVariables.Values.Any(m => m.NodeId.EqualsNodeId(nodeId));
+                if (!duplicate)
+                {
+                    _monitoredVariables[clientHandle] = variable;
+                    _opcMonitoredItems[clientHandle] = monitoredItem;
+                    _opcHandleToClientHandle[monitoredItem.ClientHandle] = clientHandle;
+                }
+            }
+
+            if (duplicate)
+            {
+                _logger.Warning($"Node {displayName} is already being monitored");
+                monitoredItem.Notification -= MonitoredItem_Notification;
+                _subscription.RemoveItem(monitoredItem);
+                await _subscription.ApplyChangesAsync();
+                return null;
             }
 
             _logger.Info($"Subscribed to {displayName}");
@@ -625,14 +641,21 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     /// </summary>
     public void MarkAllAsStale()
     {
+        List<MonitoredNode> staleVariables;
         lock (_lock)
         {
-            foreach (var variable in _monitoredVariables.Values)
+            staleVariables = _monitoredVariables.Values.ToList();
+            foreach (var variable in staleVariables)
             {
                 variable.Value = "(reconnecting...)";
                 variable.StatusCode = StatusCodes.UncertainInitialValue;
-                ValueChanged?.Invoke(variable);
             }
+        }
+
+        // Raise events outside the lock to avoid invoking handlers while holding it.
+        foreach (var variable in staleVariables)
+        {
+            ValueChanged?.Invoke(variable);
         }
     }
 
