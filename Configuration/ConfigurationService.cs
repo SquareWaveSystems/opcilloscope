@@ -13,6 +13,13 @@ public class ConfigurationService
 {
 
     /// <summary>
+    /// The most recently loaded configuration, retained so that fields not
+    /// surfaced by the UI (security and sampling settings) survive a
+    /// load/capture/save round-trip instead of being silently dropped.
+    /// </summary>
+    private OpcilloscopeConfig? _loadedConfig;
+
+    /// <summary>
     /// Path to the currently loaded configuration file, or null if no file is loaded.
     /// </summary>
     public string? CurrentFilePath { get; private set; }
@@ -82,6 +89,7 @@ public class ConfigurationService
         // Validate the loaded configuration
         ValidateConfiguration(config);
 
+        _loadedConfig = config;
         CurrentFilePath = filePath;
         HasUnsavedChanges = false;
         UnsavedChangesStateChanged?.Invoke(false);
@@ -128,7 +136,12 @@ public class ConfigurationService
         config.Metadata.LastModified = DateTime.UtcNow;
 
         var json = JsonSerializer.Serialize(config, OpcilloscopeJsonContext.Default.OpcilloscopeConfig);
-        await File.WriteAllTextAsync(filePath, json);
+
+        // Write atomically: write to a temp file in the same directory, then
+        // replace the target so a crash mid-write cannot corrupt the config.
+        var tempPath = filePath + ".tmp";
+        await File.WriteAllTextAsync(tempPath, json);
+        File.Move(tempPath, filePath, overwrite: true);
 
         CurrentFilePath = filePath;
         HasUnsavedChanges = false;
@@ -143,29 +156,58 @@ public class ConfigurationService
     /// <param name="monitoredVariables">The current monitored variables.</param>
     /// <param name="existingMetadata">Optional existing metadata to preserve.</param>
     /// <param name="credentials">Current connection credentials (password is never persisted).</param>
+    /// <param name="existingServer">
+    /// Optional server config whose security fields should be preserved. When null,
+    /// the most recently loaded configuration's server settings are used.
+    /// </param>
+    /// <param name="existingSettings">
+    /// Optional subscription settings whose sampling/queue fields should be preserved.
+    /// When null, the most recently loaded configuration's settings are used.
+    /// </param>
     /// <returns>A new configuration object representing the current state.</returns>
     public OpcilloscopeConfig CaptureCurrentState(
         string? endpointUrl,
         int publishingInterval,
         IEnumerable<MonitoredNode> monitoredVariables,
         ConfigMetadata? existingMetadata = null,
-        ConnectionCredentials? credentials = null)
+        ConnectionCredentials? credentials = null,
+        ServerConfig? existingServer = null,
+        SubscriptionSettings? existingSettings = null)
     {
+        // Preserve fields that the UI does not currently surface (security mode/policy,
+        // sampling interval, queue size) so a load/save round-trip does not drop them.
+        var sourceServer = existingServer ?? _loadedConfig?.Server;
+        var sourceSettings = existingSettings ?? _loadedConfig?.Settings;
+
+        var server = new ServerConfig
+        {
+            EndpointUrl = endpointUrl ?? string.Empty,
+            Authentication = new AuthenticationConfig
+            {
+                Type = (credentials?.Type ?? AuthenticationType.Anonymous).ToString(),
+                Username = credentials?.Type == AuthenticationType.UserName ? credentials.Username : null
+            }
+        };
+        if (sourceServer is not null)
+        {
+            server.SecurityMode = sourceServer.SecurityMode;
+            server.SecurityPolicy = sourceServer.SecurityPolicy;
+        }
+
+        var settings = new SubscriptionSettings
+        {
+            PublishingIntervalMs = publishingInterval
+        };
+        if (sourceSettings is not null)
+        {
+            settings.SamplingIntervalMs = sourceSettings.SamplingIntervalMs;
+            settings.QueueSize = sourceSettings.QueueSize;
+        }
+
         return new OpcilloscopeConfig
         {
-            Server = new ServerConfig
-            {
-                EndpointUrl = endpointUrl ?? string.Empty,
-                Authentication = new AuthenticationConfig
-                {
-                    Type = (credentials?.Type ?? AuthenticationType.Anonymous).ToString(),
-                    Username = credentials?.Type == AuthenticationType.UserName ? credentials.Username : null
-                }
-            },
-            Settings = new SubscriptionSettings
-            {
-                PublishingIntervalMs = publishingInterval
-            },
+            Server = server,
+            Settings = settings,
             MonitoredNodes = monitoredVariables.Select(m => new MonitoredNodeConfig
             {
                 NodeId = m.NodeId.ToString(),
@@ -185,6 +227,7 @@ public class ConfigurationService
     /// </summary>
     public void Reset()
     {
+        _loadedConfig = null;
         CurrentFilePath = null;
         HasUnsavedChanges = false;
         UnsavedChangesStateChanged?.Invoke(false);
@@ -216,7 +259,7 @@ public class ConfigurationService
     /// Gets the default directory for configuration files.
     /// Uses cross-platform appropriate locations:
     /// - Windows: %APPDATA%/opcilloscope/configs/
-    /// - macOS: ~/Library/Application Support/opcilloscope/configs/
+    /// - macOS: ~/.config/opcilloscope/configs/
     /// - Linux: ~/.config/opcilloscope/configs/
     /// </summary>
     /// <returns>Path to the default configuration directory.</returns>
@@ -233,7 +276,8 @@ public class ConfigurationService
         }
         else if (OperatingSystem.IsMacOS())
         {
-            // macOS: ~/Library/Application Support/opcilloscope/configs/
+            // macOS: ~/.config/opcilloscope/configs/
+            // (.NET maps SpecialFolder.ApplicationData to ~/.config on macOS)
             baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             appFolder = "opcilloscope";
         }
