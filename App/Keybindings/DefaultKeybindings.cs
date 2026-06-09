@@ -26,6 +26,7 @@ public static class DefaultKeybindings
         void UnsubscribeSelected();
         void ToggleScopeSelection();
         void OpenScope();
+        void WriteSelected();
 
         // Application
         void OpenConfig();
@@ -137,6 +138,26 @@ public static class DefaultKeybindings
             showInStatusBar: true,
             statusBarPriority: 30,
             category: "Address Space");
+
+        manager.Register(
+            KeybindingContext.AddressSpace,
+            (Key)'w',
+            "Write",
+            "Write value to selected node",
+            actions.WriteSelected,
+            showInStatusBar: true,
+            statusBarPriority: 40,
+            category: "Address Space");
+
+        manager.Register(
+            KeybindingContext.AddressSpace,
+            (Key)'W',
+            "Write",
+            "Write value to selected node",
+            actions.WriteSelected,
+            showInStatusBar: false,
+            statusBarPriority: 41,
+            category: "Address Space");
     }
 
     private static void ConfigureMonitoredVariablesBindings(KeybindingManager manager, IKeybindingActions actions)
@@ -199,6 +220,26 @@ public static class DefaultKeybindings
             actions.OpenScope,
             showInStatusBar: false,
             statusBarPriority: 41,
+            category: "Monitored Variables");
+
+        manager.Register(
+            KeybindingContext.MonitoredVariables,
+            (Key)'w',
+            "Write",
+            "Write value to selected variable",
+            actions.WriteSelected,
+            showInStatusBar: true,
+            statusBarPriority: 50,
+            category: "Monitored Variables");
+
+        manager.Register(
+            KeybindingContext.MonitoredVariables,
+            (Key)'W',
+            "Write",
+            "Write value to selected variable",
+            actions.WriteSelected,
+            showInStatusBar: false,
+            statusBarPriority: 51,
             category: "Monitored Variables");
     }
 

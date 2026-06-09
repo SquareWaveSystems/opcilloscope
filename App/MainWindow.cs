@@ -543,6 +543,132 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         }
     }
 
+    private void WriteSelected()
+    {
+        if (!_connectionManager.IsConnected)
+        {
+            _logger.Warning("Not connected");
+            return;
+        }
+
+        if (_keybindingManager.CurrentContext == KeybindingContext.MonitoredVariables)
+        {
+            var variable = _monitoredVariablesView.SelectedVariable;
+            if (variable == null) return;
+            WriteToMonitoredVariable(variable);
+        }
+        else if (_keybindingManager.CurrentContext == KeybindingContext.AddressSpace)
+        {
+            var node = _addressSpaceView.SelectedNode;
+            if (node == null) return;
+            if (node.NodeClass != Opc.Ua.NodeClass.Variable)
+            {
+                _logger.Warning($"Cannot write to {node.NodeClass} nodes, only Variables");
+                return;
+            }
+            WriteToAddressSpaceNodeAsync(node).FireAndForget(_logger);
+        }
+    }
+
+    private void WriteToMonitoredVariable(MonitoredNode variable)
+    {
+        if (!variable.IsWritable)
+        {
+            _logger.Warning($"Node '{variable.DisplayName}' is not writable");
+            MessageBox.ErrorQuery("Write", $"Node '{variable.DisplayName}' is not writable.", "OK");
+            return;
+        }
+
+        if (!OpcValueConverter.IsWriteSupported(variable.DataType))
+        {
+            _logger.Warning($"Write not supported for data type {variable.DataType}");
+            MessageBox.ErrorQuery("Write", $"Write not supported for data type: {variable.DataType}", "OK");
+            return;
+        }
+
+        OpenWriteDialogAndWrite(
+            variable.NodeId,
+            variable.DisplayName,
+            variable.DataType,
+            variable.DataTypeName,
+            variable.Value);
+    }
+
+    private async Task WriteToAddressSpaceNodeAsync(BrowsedNode node)
+    {
+        byte accessLevel = 0;
+        Opc.Ua.BuiltInType builtInType = Opc.Ua.BuiltInType.Variant;
+        string dataTypeName = "Unknown";
+        string? currentValue = null;
+
+        try
+        {
+            var attrs = await _connectionManager.Client.ReadAttributesAsync(
+                node.NodeId,
+                Opc.Ua.Attributes.AccessLevel,
+                Opc.Ua.Attributes.DataType);
+
+            if (attrs.Count >= 2)
+            {
+                if (Opc.Ua.StatusCode.IsGood(attrs[0].StatusCode) && attrs[0].Value is byte al)
+                    accessLevel = al;
+
+                if (Opc.Ua.StatusCode.IsGood(attrs[1].StatusCode) && attrs[1].Value is Opc.Ua.NodeId dataTypeNodeId)
+                {
+                    (builtInType, dataTypeName) = SubscriptionManager.ResolveDataType(dataTypeNodeId);
+                }
+            }
+
+            var dv = await _connectionManager.Client.ReadValueAsync(node.NodeId);
+            currentValue = dv?.Value?.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to read attributes for write: {ex.Message}");
+            return;
+        }
+
+        if ((accessLevel & Opc.Ua.AccessLevels.CurrentWrite) == 0)
+        {
+            _logger.Warning($"Node '{node.DisplayName}' is not writable");
+            UiThread.Run(() => MessageBox.ErrorQuery("Write", $"Node '{node.DisplayName}' is not writable.", "OK"));
+            return;
+        }
+
+        if (!OpcValueConverter.IsWriteSupported(builtInType))
+        {
+            _logger.Warning($"Write not supported for data type {builtInType}");
+            UiThread.Run(() => MessageBox.ErrorQuery("Write", $"Write not supported for data type: {builtInType}", "OK"));
+            return;
+        }
+
+        UiThread.Run(() => OpenWriteDialogAndWrite(node.NodeId, node.DisplayName, builtInType, dataTypeName, currentValue));
+    }
+
+    private void OpenWriteDialogAndWrite(Opc.Ua.NodeId nodeId, string displayName, Opc.Ua.BuiltInType dataType, string dataTypeName, string? currentValue)
+    {
+        var dialog = new WriteValueDialog(nodeId, displayName, dataType, dataTypeName, currentValue);
+        Application.Run(dialog);
+
+        if (!dialog.Confirmed || dialog.ParsedValue == null) return;
+
+        var parsedValue = dialog.ParsedValue;
+        PerformWriteAsync(nodeId, displayName, parsedValue).FireAndForget(_logger);
+    }
+
+    private async Task PerformWriteAsync(Opc.Ua.NodeId nodeId, string displayName, object value)
+    {
+        var status = await _connectionManager.WriteValueAsync(nodeId, value);
+        if (Opc.Ua.StatusCode.IsGood(status))
+        {
+            _logger.Info($"Wrote {value} to {displayName}");
+        }
+        else
+        {
+            _logger.Error($"Write failed for {displayName}: 0x{status.Code:X8}");
+        }
+    }
+
     private void OnNodeSelected(BrowsedNode node)
     {
         _nodeDetailsView.ShowNodeAsync(node).FireAndForget(_logger);
@@ -1271,6 +1397,7 @@ License: MIT
     void DefaultKeybindings.IKeybindingActions.UnsubscribeSelected() => UnsubscribeSelected();
     void DefaultKeybindings.IKeybindingActions.ToggleScopeSelection() { /* Handled by MonitoredVariablesView */ }
     void DefaultKeybindings.IKeybindingActions.OpenScope() => LaunchScope();
+    void DefaultKeybindings.IKeybindingActions.WriteSelected() => WriteSelected();
     void DefaultKeybindings.IKeybindingActions.OpenConfig() => OpenConfig();
     void DefaultKeybindings.IKeybindingActions.SaveConfig() => SaveConfig();
     void DefaultKeybindings.IKeybindingActions.SaveConfigAs() => SaveConfigAs();

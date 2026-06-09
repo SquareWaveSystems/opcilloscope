@@ -263,7 +263,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         }
     }
 
-    private (BuiltInType, string) ResolveDataType(NodeId dataTypeNodeId)
+    internal static (BuiltInType, string) ResolveDataType(NodeId dataTypeNodeId)
     {
         // Compare against standard OPC UA DataType NodeIds explicitly for clarity and maintainability
         if (dataTypeNodeId.NamespaceIndex == 0 && dataTypeNodeId.IdType == IdType.Numeric)
