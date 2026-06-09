@@ -36,32 +36,70 @@ public static class ConnectionIdentifier
         if (string.IsNullOrEmpty(endpointUrl))
             return "unknown";
 
-        var url = endpointUrl;
-
         // Remove protocol prefix
-        url = RemoveProtocolPrefix(url);
+        var url = RemoveProtocolPrefix(endpointUrl);
 
-        // Extract host and port before any path
-        var pathIndex = url.IndexOf('/');
-        if (pathIndex >= 0)
-            url = url.Substring(0, pathIndex);
+        string host;
+        string? port = null;
 
-        // Parse host and port
-        var lastColonIndex = url.LastIndexOf(':');
-        if (lastColonIndex > 0)
+        if (url.StartsWith('['))
         {
-            var host = url.Substring(0, lastColonIndex);
-            var port = url.Substring(lastColonIndex + 1);
+            // Bracketed IPv6 literal, e.g. "[::1]:4840" or "[2001:db8::1]/path".
+            // The colons inside the brackets are part of the address, not a port
+            // separator, so split on the closing bracket first.
+            var closeBracket = url.IndexOf(']');
+            if (closeBracket > 0)
+            {
+                host = url.Substring(1, closeBracket - 1);
 
-            // Sanitize host (replace dots are ok, but sanitize other chars)
-            host = SanitizeComponent(host);
+                var rest = url.Substring(closeBracket + 1);
+
+                // Strip any path after the host/port.
+                var restPathIndex = rest.IndexOf('/');
+                if (restPathIndex >= 0)
+                    rest = rest.Substring(0, restPathIndex);
+
+                // Whatever remains, if anything, is ":port".
+                if (rest.StartsWith(':') && rest.Length > 1)
+                    port = rest.Substring(1);
+            }
+            else
+            {
+                // Malformed (no closing bracket) - fall back to the whole string.
+                host = url;
+            }
+        }
+        else
+        {
+            // Extract host and port before any path
+            var pathIndex = url.IndexOf('/');
+            if (pathIndex >= 0)
+                url = url.Substring(0, pathIndex);
+
+            // Parse host and port
+            var lastColonIndex = url.LastIndexOf(':');
+            if (lastColonIndex > 0)
+            {
+                host = url.Substring(0, lastColonIndex);
+                port = url.Substring(lastColonIndex + 1);
+            }
+            else
+            {
+                host = url;
+            }
+        }
+
+        // Sanitize host (replace dots are ok, but sanitize other chars)
+        host = SanitizeComponent(host);
+
+        if (!string.IsNullOrEmpty(port))
+        {
             port = SanitizeComponent(port);
-
             return $"{host}-{port}";
         }
 
         // No port specified, just sanitize the host
-        return SanitizeComponent(url);
+        return host;
     }
 
     /// <summary>

@@ -274,6 +274,68 @@ public class OpcValueConverterTests
             $"Expected error about 'out of range' or 'valid decimal', got: {error}");
     }
 
+    [Theory]
+    [InlineData("3,14")]
+    [InlineData("1,000")]
+    [InlineData("1.234,56")]
+    public void TryConvert_Float_CommaSeparator_ReturnsFalse(string input)
+    {
+        // Regression: under invariant parsing a ',' must never be treated as a
+        // decimal or thousands separator (e.g. "3,14" silently becoming 314).
+        // Act
+        var (success, value, error) = OpcValueConverter.TryConvert(input, BuiltInType.Float);
+
+        // Assert
+        Assert.False(success);
+        Assert.Null(value);
+        Assert.NotNull(error);
+    }
+
+    [Theory]
+    [InlineData("3,14")]
+    [InlineData("1,000")]
+    [InlineData("1.234,56")]
+    public void TryConvert_Double_CommaSeparator_ReturnsFalse(string input)
+    {
+        // Regression: under invariant parsing a ',' must never be treated as a
+        // decimal or thousands separator (e.g. "3,14" silently becoming 314).
+        // Act
+        var (success, value, error) = OpcValueConverter.TryConvert(input, BuiltInType.Double);
+
+        // Assert
+        Assert.False(success);
+        Assert.Null(value);
+        Assert.NotNull(error);
+    }
+
+    [Theory]
+    [InlineData("3.14", 3.14f)]
+    [InlineData("1000", 1000f)]
+    public void TryConvert_Float_DotDecimal_AlwaysInvariant(string input, float expected)
+    {
+        // Act
+        var (success, value, error) = OpcValueConverter.TryConvert(input, BuiltInType.Float);
+
+        // Assert
+        Assert.True(success);
+        Assert.Equal(expected, (float)value!);
+        Assert.Null(error);
+    }
+
+    [Theory]
+    [InlineData("3.14", 3.14)]
+    [InlineData("1000", 1000.0)]
+    public void TryConvert_Double_DotDecimal_AlwaysInvariant(string input, double expected)
+    {
+        // Act
+        var (success, value, error) = OpcValueConverter.TryConvert(input, BuiltInType.Double);
+
+        // Assert
+        Assert.True(success);
+        Assert.Equal(expected, (double)value!);
+        Assert.Null(error);
+    }
+
     #endregion
 
     #region String Tests
@@ -323,6 +385,33 @@ public class OpcValueConverterTests
         Assert.True(success);
         Assert.IsType<DateTime>(value);
         Assert.Null(error);
+    }
+
+    [Fact]
+    public void TryConvert_DateTime_NormalizesToUtcKind()
+    {
+        // Act
+        var (success, value, error) = OpcValueConverter.TryConvert("2026-01-06 12:00:00", BuiltInType.DateTime);
+
+        // Assert
+        Assert.True(success);
+        Assert.Null(error);
+        var dt = Assert.IsType<DateTime>(value);
+        Assert.Equal(DateTimeKind.Utc, dt.Kind);
+    }
+
+    [Fact]
+    public void TryConvert_DateTime_WithOffset_ConvertsToUtc()
+    {
+        // Act - 12:00 at +02:00 is 10:00 UTC
+        var (success, value, error) = OpcValueConverter.TryConvert("2026-01-06T12:00:00+02:00", BuiltInType.DateTime);
+
+        // Assert
+        Assert.True(success);
+        Assert.Null(error);
+        var dt = Assert.IsType<DateTime>(value);
+        Assert.Equal(DateTimeKind.Utc, dt.Kind);
+        Assert.Equal(new DateTime(2026, 1, 6, 10, 0, 0, DateTimeKind.Utc), dt);
     }
 
     [Theory]

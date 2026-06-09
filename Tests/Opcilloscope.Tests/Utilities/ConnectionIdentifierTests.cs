@@ -163,6 +163,75 @@ public class ConnectionIdentifierTests
     }
 
     [Fact]
+    public void ExtractHostPort_WithBracketedIpv6AndPort_SeparatesHostAndPort()
+    {
+        // Act
+        var result = ConnectionIdentifier.ExtractHostPort("opc.tcp://[2001:db8::1]:50000");
+
+        // Assert - port must be split off cleanly and not merged into the host
+        Assert.EndsWith("-50000", result);
+        Assert.Contains("-", result);
+        Assert.DoesNotContain("[", result);
+        Assert.DoesNotContain("]", result);
+        Assert.DoesNotContain(":", result);
+    }
+
+    [Fact]
+    public void ExtractHostPort_WithBracketedIpv6Loopback_DoesNotMangleAddress()
+    {
+        // The bug case: LastIndexOf(':') split "[::1]:4840" inside the address.
+        // Act
+        var result = ConnectionIdentifier.ExtractHostPort("opc.tcp://[::1]:4840");
+
+        // Assert
+        Assert.EndsWith("-4840", result);
+        Assert.DoesNotContain("[", result);
+        Assert.DoesNotContain("]", result);
+        Assert.DoesNotContain(":", result);
+    }
+
+    [Fact]
+    public void ExtractHostPort_WithBracketedIpv6NoPort_ReturnsHostOnly()
+    {
+        // Act
+        var result = ConnectionIdentifier.ExtractHostPort("opc.tcp://[::1]");
+
+        // Assert - no port, so no trailing "-port"
+        Assert.DoesNotContain("[", result);
+        Assert.DoesNotContain("]", result);
+        Assert.DoesNotContain(":", result);
+        Assert.DoesNotMatch(@"-\d+$", result);
+    }
+
+    [Fact]
+    public void ExtractHostPort_WithBracketedIpv6AndPath_IgnoresPathAndKeepsPort()
+    {
+        // Act
+        var result = ConnectionIdentifier.ExtractHostPort("opc.tcp://[2001:db8::1]:50000/UA/Server");
+
+        // Assert
+        Assert.EndsWith("-50000", result);
+        Assert.DoesNotContain("UA", result);
+        Assert.DoesNotContain("Server", result);
+    }
+
+    [Fact]
+    public void Generate_WithBracketedIpv6_ProducesCleanIdentifier()
+    {
+        // Arrange
+        var timestamp = new DateTime(2026, 1, 7, 12, 34, 0);
+
+        // Act
+        var result = ConnectionIdentifier.Generate("opc.tcp://[::1]:4840", timestamp);
+
+        // Assert - identifier remains filename-safe and ends with the timestamp
+        Assert.EndsWith("_20260107_1234", result);
+        Assert.DoesNotContain("[", result);
+        Assert.DoesNotContain("]", result);
+        Assert.DoesNotContain(":", result);
+    }
+
+    [Fact]
     public void LimitLength_WithShortIdentifier_ReturnsUnchanged()
     {
         // Act

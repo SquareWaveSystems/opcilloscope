@@ -1,3 +1,4 @@
+using System.Globalization;
 using Opc.Ua;
 
 namespace Opcilloscope.Utilities;
@@ -71,13 +72,15 @@ public static class OpcValueConverter
     /// Parses a Float value. Rejects NaN and Infinity values for safety.
     /// </summary>
     /// <remarks>
-    /// Note: float.TryParse can successfully parse "NaN", "Infinity", and "-Infinity" 
-    /// into their respective special floating-point values. These are explicitly rejected 
+    /// Note: float.TryParse can successfully parse "NaN", "Infinity", and "-Infinity"
+    /// into their respective special floating-point values. These are explicitly rejected
     /// to prevent unintended writes of special values to OPC UA nodes.
+    /// Parsing uses the invariant culture so that ',' is never treated as a decimal or
+    /// thousands separator (e.g. "3,14" must not silently become 314).
     /// </remarks>
     private static (bool, object?, string?) TryParseFloat(string input)
     {
-        if (float.TryParse(input.Trim(), out var result))
+        if (float.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
         {
             if (float.IsNaN(result) || float.IsInfinity(result))
             {
@@ -92,13 +95,15 @@ public static class OpcValueConverter
     /// Parses a Double value. Rejects NaN and Infinity values for safety.
     /// </summary>
     /// <remarks>
-    /// Note: double.TryParse can successfully parse "NaN", "Infinity", and "-Infinity" 
-    /// into their respective special floating-point values. These are explicitly rejected 
+    /// Note: double.TryParse can successfully parse "NaN", "Infinity", and "-Infinity"
+    /// into their respective special floating-point values. These are explicitly rejected
     /// to prevent unintended writes of special values to OPC UA nodes.
+    /// Parsing uses the invariant culture so that ',' is never treated as a decimal or
+    /// thousands separator (e.g. "3,14" must not silently become 314).
     /// </remarks>
     private static (bool, object?, string?) TryParseDouble(string input)
     {
-        if (double.TryParse(input.Trim(), out var result))
+        if (double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
         {
             if (double.IsNaN(result) || double.IsInfinity(result))
             {
@@ -109,9 +114,19 @@ public static class OpcValueConverter
         return (false, null, "Enter a valid decimal number");
     }
 
+    /// <summary>
+    /// Parses a DateTime value and normalizes it to UTC so the written value has a
+    /// well-defined kind. Inputs without an explicit offset are assumed to be UTC;
+    /// inputs with an offset are converted to UTC. This avoids writing an ambiguous
+    /// Kind=Unspecified value to an OPC UA node.
+    /// </summary>
     private static (bool, object?, string?) TryParseDateTime(string input)
     {
-        if (DateTime.TryParse(input.Trim(), out var result))
+        if (DateTime.TryParse(
+                input.Trim(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var result))
         {
             return (true, result, null);
         }
