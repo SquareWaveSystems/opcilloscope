@@ -87,10 +87,18 @@ public sealed class ConnectionManager : IDisposable
     /// </summary>
     public event Action? AutoReconnectTriggered;
 
-    public ConnectionManager(Logger logger)
+    /// <summary>
+    /// Creates a new connection manager.
+    /// </summary>
+    /// <param name="logger">Logger for connection diagnostics.</param>
+    /// <param name="allowInsecure">
+    /// When <c>true</c>, untrusted server certificates are auto-accepted (development only).
+    /// When <c>null</c> (the default), <see cref="OpcUaClientWrapper.AllowInsecureByDefault"/> is used.
+    /// </param>
+    public ConnectionManager(Logger logger, bool? allowInsecure = null)
     {
         _logger = logger;
-        _client = new OpcUaClientWrapper(logger);
+        _client = new OpcUaClientWrapper(logger, allowInsecure);
         _nodeBrowser = new NodeBrowser(_client, logger);
 
         _client.Connected += OnClientConnected;
@@ -105,8 +113,15 @@ public sealed class ConnectionManager : IDisposable
     /// <param name="endpoint">The endpoint URL to connect to.</param>
     /// <param name="publishingInterval">Publishing interval in milliseconds for the subscription.</param>
     /// <param name="credentials">Authentication credentials (defaults to anonymous).</param>
+    /// <param name="securityMode">Requested message security mode (e.g. None, Sign, SignAndEncrypt). When null/None, an unsecured endpoint is selected.</param>
+    /// <param name="securityPolicy">Requested security policy URI or shorthand (e.g. Basic256Sha256). Honored when a matching endpoint exists.</param>
     /// <returns>True if connection succeeded, false otherwise.</returns>
-    public async Task<bool> ConnectAsync(string endpoint, int publishingInterval = 250, ConnectionCredentials? credentials = null)
+    public async Task<bool> ConnectAsync(
+        string endpoint,
+        int publishingInterval = 250,
+        ConnectionCredentials? credentials = null,
+        string? securityMode = null,
+        string? securityPolicy = null)
     {
         Disconnect();
 
@@ -116,7 +131,7 @@ public sealed class ConnectionManager : IDisposable
 
         try
         {
-            var success = await _client.ConnectAsync(endpoint, _credentials);
+            var success = await _client.ConnectAsync(endpoint, _credentials, securityMode, securityPolicy);
 
             if (success)
             {
@@ -145,6 +160,18 @@ public sealed class ConnectionManager : IDisposable
     {
         DisposeSubscription();
         _client.Disconnect();
+        StateChanged?.Invoke(ConnectionState.Disconnected);
+    }
+
+    /// <summary>
+    /// Asynchronously disconnects from the current server without blocking the calling
+    /// thread on the OPC UA close round-trip. Preferred over <see cref="Disconnect"/> for
+    /// UI callers.
+    /// </summary>
+    public async Task DisconnectAsync()
+    {
+        DisposeSubscription();
+        await _client.DisconnectAsync().ConfigureAwait(false);
         StateChanged?.Invoke(ConnectionState.Disconnected);
     }
 

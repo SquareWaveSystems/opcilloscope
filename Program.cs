@@ -1,5 +1,6 @@
 using Terminal.Gui;
 using Opcilloscope.App;
+using Opcilloscope.OpcUa;
 
 namespace Opcilloscope;
 
@@ -43,6 +44,13 @@ class Program
                 else if (args[i].StartsWith("opc.tcp://"))
                 {
                     autoConnectUrl = args[i];
+                }
+                else if (args[i] == "--insecure")
+                {
+                    // Development-only: accept untrusted server certificates. Threaded to the
+                    // OPC UA client wrapper as the process-wide default (secure-by-default
+                    // otherwise). See OpcUaClientWrapper.AllowInsecureByDefault.
+                    OpcUaClientWrapper.AllowInsecureByDefault = true;
                 }
                 else if (args[i] == "--help" || args[i] == "-h")
                 {
@@ -97,6 +105,7 @@ class Program
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  -f, --config <file>   Load configuration file (.cfg, .opcilloscope, or .json)");
+        Console.WriteLine("      --insecure        Accept untrusted server certificates (development only)");
         Console.WriteLine("  -h, --help            Show this help message");
         Console.WriteLine();
         Console.WriteLine("Note: Direct server connection via --connect or opc.tcp:// URLs is not yet");
