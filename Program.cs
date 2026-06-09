@@ -1,5 +1,6 @@
 using Terminal.Gui;
 using Opcilloscope.App;
+using Opcilloscope.OpcUa;
 
 namespace Opcilloscope;
 
@@ -7,13 +8,11 @@ class Program
 {
     static int Main(string[] args)
     {
+        bool initialized = false;
         try
         {
-#pragma warning disable IL2026 // Terminal.Gui Application.Init uses reflection and is not AOT-compatible
-            Application.Init();
-#pragma warning restore IL2026
-
-            // Parse command-line arguments
+            // Parse command-line arguments before initializing the terminal, so that --help/-h
+            // prints usage and exits without opening a tty (required for headless/CI environments).
             // Note: If multiple arguments of the same type are provided (e.g., two config files),
             // the last one specified will be used.
             string? autoConnectUrl = null;
@@ -44,12 +43,24 @@ class Program
                 {
                     autoConnectUrl = args[i];
                 }
+                else if (args[i] == "--insecure")
+                {
+                    // Development-only: accept untrusted server certificates. Threaded to the
+                    // OPC UA client wrapper as the process-wide default (secure-by-default
+                    // otherwise). See OpcUaClientWrapper.AllowInsecureByDefault.
+                    OpcUaClientWrapper.AllowInsecureByDefault = true;
+                }
                 else if (args[i] == "--help" || args[i] == "-h")
                 {
                     PrintUsage();
                     return 0;
                 }
             }
+
+#pragma warning disable IL2026 // Terminal.Gui Application.Init uses reflection and is not AOT-compatible
+            Application.Init();
+#pragma warning restore IL2026
+            initialized = true;
 
             var mainWindow = new MainWindow();
 
@@ -59,7 +70,6 @@ class Program
                 if (!File.Exists(configPath))
                 {
                     Console.Error.WriteLine($"Error: Configuration file not found: {configPath}");
-                    Application.Shutdown();
                     return 1;
                 }
                 mainWindow.LoadConfigFromCommandLine(configPath);
@@ -83,7 +93,10 @@ class Program
         }
         finally
         {
-            Application.Shutdown();
+            if (initialized)
+            {
+                Application.Shutdown();
+            }
         }
 
         return 0;
@@ -97,6 +110,7 @@ class Program
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  -f, --config <file>   Load configuration file (.cfg, .opcilloscope, or .json)");
+        Console.WriteLine("      --insecure        Accept untrusted server certificates (development only)");
         Console.WriteLine("  -h, --help            Show this help message");
         Console.WriteLine();
         Console.WriteLine("Note: Direct server connection via --connect or opc.tcp:// URLs is not yet");

@@ -19,6 +19,17 @@ public class OpcUaClientWrapper : IDisposable
     private ApplicationConfiguration? _appConfig;
     private ConfiguredEndpoint? _lastConfiguredEndpoint;
     private ConnectionCredentials _credentials = ConnectionCredentials.Anonymous;
+    private readonly bool _allowInsecure;
+    private string? _securityMode;
+    private string? _securityPolicy;
+
+    /// <summary>
+    /// Process-wide default for whether untrusted server certificates are auto-accepted.
+    /// Set once at startup from the <c>--insecure</c> CLI flag (see <c>Program.cs</c>).
+    /// Wrapper instances created without an explicit <c>allowInsecure</c> argument inherit
+    /// this value. Defaults to <c>false</c> (secure-by-default).
+    /// </summary>
+    public static bool AllowInsecureByDefault { get; set; }
 
     public bool IsConnected => _session?.Connected ?? false;
     public string? CurrentEndpoint => _currentEndpoint;
@@ -44,9 +55,18 @@ public class OpcUaClientWrapper : IDisposable
     /// </summary>
     public event Action? ReconnectRequired;
 
-    public OpcUaClientWrapper(Logger? logger = null)
+    /// <summary>
+    /// Creates a new client wrapper.
+    /// </summary>
+    /// <param name="logger">Optional logger.</param>
+    /// <param name="allowInsecure">
+    /// When <c>true</c>, untrusted server certificates are auto-accepted (development only).
+    /// When <c>null</c> (the default), the value of <see cref="AllowInsecureByDefault"/> is used.
+    /// </param>
+    public OpcUaClientWrapper(Logger? logger = null, bool? allowInsecure = null)
     {
         _logger = logger ?? new Logger();
+        _allowInsecure = allowInsecure ?? AllowInsecureByDefault;
     }
 
     private async Task<ApplicationConfiguration> GetApplicationConfigAsync()
@@ -91,7 +111,9 @@ public class OpcUaClientWrapper : IDisposable
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "opcilloscope", "pki", "rejected")
                 },
-                AutoAcceptUntrustedCertificates = true,
+                // Secure-by-default: never blanket-accept. Acceptance is decided per
+                // certificate by OnCertificateValidation, gated on the --insecure flag.
+                AutoAcceptUntrustedCertificates = false,
                 AddAppCertToTrustedStore = false
             },
             TransportConfigurations = new TransportConfigurationCollection(),
@@ -99,9 +121,10 @@ public class OpcUaClientWrapper : IDisposable
             ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 }
         };
 
-        // AutoAcceptUntrustedCertificates is already set above, no need for explicit validator
-
         await _appConfig.ValidateAsync(ApplicationType.Client);
+
+        // Decide certificate acceptance per certificate rather than blanket-accepting.
+        _appConfig.CertificateValidator.CertificateValidation += OnCertificateValidation;
 
         // Create client application certificate if it doesn't exist (needed for secure channels)
         var appInstance = new ApplicationInstance(_appConfig, null);
@@ -111,25 +134,64 @@ public class OpcUaClientWrapper : IDisposable
             _logger.Warning("Client certificate could not be created. Secure channel connections may fail.");
         }
 
-        _logger.Warning("Certificate validation disabled (AutoAcceptUntrustedCertificates=true). Not recommended for production.");
+        if (_allowInsecure)
+        {
+            _logger.Warning("Insecure mode enabled (--insecure): untrusted server certificates will be auto-accepted. Not recommended for production.");
+        }
+        else
+        {
+            _logger.Info("Certificate validation enabled. Untrusted server certificates will be rejected (re-run with --insecure to override).");
+        }
 
         return _appConfig;
     }
 
-    public async Task<bool> ConnectAsync(string endpointUrl, ConnectionCredentials? credentials = null)
+    /// <summary>
+    /// Decides whether to accept a server certificate that failed validation.
+    /// Without <c>--insecure</c>, untrusted certificates are rejected with a clear,
+    /// actionable log message. With <c>--insecure</c>, they are accepted (development only).
+    /// </summary>
+    private void OnCertificateValidation(CertificateValidator sender, CertificateValidationEventArgs e)
+    {
+        // Only intervene on validation failures; good certificates pass through untouched.
+        if (ServiceResult.IsGood(e.Error))
+            return;
+
+        if (_allowInsecure)
+        {
+            _logger.Warning($"Accepting untrusted server certificate (--insecure): '{e.Certificate?.Subject}' [{e.Error.StatusCode}]");
+            e.AcceptAll = true;
+            e.Accept = true;
+            return;
+        }
+
+        var trustedStorePath = _appConfig?.SecurityConfiguration?.TrustedPeerCertificates?.StorePath;
+        _logger.Error(
+            $"Server certificate rejected ({e.Error.StatusCode}): '{e.Certificate?.Subject}'. Connection refused. " +
+            "Re-run with --insecure to accept untrusted certificates (development only), " +
+            $"or add the trusted certificate to the PKI store at: {trustedStorePath}");
+        e.Accept = false;
+    }
+
+    public async Task<bool> ConnectAsync(
+        string endpointUrl,
+        ConnectionCredentials? credentials = null,
+        string? securityMode = null,
+        string? securityPolicy = null)
     {
         try
         {
             Disconnect();
 
             _credentials = credentials ?? ConnectionCredentials.Anonymous;
+            _securityMode = securityMode;
+            _securityPolicy = securityPolicy;
             _logger.Info($"Connecting to {endpointUrl}...");
 
             var config = await GetApplicationConfigAsync();
 
-            // Discover endpoints — prefer secure endpoints when using credentials
-            var useSecurity = _credentials.Type == AuthenticationType.UserName;
-            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, endpointUrl, useSecurity);
+            // Select the strongest endpoint matching the requested security settings.
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, endpointUrl, _securityMode, _securityPolicy);
 
             // Create session
             var endpointConfig = EndpointConfiguration.Create(config);
@@ -183,38 +245,56 @@ public class OpcUaClientWrapper : IDisposable
 
     private void Session_KeepAlive(ISession session, KeepAliveEventArgs e)
     {
+        // A bad keep-alive status indicates the connection is unhealthy. On a transient
+        // TCP drop the SDK can still report session.Connected == true, so do NOT gate on
+        // it - that previously prevented auto-reconnect from ever firing for network
+        // drops. Re-entrancy / duplicate triggers are guarded in ConnectionManager.
         if (e.Status != null && ServiceResult.IsBad(e.Status))
         {
-            _logger.Warning($"Keep alive error: {e.Status}");
-            if (!session.Connected)
-            {
-                _logger.Warning("Connection lost - reconnection required");
-                ReconnectRequired?.Invoke();
-            }
+            _logger.Warning($"Keep alive error: {e.Status} - reconnection required");
+            ReconnectRequired?.Invoke();
         }
     }
 
+    /// <summary>
+    /// Synchronously disconnects the current session. Kept for back-compat with
+    /// existing synchronous callers; UI callers should prefer <see cref="DisconnectAsync"/>
+    /// to avoid blocking the UI thread on the close round-trip.
+    /// </summary>
     public void Disconnect()
     {
-        _reconnectCts?.Cancel();
-        _reconnectCts = null;
+        DisposeReconnectCts();
 
-        if (_session != null)
+        var session = _session;
+        if (session != null)
         {
+            _session = null;
+            _currentEndpoint = null;
             try
             {
-                _session.KeepAlive -= Session_KeepAlive;
-                _session.CloseAsync().GetAwaiter().GetResult();
-                _session.Dispose();
+                session.KeepAlive -= Session_KeepAlive;
+                session.CloseAsync().GetAwaiter().GetResult();
+                session.Dispose();
             }
             catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
             {
                 // Session cleanup errors are expected during network issues
                 _logger.Warning($"Session cleanup error (non-critical): {ex.Message}");
             }
-            _session = null;
-            _currentEndpoint = null;
             Disconnected?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Cancels and disposes the reconnect cancellation token source, if any.
+    /// </summary>
+    private void DisposeReconnectCts()
+    {
+        if (_reconnectCts != null)
+        {
+            try { _reconnectCts.Cancel(); } catch (ObjectDisposedException) { }
+            _reconnectCts.Dispose();
+            _reconnectCts = null;
         }
     }
 
@@ -232,6 +312,7 @@ public class OpcUaClientWrapper : IDisposable
             return false;
         }
 
+        DisposeReconnectCts();
         _reconnectCts = new CancellationTokenSource();
 
         // Exponential backoff: 1s, 2s, 4s, 8s
@@ -353,8 +434,7 @@ public class OpcUaClientWrapper : IDisposable
             }
 
             // Rediscover endpoint in case server configuration changed
-            var useSecurity = _credentials.Type == AuthenticationType.UserName;
-            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, _currentEndpoint, useSecurity);
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, _currentEndpoint, _securityMode, _securityPolicy);
             var endpointConfig = EndpointConfiguration.Create(config);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
             _lastConfiguredEndpoint = endpoint;
@@ -512,10 +592,32 @@ public class OpcUaClientWrapper : IDisposable
         return response.Results?.Count > 0 ? response.Results[0] : StatusCodes.BadUnexpectedError;
     }
 
-    public Task DisconnectAsync()
+    /// <summary>
+    /// Asynchronously disconnects the current session without blocking the calling thread
+    /// on the OPC UA close round-trip. Preferred over <see cref="Disconnect"/> for UI callers.
+    /// </summary>
+    public async Task DisconnectAsync()
     {
-        Disconnect();
-        return Task.CompletedTask;
+        DisposeReconnectCts();
+
+        var session = _session;
+        if (session != null)
+        {
+            _session = null;
+            _currentEndpoint = null;
+            try
+            {
+                session.KeepAlive -= Session_KeepAlive;
+                await session.CloseAsync().ConfigureAwait(false);
+                session.Dispose();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+            {
+                // Session cleanup errors are expected during network issues
+                _logger.Warning($"Session cleanup error (non-critical): {ex.Message}");
+            }
+            Disconnected?.Invoke();
+        }
     }
 
     public void Dispose()
@@ -523,7 +625,20 @@ public class OpcUaClientWrapper : IDisposable
         if (!_disposed)
         {
             _disposed = true;
-            Disconnect();
+            try
+            {
+                // Bounded synchronous wait to avoid deadlocks when disposed from a
+                // synchronization context (mirrors SubscriptionManager.Dispose).
+                Task.Run(async () => await DisconnectAsync()).Wait(TimeSpan.FromSeconds(5));
+            }
+            catch (AggregateException ex)
+            {
+                _logger.Warning($"Disposal warning: {ex.InnerException?.Message ?? ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Disposal warning: {ex.Message}");
+            }
         }
     }
 
@@ -542,7 +657,8 @@ public class OpcUaClientWrapper : IDisposable
     private async Task<EndpointDescription> DiscoverAndSelectEndpointAsync(
         ApplicationConfiguration config,
         string endpointUrl,
-        bool useSecurity)
+        string? securityMode,
+        string? securityPolicy)
     {
         // Discover endpoints from the server
         var uri = new Uri(endpointUrl);
@@ -567,41 +683,53 @@ public class OpcUaClientWrapper : IDisposable
             throw;
         }
 
-        // Select the best endpoint based on security preference
-        EndpointDescription? selectedEndpoint = null;
-
-        foreach (var endpoint in endpoints)
+        if (endpoints.Count == 0)
         {
-            // Skip endpoints that don't match our security preference
-            if (useSecurity)
+            throw new ServiceResultException(StatusCodes.BadNotConnected,
+                $"No endpoints offered by server at {endpointUrl}");
+        }
+
+        // Security is requested either by an explicit, non-"None" SecurityMode, or whenever
+        // credentials are supplied: username/password tokens must never be sent over an
+        // unencrypted channel. SelectEndpoint falls back to a None endpoint only if the server
+        // offers no secure endpoint, so this never hard-fails a None-only server.
+        bool securityRequested = !string.IsNullOrEmpty(securityMode)
+            && !string.Equals(securityMode, nameof(MessageSecurityMode.None), StringComparison.OrdinalIgnoreCase);
+        bool useSecurity = securityRequested || _credentials.Type != AuthenticationType.Anonymous;
+
+        // If a specific SecurityMode/SecurityPolicy was requested, honor it by narrowing the
+        // candidate set to exact matches; fall back to all endpoints if none match.
+        var candidates = endpoints;
+        if (useSecurity && (!string.IsNullOrEmpty(securityMode) || !string.IsNullOrEmpty(securityPolicy)))
+        {
+            var matches = endpoints
+                .Where(ep => MatchesSecurityMode(ep, securityMode) && MatchesSecurityPolicy(ep, securityPolicy))
+                .ToList();
+
+            if (matches.Count > 0)
             {
-                if (endpoint.SecurityMode == MessageSecurityMode.None)
-                    continue;
+                candidates = new EndpointDescriptionCollection(matches);
             }
             else
             {
-                if (endpoint.SecurityMode != MessageSecurityMode.None)
-                    continue;
-            }
-
-            // Prefer the first matching endpoint
-            if (selectedEndpoint == null)
-            {
-                selectedEndpoint = endpoint;
+                _logger.Warning(
+                    $"No endpoint matched requested SecurityMode='{securityMode}' / SecurityPolicy='{securityPolicy}'. " +
+                    "Selecting the strongest available endpoint instead.");
             }
         }
 
-        // If no endpoint matched our preference, try any endpoint
-        if (selectedEndpoint == null && endpoints.Count > 0)
-        {
-            selectedEndpoint = endpoints[0];
-        }
+        // CoreClientUtils.SelectEndpoint sorts by SecurityLevel and returns the strongest
+        // endpoint matching the security preference (instead of the first match).
+        // telemetry context is optional; the SDK tolerates a null context.
+        var selectedEndpoint = CoreClientUtils.SelectEndpoint(config, uri, candidates, useSecurity, null!);
 
         if (selectedEndpoint == null)
         {
             throw new ServiceResultException(StatusCodes.BadNotConnected,
                 $"No suitable endpoint found at {endpointUrl}");
         }
+
+        _logger.Info($"Selected endpoint: {selectedEndpoint.SecurityMode} / {selectedEndpoint.SecurityPolicyUri}");
 
         // Update the endpoint URL to use the requested host if different
         // (handles cases where server returns localhost but we connected via IP/hostname)
@@ -617,4 +745,14 @@ public class OpcUaClientWrapper : IDisposable
 
         return selectedEndpoint;
     }
+
+    private static bool MatchesSecurityMode(EndpointDescription endpoint, string? securityMode)
+        => string.IsNullOrEmpty(securityMode)
+           || string.Equals(endpoint.SecurityMode.ToString(), securityMode, StringComparison.OrdinalIgnoreCase);
+
+    private static bool MatchesSecurityPolicy(EndpointDescription endpoint, string? securityPolicy)
+        => string.IsNullOrEmpty(securityPolicy)
+           || string.Equals(endpoint.SecurityPolicyUri, securityPolicy, StringComparison.OrdinalIgnoreCase)
+           || endpoint.SecurityPolicyUri?.EndsWith("#" + securityPolicy, StringComparison.OrdinalIgnoreCase) == true
+           || endpoint.SecurityPolicyUri?.EndsWith("/" + securityPolicy, StringComparison.OrdinalIgnoreCase) == true;
 }
