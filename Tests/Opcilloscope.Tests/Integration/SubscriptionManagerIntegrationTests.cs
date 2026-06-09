@@ -319,8 +319,8 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         // Act
         var node = await subscriptionManager.AddNodeAsync(invalidNodeId, "NonExistent");
 
-        // Assert - the subscription may still be created but with bad status
-        // The behavior depends on the server's response
-        // At minimum, ensure no exception was thrown
+        // Assert - a bad monitored item status causes AddNodeAsync to clean up
+        // and return null per its implementation contract.
+        Assert.Null(node);
     }
 }
