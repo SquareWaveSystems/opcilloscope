@@ -8,13 +8,11 @@ class Program
 {
     static int Main(string[] args)
     {
+        bool initialized = false;
         try
         {
-#pragma warning disable IL2026 // Terminal.Gui Application.Init uses reflection and is not AOT-compatible
-            Application.Init();
-#pragma warning restore IL2026
-
-            // Parse command-line arguments
+            // Parse command-line arguments before initializing the terminal, so that --help/-h
+            // prints usage and exits without opening a tty (required for headless/CI environments).
             // Note: If multiple arguments of the same type are provided (e.g., two config files),
             // the last one specified will be used.
             string? autoConnectUrl = null;
@@ -59,6 +57,11 @@ class Program
                 }
             }
 
+#pragma warning disable IL2026 // Terminal.Gui Application.Init uses reflection and is not AOT-compatible
+            Application.Init();
+#pragma warning restore IL2026
+            initialized = true;
+
             var mainWindow = new MainWindow();
 
             // Load config file if specified (takes precedence over URL)
@@ -67,7 +70,6 @@ class Program
                 if (!File.Exists(configPath))
                 {
                     Console.Error.WriteLine($"Error: Configuration file not found: {configPath}");
-                    Application.Shutdown();
                     return 1;
                 }
                 mainWindow.LoadConfigFromCommandLine(configPath);
@@ -91,7 +93,10 @@ class Program
         }
         finally
         {
-            Application.Shutdown();
+            if (initialized)
+            {
+                Application.Shutdown();
+            }
         }
 
         return 0;

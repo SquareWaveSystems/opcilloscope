@@ -689,10 +689,13 @@ public class OpcUaClientWrapper : IDisposable
                 $"No endpoints offered by server at {endpointUrl}");
         }
 
-        // Whether security is desired is driven by configuration (SecurityMode), not by the
-        // authentication type. An explicit, non-"None" SecurityMode requests a secure channel.
-        bool useSecurity = !string.IsNullOrEmpty(securityMode)
+        // Security is requested either by an explicit, non-"None" SecurityMode, or whenever
+        // credentials are supplied: username/password tokens must never be sent over an
+        // unencrypted channel. SelectEndpoint falls back to a None endpoint only if the server
+        // offers no secure endpoint, so this never hard-fails a None-only server.
+        bool securityRequested = !string.IsNullOrEmpty(securityMode)
             && !string.Equals(securityMode, nameof(MessageSecurityMode.None), StringComparison.OrdinalIgnoreCase);
+        bool useSecurity = securityRequested || _credentials.Type != AuthenticationType.Anonymous;
 
         // If a specific SecurityMode/SecurityPolicy was requested, honor it by narrowing the
         // candidate set to exact matches; fall back to all endpoints if none match.
