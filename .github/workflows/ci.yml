@@ -28,8 +28,8 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: Test (unit + integration + TUI component)
+        run: dotnet test Tests/Opcilloscope.Tests/Opcilloscope.Tests.csproj --no-build --configuration Release --verbosity normal
 
       - name: Publish (smoke)
         run: dotnet publish Opcilloscope.csproj -c Release -r linux-x64 -o ./publish
@@ -44,3 +44,33 @@ jobs:
           code=$?
           echo "Published binary exited with code $code"
           test "$code" -eq 0
+
+  e2e:
+    # Black-box end-to-end TUI tests: drive the published binary over a PTY and assert on the
+    # reconstructed screen. PTY allocation works on GitHub's ubuntu runners by default.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build e2e project
+        run: dotnet build Tests/Opcilloscope.E2ETests/Opcilloscope.E2ETests.csproj --configuration Release
+
+      - name: Publish binary under test
+        run: dotnet publish Opcilloscope.csproj -c Release -r linux-x64 -o ./publish
+
+      - name: Run e2e tests
+        env:
+          # Reuse the binary published above instead of republishing inside the fixture.
+          OPCILLOSCOPE_BIN: ${{ github.workspace }}/publish/opcilloscope
+        run: |
+          chmod +x ./publish/opcilloscope
+          dotnet test Tests/Opcilloscope.E2ETests/Opcilloscope.E2ETests.csproj --no-build --configuration Release --verbosity normal
