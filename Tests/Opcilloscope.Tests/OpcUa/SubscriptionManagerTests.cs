@@ -1,3 +1,4 @@
+using System.Globalization;
 using Opc.Ua;
 using Opcilloscope.OpcUa;
 
@@ -238,6 +239,168 @@ public class SubscriptionManagerTests
 
         // Assert
         Assert.Equal(expected, result);
+    }
+}
+
+public class FormatRawValueTests
+{
+    /// <summary>
+    /// Runs an action with the given culture set as both the current and the
+    /// default thread culture, restoring the originals afterwards.
+    /// </summary>
+    private static void WithCulture(string cultureName, Action action)
+    {
+        var culture = new CultureInfo(cultureName);
+        var originalCurrent = CultureInfo.CurrentCulture;
+        var originalDefault = CultureInfo.DefaultThreadCurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.DefaultThreadCurrentCulture = culture;
+            action();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCurrent;
+            CultureInfo.DefaultThreadCurrentCulture = originalDefault;
+        }
+    }
+
+    [Fact]
+    public void FormatRawValue_Null_ReturnsNullString()
+    {
+        Assert.Equal("null", SubscriptionManager.FormatRawValue(null));
+    }
+
+    [Fact]
+    public void FormatRawValue_String_ReturnsAsIs()
+    {
+        Assert.Equal("Hello, World", SubscriptionManager.FormatRawValue("Hello, World"));
+    }
+
+    [Fact]
+    public void FormatRawValue_Double_PreservesFullPrecision()
+    {
+        // Display format truncates to "2.72"; raw must keep full precision.
+        Assert.Equal("2.71828", SubscriptionManager.FormatRawValue(2.71828));
+    }
+
+    [Fact]
+    public void FormatRawValue_Float_PreservesFullPrecision()
+    {
+        Assert.Equal("3.14159", SubscriptionManager.FormatRawValue(3.14159f));
+    }
+
+    [Fact]
+    public void FormatRawValue_Double_RoundTrips()
+    {
+        var original = 1.0 / 3.0;
+
+        var text = SubscriptionManager.FormatRawValue(original);
+        var parsed = double.Parse(text, CultureInfo.InvariantCulture);
+
+        Assert.Equal(original, parsed);
+    }
+
+    [Fact]
+    public void FormatRawValue_Float_RoundTrips()
+    {
+        var original = 0.1f * 7f;
+
+        var text = SubscriptionManager.FormatRawValue(original);
+        var parsed = float.Parse(text, CultureInfo.InvariantCulture);
+
+        Assert.Equal(original, parsed);
+    }
+
+    [Theory]
+    [InlineData("fi-FI")]
+    [InlineData("de-DE")]
+    [InlineData("th-TH")]
+    public void FormatRawValue_Double_UsesDotDecimalSeparator_UnderHostileCulture(string cultureName)
+    {
+        WithCulture(cultureName, () =>
+        {
+            var result = SubscriptionManager.FormatRawValue(42.12);
+
+            // Exact ordinal comparison: '.' decimal separator, never ','.
+            // (Avoid Assert.DoesNotContain(string) here - its default
+            // comparison is culture-sensitive and th-TH collation treats
+            // punctuation as ignorable.)
+            Assert.Equal("42.12", result);
+        });
+    }
+
+    [Fact]
+    public void FormatRawValue_Decimal_UsesInvariantCulture()
+    {
+        WithCulture("de-DE", () =>
+        {
+            Assert.Equal("1234.5678", SubscriptionManager.FormatRawValue(1234.5678m));
+        });
+    }
+
+    [Fact]
+    public void FormatRawValue_DateTime_UsesIso8601RoundTripFormat()
+    {
+        WithCulture("th-TH", () =>
+        {
+            var value = new DateTime(2026, 1, 6, 14, 30, 45, 678, DateTimeKind.Utc);
+
+            var result = SubscriptionManager.FormatRawValue(value);
+
+            // ISO 8601, Gregorian year (not Buddhist 2569), ':' separators.
+            Assert.Equal("2026-01-06T14:30:45.6780000Z", result);
+        });
+    }
+
+    [Fact]
+    public void FormatRawValue_IntArray_SerializesElementsSemicolonJoined()
+    {
+        Assert.Equal("1;2;3;4;5", SubscriptionManager.FormatRawValue(new[] { 1, 2, 3, 4, 5 }));
+    }
+
+    [Fact]
+    public void FormatRawValue_DoubleArray_SerializesElementsInvariantly()
+    {
+        WithCulture("fi-FI", () =>
+        {
+            Assert.Equal("1.1;2.2;3.3", SubscriptionManager.FormatRawValue(new[] { 1.1, 2.2, 3.3 }));
+        });
+    }
+
+    [Fact]
+    public void FormatRawValue_StringArray_SerializesElements()
+    {
+        Assert.Equal("a;b;c", SubscriptionManager.FormatRawValue(new[] { "a", "b", "c" }));
+    }
+
+    [Fact]
+    public void FormatRawValue_EmptyArray_ReturnsEmptyString()
+    {
+        Assert.Equal(string.Empty, SubscriptionManager.FormatRawValue(Array.Empty<int>()));
+    }
+
+    [Fact]
+    public void FormatRawValue_ByteArray_SerializesElements()
+    {
+        Assert.Equal("1;2;255", SubscriptionManager.FormatRawValue(new byte[] { 1, 2, 255 }));
+    }
+
+    [Fact]
+    public void FormatRawValue_Boolean_FormatsAsTrueFalse()
+    {
+        Assert.Equal("True", SubscriptionManager.FormatRawValue(true));
+        Assert.Equal("False", SubscriptionManager.FormatRawValue(false));
+    }
+
+    [Fact]
+    public void FormatRawValue_Integer_FormatsInvariantly()
+    {
+        WithCulture("de-DE", () =>
+        {
+            Assert.Equal("1234567", SubscriptionManager.FormatRawValue(1234567));
+        });
     }
 }
 

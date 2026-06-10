@@ -1,3 +1,4 @@
+using System.Globalization;
 using Opc.Ua;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.Utilities;
@@ -504,6 +505,199 @@ public class CsvRecordingManagerTests : IDisposable
         Assert.Equal(count, _manager.RecordCount);
         var lines = File.ReadAllLines(filePath);
         Assert.Equal(count + 1, lines.Length); // header + all records
+    }
+
+    /// <summary>
+    /// Runs an action under a hostile culture, set as both the current culture
+    /// (flows to the background writer task via ExecutionContext) and the
+    /// default thread culture (covers any thread that does not inherit it).
+    /// Restored in a finally block so other tests are unaffected.
+    /// </summary>
+    private static void WithCulture(string cultureName, Action action)
+    {
+        var culture = new CultureInfo(cultureName);
+        var originalCurrent = CultureInfo.CurrentCulture;
+        var originalDefault = CultureInfo.DefaultThreadCurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.DefaultThreadCurrentCulture = culture;
+            action();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCurrent;
+            CultureInfo.DefaultThreadCurrentCulture = originalDefault;
+        }
+    }
+
+    [Fact]
+    public void RecordValue_TimestampIsIso8601_UnderFinnishCulture()
+    {
+        // fi-FI replaces the ':' custom-format placeholder with '.', which
+        // previously produced "14.30.45" instead of ISO 8601 "14:30:45".
+        WithCulture("fi-FI", () =>
+        {
+            var filePath = Path.Combine(_testDirectory, "test.csv");
+            _manager.StartRecording(filePath);
+            var node = new MonitoredNode
+            {
+                DisplayName = "TestNode",
+                NodeId = new NodeId(1234),
+                Value = "100",
+                Timestamp = new DateTime(2026, 1, 6, 14, 30, 45, 678)
+            };
+
+            _manager.RecordValue(node);
+            _manager.StopRecording(); // waits for the background writer to drain
+
+            var content = File.ReadAllText(filePath);
+            Assert.Contains("2026-01-06T14:30:45.678", content);
+            Assert.DoesNotContain("14.30.45", content);
+        });
+    }
+
+    [Fact]
+    public void RecordValue_TimestampUsesGregorianCalendar_UnderThaiCulture()
+    {
+        // th-TH defaults to the Buddhist calendar (2026 -> 2569), which
+        // previously leaked into the recorded year.
+        WithCulture("th-TH", () =>
+        {
+            var filePath = Path.Combine(_testDirectory, "test.csv");
+            _manager.StartRecording(filePath);
+            var node = new MonitoredNode
+            {
+                DisplayName = "TestNode",
+                NodeId = new NodeId(1234),
+                Value = "100",
+                Timestamp = new DateTime(2026, 1, 6, 14, 30, 45, 678)
+            };
+
+            _manager.RecordValue(node);
+            _manager.StopRecording();
+
+            var content = File.ReadAllText(filePath);
+            Assert.Contains("2026-01-06T14:30:45.678", content);
+            Assert.DoesNotContain("2569", content);
+        });
+    }
+
+    [Fact]
+    public void RecordValue_NullTimestampFallback_IsIso8601_UnderFinnishCulture()
+    {
+        WithCulture("fi-FI", () =>
+        {
+            var filePath = Path.Combine(_testDirectory, "test.csv");
+            _manager.StartRecording(filePath);
+            var node = new MonitoredNode
+            {
+                DisplayName = "TestNode",
+                NodeId = new NodeId(1234),
+                Value = "100",
+                Timestamp = null // DateTime.Now fallback formatted on the writer thread
+            };
+
+            _manager.RecordValue(node);
+            _manager.StopRecording();
+
+            var lines = File.ReadAllLines(filePath);
+            Assert.True(lines.Length >= 2);
+            var timestamp = lines[1].Split(',')[0];
+            // ISO 8601: 'T' separator and ':' time separators (fi-FI would emit '.')
+            Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$", timestamp);
+        });
+    }
+
+    [Fact]
+    public void RecordValue_RecordsRawValue_NotTruncatedDisplayValue()
+    {
+        // Arrange - display Value is the truncated "F2" string; RawValue holds
+        // the full-precision invariant representation. The CSV must record RawValue.
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        var node = new MonitoredNode
+        {
+            DisplayName = "TestNode",
+            NodeId = new NodeId(1234),
+            Value = "42.12",
+            RawValue = "42.123456789012345",
+            Timestamp = new DateTime(2026, 1, 6, 12, 30, 45, 123)
+        };
+
+        // Act
+        _manager.RecordValue(node);
+        _manager.StopRecording();
+
+        // Assert
+        var content = File.ReadAllText(filePath);
+        Assert.Contains("42.123456789012345", content);
+    }
+
+    [Fact]
+    public void RecordValue_FallsBackToDisplayValue_WhenRawValueIsEmpty()
+    {
+        // Arrange - nodes that never had a raw representation set must still record.
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        var node = new MonitoredNode
+        {
+            DisplayName = "TestNode",
+            NodeId = new NodeId(1234),
+            Value = "fallback-value"
+            // RawValue left empty
+        };
+
+        // Act
+        _manager.RecordValue(node);
+        _manager.StopRecording();
+
+        // Assert
+        var content = File.ReadAllText(filePath);
+        Assert.Contains("fallback-value", content);
+    }
+
+    [Fact]
+    public void RecordValue_SnapshotsRawValueAtEnqueueTime()
+    {
+        // Arrange - the RawValue snapshot must be immutable at enqueue time,
+        // exactly like the display value snapshot.
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        var node = new MonitoredNode
+        {
+            DisplayName = "SnapNode",
+            NodeId = new NodeId(1234),
+            Value = "1.23",
+            RawValue = "1.2345678"
+        };
+
+        // Act - enqueue, then mutate the live node (as the OPC thread would).
+        _manager.RecordValue(node);
+        node.RawValue = "9.8765432";
+        node.Value = "9.88";
+        _manager.StopRecording();
+
+        // Assert
+        var content = File.ReadAllText(filePath);
+        Assert.Contains("1.2345678", content);
+        Assert.DoesNotContain("9.8765432", content);
+    }
+
+    [Fact]
+    public void GenerateDefaultRecordingFilename_UsesGregorianCalendar_UnderThaiCulture()
+    {
+        WithCulture("th-TH", () =>
+        {
+            var filename = CsvRecordingManager.GenerateDefaultRecordingFilename(
+                "opc.tcp://localhost:4840", 3);
+
+            // The timestamp must use the Gregorian year, not Buddhist (+543).
+            var gregorianYear = DateTime.Now.Year.ToString(CultureInfo.InvariantCulture);
+            var buddhistYear = (DateTime.Now.Year + 543).ToString(CultureInfo.InvariantCulture);
+            Assert.Contains(gregorianYear, filename);
+            Assert.DoesNotContain(buddhistYear, filename);
+        });
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using Opcilloscope.OpcUa.Models;
 
 namespace Opcilloscope.Utilities;
@@ -6,6 +7,10 @@ namespace Opcilloscope.Utilities;
 /// <summary>
 /// Manages CSV recording of monitored variable value changes.
 /// Writes data to file in real-time as values change using a background queue.
+/// Output is culture-invariant: timestamps are ISO 8601 (Gregorian calendar,
+/// '.' decimal / ':' time separators regardless of locale) and values are the
+/// full-precision raw representation ('.' decimal separator, arrays as
+/// semicolon-joined elements) rather than the truncated UI display string.
 /// </summary>
 public class CsvRecordingManager : IDisposable
 {
@@ -85,7 +90,9 @@ public class CsvRecordingManager : IDisposable
     /// <returns>A sanitized filename with .csv extension.</returns>
     public static string GenerateDefaultRecordingFilename(string? connectionUrl, int variableCount)
     {
-        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        // InvariantCulture pins the Gregorian calendar (e.g. th-TH defaults to
+        // the Buddhist calendar, which would shift the year by 543).
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
         string baseName;
 
         if (!string.IsNullOrEmpty(connectionUrl))
@@ -380,11 +387,14 @@ public class CsvRecordingManager : IDisposable
         // thread mutates the live MonitoredNode in place, so queuing the
         // reference would let the writer serialize a newer state than was
         // sampled (duplicated/skipped rows under load).
+        // Record the full-precision, culture-invariant RawValue rather than the
+        // truncated ("F2"), culture-aware display Value. Fall back to Value for
+        // nodes that never had a raw representation set.
         var snapshot = new RecordSnapshot(
             item.Timestamp,
             item.DisplayName,
             item.NodeId.ToString(),
-            item.Value,
+            string.IsNullOrEmpty(item.RawValue) ? item.Value : item.RawValue,
             item.StatusString);
 
         // Queue the snapshot for background writing (non-blocking)
@@ -464,9 +474,13 @@ public class CsvRecordingManager : IDisposable
 
             try
             {
-                // Use ISO 8601 timestamp format with milliseconds for precision
-                var timestamp = item.Timestamp?.ToString("yyyy-MM-ddTHH:mm:ss.fff")
-                    ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff");
+                // Use ISO 8601 timestamp format with milliseconds for precision.
+                // InvariantCulture is required: the ':' custom-format specifier
+                // is replaced by the culture's time separator (fi-FI uses '.')
+                // and the culture's default calendar applies (th-TH uses the
+                // Buddhist calendar), which would break the ISO 8601 contract.
+                var timestamp = item.Timestamp?.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture)
+                    ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
 
                 // Escape values for CSV (handle quotes and commas)
                 var displayName = EscapeCsvField(item.DisplayName);

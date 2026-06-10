@@ -1,3 +1,4 @@
+using System.Globalization;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opcilloscope.OpcUa.Models;
@@ -152,6 +153,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 NodeId = nodeId,
                 DisplayName = displayName,
                 Value = "(pending)",
+                RawValue = "(pending)",
                 StatusCode = 0 // Good
             };
 
@@ -232,6 +234,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             if (value != null)
             {
                 item.Value = FormatValue(value.Value);
+                item.RawValue = FormatRawValue(value.Value);
                 item.Timestamp = value.SourceTimestamp;
                 item.StatusCode = (uint)value.StatusCode.Code;
                 ValueChanged?.Invoke(item);
@@ -384,6 +387,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         var newValue = FormatValue(dataValue.Value);
 
         variable.Value = newValue;
+        variable.RawValue = FormatRawValue(dataValue.Value);
         variable.Timestamp = dataValue.SourceTimestamp;
         variable.StatusCode = (uint)dataValue.StatusCode.Code;
 
@@ -396,6 +400,11 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         ValueChanged?.Invoke(variable);
     }
 
+    /// <summary>
+    /// Formats a value for on-screen display. Intentionally culture-aware and
+    /// truncated ("F2") for readability; never use this for data export -
+    /// use <see cref="FormatRawValue"/> instead.
+    /// </summary>
     internal static string FormatValue(object? value)
     {
         if (value == null) return "null";
@@ -403,6 +412,42 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         if (value is Array arr) return $"[{arr.Length} items]";
         if (value is float f) return f.ToString("F2");
         if (value is double d) return d.ToString("F2");
+        return value.ToString() ?? "null";
+    }
+
+    /// <summary>
+    /// Formats a value for data export (CSV recording): full precision,
+    /// culture-invariant. Floating point uses round-trip formatting, DateTime
+    /// uses ISO 8601 ("O"), other IFormattable types use InvariantCulture, and
+    /// arrays are serialized as their actual elements joined with ';'
+    /// (e.g. "1;2;3"), so the field never needs CSV comma-escaping for the
+    /// separator itself.
+    /// </summary>
+    internal static string FormatRawValue(object? value)
+    {
+        if (value == null) return "null";
+        if (value is string s) return s;
+        // Round-trip floating point: default ToString is shortest round-trippable
+        // on modern .NET; pin the culture so the decimal separator is always '.'.
+        if (value is float f) return f.ToString(CultureInfo.InvariantCulture);
+        if (value is double d) return d.ToString(CultureInfo.InvariantCulture);
+        // ISO 8601 round-trip format for timestamps embedded in values.
+        if (value is DateTime dt) return dt.ToString("O", CultureInfo.InvariantCulture);
+        if (value is Array arr)
+        {
+            // Serialize the actual elements (semicolon-joined) instead of the
+            // lossy "[N items]" display placeholder.
+            var parts = new List<string>(arr.Length);
+            foreach (var element in arr)
+            {
+                parts.Add(FormatRawValue(element));
+            }
+            return string.Join(";", parts);
+        }
+        if (value is IFormattable formattable)
+        {
+            return formattable.ToString(null, CultureInfo.InvariantCulture);
+        }
         return value.ToString() ?? "null";
     }
 
@@ -648,6 +693,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             foreach (var variable in staleVariables)
             {
                 variable.Value = "(reconnecting...)";
+                variable.RawValue = "(reconnecting...)";
                 variable.StatusCode = StatusCodes.UncertainInitialValue;
             }
         }

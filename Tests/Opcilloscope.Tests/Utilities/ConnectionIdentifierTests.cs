@@ -1,3 +1,4 @@
+using System.Globalization;
 using Opcilloscope.Utilities;
 
 namespace Opcilloscope.Tests.Utilities;
@@ -15,6 +16,27 @@ public class ConnectionIdentifierTests
 
         // Assert
         Assert.Equal("192.168.1.67-50000_20260107_1234", result);
+    }
+
+    [Fact]
+    public void Generate_UsesGregorianCalendar_UnderThaiCulture()
+    {
+        // th-TH defaults to the Buddhist calendar (2026 -> 2569); the
+        // identifier timestamp must stay Gregorian regardless of locale.
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("th-TH");
+            var timestamp = new DateTime(2026, 1, 7, 12, 34, 0);
+
+            var result = ConnectionIdentifier.Generate("opc.tcp://localhost:4840", timestamp);
+
+            Assert.Equal("localhost-4840_20260107_1234", result);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     [Fact]

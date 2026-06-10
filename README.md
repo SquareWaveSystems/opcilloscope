@@ -30,7 +30,7 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 - **Monitor** — Subscribe to variables with `Enter`. Real-time updates via OPC UA pub/sub, not polling.
 - **Inspect** — Full node attributes: Description, DataType, AccessLevel, ValueRank.
 - **Scope** — Real-time multi-signal oscilloscope (up to 5 signals, 30 s sliding window).
-- **Record** — Export monitored values to CSV. Zero data loss — every server-pushed sample is captured.
+- **Record** — Export monitored values to CSV. Zero data loss — every server-pushed sample is captured at full precision in a locale-independent format (ISO 8601 timestamps, `.` decimal separator, arrays as semicolon-joined elements).
 - **Configure** — Save/load connection and subscription configs (`.cfg` JSON files).
 - **Themes** — Dark (default) and light.
 
