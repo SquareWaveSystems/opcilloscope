@@ -102,21 +102,6 @@ public class RecentFilesManager
         return _recentFiles.Where(File.Exists).ToList().AsReadOnly();
     }
 
-    /// <summary>
-    /// Removes any files from the list that no longer exist on disk.
-    /// </summary>
-    public void CleanupMissingFiles()
-    {
-        var originalCount = _recentFiles.Count;
-        _recentFiles = _recentFiles.Where(File.Exists).ToList();
-
-        if (_recentFiles.Count != originalCount)
-        {
-            Save();
-            FilesChanged?.Invoke();
-        }
-    }
-
     private void Load()
     {
         try

@@ -79,7 +79,7 @@ public class FocusManager
     /// <summary>
     /// Sets focus to the pane at the specified index.
     /// </summary>
-    public void FocusPane(int index)
+    private void FocusPane(int index)
     {
         if (index >= 0 && index < _panes.Length)
         {
@@ -97,29 +97,11 @@ public class FocusManager
     }
 
     /// <summary>
-    /// Cycles focus to the previous pane.
-    /// </summary>
-    public void FocusPrevious()
-    {
-        var currentIndex = _currentPane != null ? Array.IndexOf(_panes, _currentPane) : 0;
-        FocusPane(GetPreviousIndex(currentIndex, _panes.Length));
-    }
-
-    /// <summary>
     /// Computes the index of the next pane in tab order, wrapping around to the
     /// first pane after the last. Pure helper extracted for testability.
     /// </summary>
     internal static int GetNextIndex(int currentIndex, int paneCount)
     {
         return (currentIndex + 1) % paneCount;
-    }
-
-    /// <summary>
-    /// Computes the index of the previous pane in tab order, wrapping around to the
-    /// last pane before the first. Pure helper extracted for testability.
-    /// </summary>
-    internal static int GetPreviousIndex(int currentIndex, int paneCount)
-    {
-        return (currentIndex - 1 + paneCount) % paneCount;
     }
 }

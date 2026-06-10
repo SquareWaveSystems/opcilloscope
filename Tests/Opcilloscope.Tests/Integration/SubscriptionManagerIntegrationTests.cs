@@ -194,29 +194,6 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task RemoveNodeByNodeIdAsync_UnsubscribesFromNode()
-    {
-        // Arrange
-        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
-        await subscriptionManager.InitializeAsync();
-        var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
-        var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
-
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
-
-        // Act
-        var result = await subscriptionManager.RemoveNodeByNodeIdAsync(nodeId);
-
-        // Assert
-        Assert.True(result);
-        Assert.Empty(subscriptionManager.MonitoredVariables);
-    }
-
-    [Fact]
     public async Task ValueChanged_ReceivesUpdates_WhenValueChanges()
     {
         // Arrange
