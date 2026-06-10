@@ -24,23 +24,16 @@ public class ServerConfig
 
     /// <summary>
     /// Requested message security mode (for example: None, Sign, SignAndEncrypt).
-    /// <para>
-    /// Warning: As of version 1.0, this value is not currently used by the
-    /// connection logic. It is included in the configuration model to
-    /// document intended security settings and to support future versions
-    /// of Opcilloscope that negotiate security based on this value.
-    /// </para>
+    /// Used during endpoint selection when connecting; when None, an unsecured
+    /// endpoint is selected.
     /// </summary>
     public string SecurityMode { get; set; } = "None";
 
     /// <summary>
     /// Requested security policy URI or shorthand (for example:
     /// Basic256Sha256 or the full policy URI).
-    /// <para>
-    /// Warning: As of version 1.0, this value is not currently used by the
-    /// connection logic. It is provided for forward compatibility and
-    /// documentation of the desired security policy.
-    /// </para>
+    /// Used during endpoint selection when connecting; honored when a
+    /// matching endpoint exists on the server.
     /// </summary>
     public string? SecurityPolicy { get; set; }
 
@@ -83,20 +76,17 @@ public class SubscriptionSettings
     public int PublishingIntervalMs { get; set; } = 250;
 
     /// <summary>
-    /// Default sampling interval (in milliseconds) for monitored variables.
-    /// <para>
-    /// Note: As of version 1.0, this setting is defined in the configuration model but is not yet
-    /// applied by the configuration loading logic. It is reserved for future use.
-    /// </para>
+    /// Sampling interval (in milliseconds) applied to monitored variables.
+    /// Controls how often the server samples the underlying value; 0 means
+    /// "as fast as the server allows".
+    /// Valid range: 0-10000 ms (values outside this range will be clamped by SubscriptionManager).
     /// </summary>
     public int SamplingIntervalMs { get; set; } = 250;
 
     /// <summary>
-    /// Default queue size for monitored variables.
-    /// <para>
-    /// Note: As of version 1.0, this setting is defined in the configuration model but is not yet
-    /// applied by the configuration loading logic. It is reserved for future use.
-    /// </para>
+    /// Server-side notification queue size applied to monitored variables.
+    /// Values sampled between publishes are queued up to this depth (oldest discarded first).
+    /// Valid range: 1-1000 (values outside this range will be clamped by SubscriptionManager).
     /// </summary>
     public uint QueueSize { get; set; } = 10;
 }

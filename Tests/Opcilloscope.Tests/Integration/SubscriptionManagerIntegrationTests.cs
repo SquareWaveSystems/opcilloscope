@@ -286,6 +286,52 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task SamplingInterval_AppliedToNewMonitoredItems()
+    {
+        // Arrange
+        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
+        subscriptionManager.SamplingInterval = 1000;
+        subscriptionManager.QueueSize = 25;
+        await subscriptionManager.InitializeAsync();
+        var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
+
+        // Act
+        var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
+
+        // Assert
+        Assert.NotNull(node);
+        Assert.Equal(1000, subscriptionManager.SamplingInterval);
+        Assert.Equal(25u, subscriptionManager.QueueSize);
+    }
+
+    [Theory]
+    [InlineData(-100, 0)]    // negative clamps to 0 (server-decided rate)
+    [InlineData(0, 0)]
+    [InlineData(500, 500)]
+    [InlineData(20000, 10000)] // above maximum clamps to 10000
+    public void SamplingInterval_ClampsToValidRange(int input, int expected)
+    {
+        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
+
+        subscriptionManager.SamplingInterval = input;
+
+        Assert.Equal(expected, subscriptionManager.SamplingInterval);
+    }
+
+    [Theory]
+    [InlineData(0u, 1u)]      // zero clamps to minimum of 1
+    [InlineData(10u, 10u)]
+    [InlineData(5000u, 1000u)] // above maximum clamps to 1000
+    public void QueueSize_ClampsToValidRange(uint input, uint expected)
+    {
+        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
+
+        subscriptionManager.QueueSize = input;
+
+        Assert.Equal(expected, subscriptionManager.QueueSize);
+    }
+
+    [Fact]
     public async Task AddNodeAsync_InvalidNodeId_ReturnsNull()
     {
         // Arrange

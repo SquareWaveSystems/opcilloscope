@@ -22,6 +22,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     private uint _nextClientHandle = 1;
     private int _publishingInterval = 250;
     private int _samplingInterval = 250;
+    private uint _queueSize = 10;
     private bool _isInitialized;
     private readonly object _lock = new();
 
@@ -54,6 +55,15 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     {
         get => _samplingInterval;
         set => _samplingInterval = Math.Max(0, Math.Min(60000, value));
+    }
+
+    /// <summary>
+    /// Server-side notification queue size applied to newly created monitored items.
+    /// </summary>
+    public uint QueueSize
+    {
+        get => _queueSize;
+        set => _queueSize = Math.Max(1, Math.Min(1000, value));
     }
 
     public IReadOnlyCollection<MonitoredNode> MonitoredVariables
@@ -143,7 +153,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 StartNodeId = nodeId,
                 AttributeId = Attributes.Value,
                 SamplingInterval = _samplingInterval,
-                QueueSize = 10,
+                QueueSize = _queueSize,
                 DiscardOldest = true
             };
 
@@ -547,7 +557,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                     StartNodeId = nodeId,
                     AttributeId = Attributes.Value,
                     SamplingInterval = _samplingInterval,
-                    QueueSize = 10,
+                    QueueSize = _queueSize,
                     DiscardOldest = true
                 };
 
