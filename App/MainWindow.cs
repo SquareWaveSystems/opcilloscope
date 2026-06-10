@@ -1251,7 +1251,15 @@ License: MIT
                 // old server while (or after) the new connection is attempted.
                 await DisconnectAsync();
 
-                var connected = await _connectionManager.ConnectAsync(config.Server.EndpointUrl, config.Settings.PublishingIntervalMs, credentials);
+                // Honor the config's security and sampling settings (the connect dialog has
+                // no UI for these, so the config file is their only source).
+                var connected = await _connectionManager.ConnectAsync(
+                    config.Server.EndpointUrl,
+                    config.Settings.PublishingIntervalMs,
+                    credentials,
+                    config.Server.SecurityMode,
+                    config.Server.SecurityPolicy,
+                    config.Settings.SamplingIntervalMs);
 
                 if (connected)
                 {

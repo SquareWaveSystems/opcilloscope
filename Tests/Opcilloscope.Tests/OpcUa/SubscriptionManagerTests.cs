@@ -6,6 +6,23 @@ namespace Opcilloscope.Tests.OpcUa;
 
 public class SubscriptionManagerTests
 {
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(250, 250)]
+    [InlineData(5000, 5000)]
+    [InlineData(-1, 0)]
+    [InlineData(100000, 60000)]
+    public void SamplingInterval_ClampsToValidRange(int requested, int expected)
+    {
+        var manager = new SubscriptionManager(
+            new global::Opcilloscope.OpcUa.OpcUaClientWrapper(),
+            new global::Opcilloscope.Utilities.Logger());
+
+        manager.SamplingInterval = requested;
+
+        Assert.Equal(expected, manager.SamplingInterval);
+    }
+
     [Fact]
     public void FormatValue_ReturnsNull_WhenValueIsNull()
     {

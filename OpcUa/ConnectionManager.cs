@@ -17,6 +17,11 @@ public sealed class ConnectionManager : IDisposable
     private bool _disposed;
     private int _isReconnecting;
 
+    // Intervals from the most recent ConnectAsync, so subscription restoration
+    // after a reconnect does not silently fall back to the defaults.
+    private int _publishingInterval = 250;
+    private int _samplingInterval = 250;
+
     // Stored event handler references for proper unsubscription
     private Action<Models.MonitoredNode>? _valueChangedHandler;
     private Action<Models.MonitoredNode>? _variableAddedHandler;
@@ -115,13 +120,15 @@ public sealed class ConnectionManager : IDisposable
     /// <param name="credentials">Authentication credentials (defaults to anonymous).</param>
     /// <param name="securityMode">Requested message security mode (e.g. None, Sign, SignAndEncrypt). When null/None, an unsecured endpoint is selected.</param>
     /// <param name="securityPolicy">Requested security policy URI or shorthand (e.g. Basic256Sha256). Honored when a matching endpoint exists.</param>
+    /// <param name="samplingInterval">Sampling interval in milliseconds for monitored items.</param>
     /// <returns>True if connection succeeded, false otherwise.</returns>
     public async Task<bool> ConnectAsync(
         string endpoint,
         int publishingInterval = 250,
         ConnectionCredentials? credentials = null,
         string? securityMode = null,
-        string? securityPolicy = null)
+        string? securityPolicy = null,
+        int samplingInterval = 250)
     {
         // Async teardown: the synchronous Disconnect() blocks on the OPC UA close
         // round-trip (up to the transport timeout against a dead server), which froze
@@ -130,6 +137,8 @@ public sealed class ConnectionManager : IDisposable
 
         _lastEndpoint = endpoint;
         _credentials = credentials ?? ConnectionCredentials.Anonymous;
+        _publishingInterval = publishingInterval;
+        _samplingInterval = samplingInterval;
         StateChanged?.Invoke(ConnectionState.Connecting);
 
         try
@@ -138,7 +147,7 @@ public sealed class ConnectionManager : IDisposable
 
             if (success)
             {
-                if (!await InitializeSubscriptionAsync(publishingInterval))
+                if (!await InitializeSubscriptionAsync())
                 {
                     // Without a subscription the session is useless for monitoring;
                     // fail the connect rather than reporting Connected.
@@ -271,9 +280,20 @@ public sealed class ConnectionManager : IDisposable
         if (!recreated)
         {
             _logger.Warning("Failed to recreate subscriptions - initializing fresh");
-            // Last resort: start fresh (will lose monitored nodes)
+            // Last resort: start fresh. The monitored nodes are gone, so tell the UI -
+            // otherwise their rows sit at "(reconnecting...)" forever with handles the
+            // new subscription manager knows nothing about.
+            var lostHandles = _subscriptionManager.MonitoredVariables
+                .Select(v => v.ClientHandle)
+                .ToList();
+
             DisposeSubscription();
             await InitializeSubscriptionAsync();
+
+            foreach (var handle in lostHandles)
+            {
+                VariableRemoved?.Invoke(handle);
+            }
         }
     }
 
@@ -313,10 +333,11 @@ public sealed class ConnectionManager : IDisposable
         return _client.WriteValueAsync(nodeId, value);
     }
 
-    private async Task<bool> InitializeSubscriptionAsync(int publishingInterval = 250)
+    private async Task<bool> InitializeSubscriptionAsync()
     {
         _subscriptionManager = new SubscriptionManager(_client, _logger);
-        _subscriptionManager.PublishingInterval = publishingInterval;
+        _subscriptionManager.PublishingInterval = _publishingInterval;
+        _subscriptionManager.SamplingInterval = _samplingInterval;
         var initialized = await _subscriptionManager.InitializeAsync();
 
         // Store handler references for proper unsubscription

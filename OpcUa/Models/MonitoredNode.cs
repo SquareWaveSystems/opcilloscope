@@ -24,8 +24,11 @@ public class MonitoredNode
 
     public DateTime? Timestamp { get; set; }
     public uint StatusCode { get; set; }
-    public bool IsGood => StatusCode == 0; // StatusCode.Good = 0
-    public bool IsUncertain => (StatusCode & 0x40000000) != 0;
+    // OPC UA status severity lives in the top two bits: 00 = Good, 01 = Uncertain,
+    // 10 = Bad. Good codes with info bits set (e.g. GoodClamped 0x00300000) are
+    // still Good, so testing for == 0 would misclassify them.
+    public bool IsGood => (StatusCode & 0xC0000000) == 0;
+    public bool IsUncertain => (StatusCode & 0xC0000000) == 0x40000000;
     public bool IsBad => (StatusCode & 0x80000000) != 0;
     public DateTime LastChangeTime { get; set; } = DateTime.MinValue;
     public bool RecentlyChanged => (DateTime.Now - LastChangeTime).TotalMilliseconds < 500;
@@ -72,9 +75,9 @@ public class MonitoredNode
         get
         {
             if (StatusCode == 0) return "Good";
-            if ((StatusCode & 0x80000000) != 0) return $"Bad (0x{StatusCode:X8})";
-            if ((StatusCode & 0x40000000) != 0) return $"Uncertain (0x{StatusCode:X8})";
-            return $"0x{StatusCode:X8}";
+            if (IsBad) return $"Bad (0x{StatusCode:X8})";
+            if (IsUncertain) return $"Uncertain (0x{StatusCode:X8})";
+            return $"Good (0x{StatusCode:X8})";
         }
     }
 
