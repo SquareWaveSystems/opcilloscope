@@ -181,7 +181,7 @@ public class OpcUaClientWrapper : IDisposable
     {
         try
         {
-            Disconnect();
+            await DisconnectAsync();
 
             _credentials = credentials ?? ConnectionCredentials.Anonymous;
             _securityMode = securityMode;
@@ -231,14 +231,14 @@ public class OpcUaClientWrapper : IDisposable
                 : "Authentication rejected by server: " + sre.Message;
             _logger.Error(msg);
             ConnectionError?.Invoke(msg);
-            Disconnect();
+            await DisconnectAsync();
             return false;
         }
         catch (Exception ex)
         {
             _logger.Error($"Connection failed: {ex.Message}");
             ConnectionError?.Invoke(ex.Message);
-            Disconnect();
+            await DisconnectAsync();
             return false;
         }
     }
@@ -406,31 +406,14 @@ public class OpcUaClientWrapper : IDisposable
 
             var config = await GetApplicationConfigAsync();
 
-            // Capture existing subscriptions before closing old session
-            SubscriptionCollection? subscriptionsToTransfer = null;
-            if (_session?.Subscriptions != null && _session.Subscriptions.Any())
-            {
-                subscriptionsToTransfer = new SubscriptionCollection(_session.Subscriptions);
-                _logger.Info($"Captured {subscriptionsToTransfer.Count} subscription(s) for transfer");
-            }
+            var oldSession = _session;
 
-            // Clean up old session without deleting subscriptions on server
-            if (_session != null)
+            // Capture existing subscriptions before replacing the session
+            SubscriptionCollection? subscriptionsToTransfer = null;
+            if (oldSession?.Subscriptions != null && oldSession.Subscriptions.Any())
             {
-                _session.KeepAlive -= Session_KeepAlive;
-                try
-                {
-                    // Dispose without CloseAsync() - this intentionally skips sending CloseSession
-                    // to the server, allowing server-side subscriptions to remain active for transfer.
-                    // With DeleteSubscriptionsOnClose=false, we want the subscriptions to persist
-                    // on the server so we can transfer them to the new session.
-                    _session.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Warning($"Session cleanup error during reconnection: {ex.Message}");
-                }
-                _session = null;
+                subscriptionsToTransfer = new SubscriptionCollection(oldSession.Subscriptions);
+                _logger.Info($"Captured {subscriptionsToTransfer.Count} subscription(s) for transfer");
             }
 
             // Rediscover endpoint in case server configuration changed
@@ -439,9 +422,10 @@ public class OpcUaClientWrapper : IDisposable
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
             _lastConfiguredEndpoint = endpoint;
 
-            // Create new session
+            // Create the new session before touching the old one, so a failure here
+            // leaves the existing state unchanged for the next retry attempt.
 #pragma warning disable CS0618
-            _session = await Opc.Ua.Client.Session.Create(
+            var newSession = await Opc.Ua.Client.Session.Create(
                 config,
                 endpoint,
                 false,
@@ -452,18 +436,39 @@ public class OpcUaClientWrapper : IDisposable
             );
 #pragma warning restore CS0618
 
-            _session.DeleteSubscriptionsOnClose = false;
-            _session.TransferSubscriptionsOnReconnect = true;
-            _session.KeepAlive += Session_KeepAlive;
+            newSession.DeleteSubscriptionsOnClose = false;
+            newSession.TransferSubscriptionsOnReconnect = true;
+            newSession.KeepAlive += Session_KeepAlive;
+            _session = newSession;
 
-            // Transfer subscriptions to new session
+            // Transfer subscriptions while the old session is still alive. The client-side
+            // half of TransferSubscriptionsAsync detaches each subscription from its previous
+            // session; if that session is already disposed this throws, the SDK swallows it
+            // and reports failure - after the server-side transfer already succeeded - leaving
+            // orphaned subscriptions on the server and forcing a duplicate recreate.
             if (subscriptionsToTransfer != null && subscriptionsToTransfer.Count > 0)
             {
                 var transferred = await TransferSubscriptionsAsync(subscriptionsToTransfer);
                 _logger.Info($"Transferred {transferred} of {subscriptionsToTransfer.Count} subscription(s)");
             }
 
-            return _session.Connected;
+            // Retire the old session. Dispose without CloseAsync() - sending CloseSession
+            // would delete any server-side subscriptions that were not transferred, and the
+            // transport is typically already dead on this path.
+            if (oldSession != null)
+            {
+                oldSession.KeepAlive -= Session_KeepAlive;
+                try
+                {
+                    oldSession.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning($"Session cleanup error during reconnection: {ex.Message}");
+                }
+            }
+
+            return newSession.Connected;
         }
         catch (Exception ex)
         {
