@@ -482,7 +482,10 @@ public class CsvRecordingManager : IDisposable
                 var timestamp = item.Timestamp?.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture)
                     ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
 
-                // Escape values for CSV (handle quotes and commas)
+                // Escape values for CSV (RFC 4180 quoting plus formula
+                // injection neutralization for server-supplied fields).
+                // The timestamp is generated locally in a fixed format, so it
+                // needs no escaping; the header line is a constant.
                 var displayName = EscapeCsvField(item.DisplayName);
                 var nodeId = EscapeCsvField(item.NodeId);
                 var value = EscapeCsvField(item.Value);
@@ -511,6 +514,10 @@ public class CsvRecordingManager : IDisposable
             return field;
         }
 
+        // Neutralize spreadsheet formula injection before applying RFC 4180
+        // quoting, so the quoting decision sees the final field content.
+        field = NeutralizeFormulaInjection(field);
+
         // If field contains comma, quote, or newline, wrap in quotes and escape internal quotes
         if (field.Contains(',') || field.Contains('"') || field.Contains('\n') || field.Contains('\r'))
         {
@@ -518,6 +525,38 @@ public class CsvRecordingManager : IDisposable
         }
 
         return field;
+    }
+
+    /// <summary>
+    /// Neutralizes spreadsheet formula injection (CWE-1236). DisplayName,
+    /// NodeId, Value and Status originate from the OPC UA server, which is
+    /// potentially untrusted on a plant network; a field such as
+    /// "=cmd|'/C calc'!A0" executes as a formula when the CSV is opened in
+    /// Excel/LibreOffice (RFC 4180 quoting alone does not prevent this).
+    /// Fields starting with a formula trigger character ('=', '+', '-', '@',
+    /// tab, or CR) are prefixed with a single quote, which spreadsheets
+    /// interpret as "treat as text".
+    /// Exception: fields that parse as a number under InvariantCulture are
+    /// NOT neutralized - recorded values are routinely negative numbers
+    /// (e.g. "-12.5"), they are inert in spreadsheets, and prefixing them
+    /// would corrupt the data column for downstream tools.
+    /// </summary>
+    private static string NeutralizeFormulaInjection(string field)
+    {
+        var first = field[0];
+        if (first is not ('=' or '+' or '-' or '@' or '\t' or '\r'))
+        {
+            return field;
+        }
+
+        // Valid invariant-culture numbers (covers leading '+'/'-') are safe
+        // and must round-trip unchanged.
+        if (double.TryParse(field, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+        {
+            return field;
+        }
+
+        return "'" + field;
     }
 
     public void Dispose()
