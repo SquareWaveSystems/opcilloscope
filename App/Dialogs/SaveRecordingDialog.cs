@@ -195,6 +195,10 @@ public class SaveRecordingDialog : Dialog
     private void OnFileListOpenSelected(object? sender, CommandEventArgs e)
     {
         NavigateToSelected();
+        // Consume the command: in Terminal.Gui 2.4 an unhandled Accepting bubbles Accept to the
+        // dialog's default (Save) button, which would save/close the moment the user tries to
+        // navigate a folder or pick a file. Browsing must not trigger Save.
+        e.Handled = true;
     }
 
     private void OnFileListKeyDown(object? sender, Key e)
@@ -208,10 +212,14 @@ public class SaveRecordingDialog : Dialog
 
     private void NavigateToSelected()
     {
-        if (_fileListView.SelectedItem < 0 || _fileListView.SelectedItem >= _fileListItems.Count)
+        // Terminal.Gui 2.4 ListView.SelectedItem is int? (null = no selection). An OR-form
+        // lower-bound guard does not catch null (lifted comparisons are false), so check it
+        // explicitly before dereferencing.
+        var sel = _fileListView.SelectedItem;
+        if (sel is null || sel < 0 || sel >= _fileListItems.Count)
             return;
 
-        var selected = _fileListItems[_fileListView.SelectedItem!.Value];
+        var selected = _fileListItems[sel.Value];
 
         if (selected == "..")
         {

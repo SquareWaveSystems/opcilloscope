@@ -471,7 +471,12 @@ public class MonitoredVariablesView : FrameView
             if (variable == null) return;
 
             ToggleScopeSelectionForVariable(variable);
-            e.Handled = true;
+            // NOTE: do NOT set e.Handled here. In Terminal.Gui 2.4 the MouseEvent handler runs
+            // BEFORE the command pipeline that moves the table cursor (LeftButtonClicked ->
+            // Command.Activate -> SetSelection). Marking it handled would suppress that, so a
+            // Sel-column click would toggle scope but no longer highlight the row / raise
+            // SelectedVariableChanged. Leaving it unhandled preserves the 2.0 behavior where a
+            // click both toggled scope and selected the row.
         }
     }
 
