@@ -1,3 +1,5 @@
+using Terminal.Gui;
+
 namespace Opcilloscope.App.Themes;
 
 /// <summary>
@@ -14,7 +16,8 @@ public static class ThemeManager
     public static IReadOnlyList<AppTheme> AvailableThemes { get; } = new AppTheme[]
     {
         new DarkTheme(),
-        new LightTheme()
+        new LightTheme(),
+        new TerminalTheme()
     };
 
     /// <summary>
@@ -67,7 +70,26 @@ public static class ThemeManager
             handlers = ThemeChanged;
         }
 
+        ApplyTerminalColorMode(themeToUse);
+
         handlers?.Invoke(themeToUse);
+    }
+
+    /// <summary>
+    /// Switches the driver between 24-bit color and 16-color ANSI output.
+    /// In 16-color mode the terminal renders colors using its own ANSI
+    /// palette, letting the Terminal theme inherit the terminal's scheme.
+    /// </summary>
+    private static void ApplyTerminalColorMode(AppTheme theme)
+    {
+        Application.Force16Colors = theme.UseTerminalColors;
+
+        // The v2 facade driver caches its own flag rather than reading
+        // Application.Force16Colors, so propagate explicitly when running
+        if (Application.Driver is { } driver)
+        {
+            driver.Force16Colors = theme.UseTerminalColors;
+        }
     }
 
     /// <summary>

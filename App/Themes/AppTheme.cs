@@ -14,6 +14,14 @@ public abstract class AppTheme
     public abstract string Name { get; }
     public abstract string Description { get; }
 
+    /// <summary>
+    /// When true, the application restricts output to the 16 ANSI colors
+    /// (via <see cref="Application.Force16Colors"/>) so the terminal renders
+    /// the theme using its own configured ANSI palette. Themes setting this
+    /// should define all colors using <see cref="ColorName16"/> values.
+    /// </summary>
+    public virtual bool UseTerminalColors => false;
+
     // === Base Colors ===
     public abstract Color Background { get; }
     public abstract Color Foreground { get; }

@@ -32,7 +32,7 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 - **Scope** — Real-time multi-signal oscilloscope (up to 5 signals, 30 s sliding window).
 - **Record** — Export monitored values to CSV. Zero data loss — every server-pushed sample is captured at full precision in a locale-independent format (ISO 8601 timestamps, `.` decimal separator, arrays as semicolon-joined elements).
 - **Configure** — Save/load connection and subscription configs (`.cfg` JSON files).
-- **Themes** — Dark (default) and light.
+- **Themes** — Dark (default), light, and terminal (inherits your terminal's ANSI colour scheme).
 
 <p align="center">
   <img src="docs/theme-dark.png" alt="Dark theme" width="49%">

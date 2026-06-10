@@ -415,15 +415,15 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
     private string GetThemeToggleTitle()
     {
-        // Show what clicking will do: "Switch to Light" when in Dark, "Switch to Dark" when in Light
-        var currentIndex = ThemeManager.GetCurrentThemeIndex();
-        return currentIndex == 0 ? "Switch to _Light" : "Switch to _Dark";
+        // Show what clicking will do: cycle Dark -> Light -> Terminal -> Dark
+        var themes = ThemeManager.AvailableThemes;
+        var nextIndex = (ThemeManager.GetCurrentThemeIndex() + 1) % themes.Count;
+        return $"Switch to _{themes[nextIndex].Name}";
     }
 
     private void ToggleTheme()
     {
-        var currentIndex = ThemeManager.GetCurrentThemeIndex();
-        var newIndex = (currentIndex + 1) % 2;
+        var newIndex = (ThemeManager.GetCurrentThemeIndex() + 1) % ThemeManager.AvailableThemes.Count;
         ThemeManager.SetThemeByIndex(newIndex);
     }
 

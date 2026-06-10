@@ -97,6 +97,7 @@ Opcilloscope/
 │       ├── AppTheme.cs             # Abstract base theme class
 │       ├── DarkTheme.cs            # Dark theme implementation
 │       ├── LightTheme.cs           # Light theme implementation
+│       ├── TerminalTheme.cs        # Theme inheriting the terminal's ANSI palette
 │       ├── ThemeManager.cs         # Global theme state and switching
 │       └── ThemeStyler.cs          # Theme application helper
 │
@@ -207,14 +208,15 @@ Opcilloscope uses JSON-based configuration files with the `.cfg` extension:
 ```
 
 ### Theme System
-Two built-in themes with consistent styling:
+Three built-in themes with consistent styling:
 - **DarkTheme** (default): Dark background, high contrast for terminal use
 - **LightTheme**: Light background for bright environments
+- **TerminalTheme**: Inherits the terminal's own ANSI color palette. Uses only the 16 named ANSI colors (`ColorName16`) and enables `Application.Force16Colors` so the driver emits standard SGR color codes instead of 24-bit RGB — the terminal renders them with its configured scheme. `ThemeManager.SetTheme` toggles `Force16Colors` automatically via `AppTheme.UseTerminalColors`.
 
-Toggle themes via View menu or programmatically:
+Toggle themes via View menu (cycles Dark → Light → Terminal) or programmatically:
 ```csharp
-ThemeManager.SetTheme("Light");
-ThemeManager.SetThemeByIndex(0); // 0 = Dark, 1 = Light
+ThemeManager.SetTheme("Terminal");
+ThemeManager.SetThemeByIndex(0); // 0 = Dark, 1 = Light, 2 = Terminal
 ```
 
 ### Scope View (Multi-Signal Oscilloscope)
