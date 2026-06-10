@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Opc.Ua;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.Utilities;
@@ -11,7 +12,10 @@ public class NodeBrowser
 {
     private readonly OpcUaClientWrapper _client;
     private readonly Logger _logger;
-    private readonly Dictionary<string, string> _dataTypeCache = new();
+    // Keyed by the data type's NodeId (not the variable's) so variables sharing a type
+    // reuse the same lookup. ConcurrentDictionary because GetChildrenAsync resolves
+    // data type names for multiple variables in parallel.
+    private readonly ConcurrentDictionary<string, string> _dataTypeCache = new();
 
     // Common data type NodeIds
     private static readonly Dictionary<uint, string> BuiltInDataTypes = new()
@@ -133,34 +137,26 @@ public class NodeBrowser
 
     private async Task<string?> GetDataTypeNameAsync(NodeId nodeId)
     {
-        var key = nodeId.ToString();
-        if (_dataTypeCache.TryGetValue(key, out var cached))
-            return cached;
-
         try
         {
             var attrs = await _client.ReadAttributesAsync(nodeId, Attributes.DataType);
             if (attrs.Count > 0 && attrs[0].Value is NodeId dataTypeId)
             {
-                string? name = null;
-
-                // Check built-in types first
+                // Check built-in types first - already a dictionary lookup, no caching needed
                 if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == IdType.Numeric)
                 {
                     var id = (uint)dataTypeId.Identifier;
                     if (BuiltInDataTypes.TryGetValue(id, out var builtIn))
-                        name = builtIn;
+                        return builtIn;
                 }
+
+                var key = dataTypeId.ToString();
+                if (_dataTypeCache.TryGetValue(key, out var cached))
+                    return cached;
 
                 // If not built-in, browse for the type name
-                if (name == null)
-                {
-                    var typeAttrs = await _client.ReadAttributesAsync(dataTypeId, Attributes.DisplayName);
-                    if (typeAttrs.Count > 0 && typeAttrs[0].Value is LocalizedText lt)
-                        name = lt.Text;
-                }
-
-                if (name != null)
+                var typeAttrs = await _client.ReadAttributesAsync(dataTypeId, Attributes.DisplayName);
+                if (typeAttrs.Count > 0 && typeAttrs[0].Value is LocalizedText lt && lt.Text is string name)
                 {
                     _dataTypeCache[key] = name;
                     return name;
