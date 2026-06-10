@@ -814,6 +814,268 @@ public class ConfigurationServiceTests : IDisposable
 
     #endregion
 
+    #region Disabled Node Preservation Tests
+
+    [Fact]
+    public async Task LoadThenCaptureCurrentState_PreservesDisabledNodes()
+    {
+        // Arrange: a config with both enabled and disabled monitored nodes.
+        var config = CreateTestConfig();
+        config.MonitoredNodes = new List<MonitoredNodeConfig>
+        {
+            new() { NodeId = "ns=2;s=Counter", DisplayName = "Counter", Enabled = true },
+            new() { NodeId = "ns=2;s=Spare", DisplayName = "Spare", Enabled = false }
+        };
+        var filePath = Path.Combine(_tempDir, "disabled.cfg");
+        await _service.SaveAsync(config, filePath);
+        await _service.LoadAsync(filePath);
+
+        // Act: capture state with only the enabled node live (matching how
+        // MainWindow only subscribes to enabled nodes on load).
+        var captured = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            1000,
+            new List<MonitoredNode>
+            {
+                new() { NodeId = new NodeId("Counter", 2), DisplayName = "Counter" }
+            });
+
+        // Assert: the disabled entry survives the round-trip with Enabled = false.
+        Assert.Equal(2, captured.MonitoredNodes.Count);
+        var live = captured.MonitoredNodes.Single(n => n.NodeId == "ns=2;s=Counter");
+        Assert.True(live.Enabled);
+        var disabled = captured.MonitoredNodes.Single(n => n.NodeId == "ns=2;s=Spare");
+        Assert.False(disabled.Enabled);
+        Assert.Equal("Spare", disabled.DisplayName);
+    }
+
+    [Fact]
+    public async Task LoadThenCaptureCurrentState_DropsUnsubscribedEnabledNodes()
+    {
+        // Arrange: two enabled nodes and one disabled node in the loaded config.
+        var config = CreateTestConfig();
+        config.MonitoredNodes = new List<MonitoredNodeConfig>
+        {
+            new() { NodeId = "ns=2;s=Counter", DisplayName = "Counter", Enabled = true },
+            new() { NodeId = "ns=2;s=SineWave", DisplayName = "SineWave", Enabled = true },
+            new() { NodeId = "ns=2;s=Spare", DisplayName = "Spare", Enabled = false }
+        };
+        var filePath = Path.Combine(_tempDir, "unsubscribed.cfg");
+        await _service.SaveAsync(config, filePath);
+        await _service.LoadAsync(filePath);
+
+        // Act: the user unsubscribed SineWave, so only Counter is live.
+        var captured = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            1000,
+            new List<MonitoredNode>
+            {
+                new() { NodeId = new NodeId("Counter", 2), DisplayName = "Counter" }
+            });
+
+        // Assert: the actively unsubscribed (previously enabled) node is dropped,
+        // while the disabled node is preserved.
+        Assert.Equal(2, captured.MonitoredNodes.Count);
+        Assert.DoesNotContain(captured.MonitoredNodes, n => n.NodeId == "ns=2;s=SineWave");
+        Assert.Contains(captured.MonitoredNodes, n => n.NodeId == "ns=2;s=Spare" && !n.Enabled);
+    }
+
+    [Fact]
+    public async Task LoadThenCaptureCurrentState_DisabledNodeResubscribed_SavedOnceAsEnabled()
+    {
+        // Arrange: a disabled node in the loaded config.
+        var config = CreateTestConfig();
+        config.MonitoredNodes = new List<MonitoredNodeConfig>
+        {
+            new() { NodeId = "ns=2;s=Counter", DisplayName = "Counter", Enabled = false }
+        };
+        var filePath = Path.Combine(_tempDir, "resubscribed.cfg");
+        await _service.SaveAsync(config, filePath);
+        await _service.LoadAsync(filePath);
+
+        // Act: the user manually subscribed to the same node, making it live.
+        var captured = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            1000,
+            new List<MonitoredNode>
+            {
+                new() { NodeId = new NodeId("Counter", 2), DisplayName = "Counter" }
+            });
+
+        // Assert: no duplicate entry; the live (enabled) entry wins.
+        var entry = Assert.Single(captured.MonitoredNodes);
+        Assert.Equal("ns=2;s=Counter", entry.NodeId);
+        Assert.True(entry.Enabled);
+    }
+
+    #endregion
+
+    #region Null Section Handling Tests
+
+    [Theory]
+    [InlineData("server")]
+    [InlineData("settings")]
+    [InlineData("monitoredNodes")]
+    [InlineData("metadata")]
+    public async Task LoadAsync_NullSection_LoadsWithDefaults(string nullSection)
+    {
+        // Arrange: explicit JSON null overwrites the property initializer,
+        // which previously caused a NullReferenceException during validation.
+        var filePath = Path.Combine(_tempDir, $"null-{nullSection}.cfg");
+        var sections = new Dictionary<string, string>
+        {
+            ["server"] = """{ "endpointUrl": "opc.tcp://localhost:4840" }""",
+            ["settings"] = """{ "publishingIntervalMs": 1000 }""",
+            ["monitoredNodes"] = "[]",
+            ["metadata"] = "{}"
+        };
+        sections[nullSection] = "null";
+        var json = $$"""
+        {
+            "version": "1.0",
+            "server": {{sections["server"]}},
+            "settings": {{sections["settings"]}},
+            "monitoredNodes": {{sections["monitoredNodes"]}},
+            "metadata": {{sections["metadata"]}}
+        }
+        """;
+        await File.WriteAllTextAsync(filePath, json);
+
+        // Act
+        var loaded = await _service.LoadAsync(filePath);
+
+        // Assert: the null section was replaced with its default instance.
+        Assert.NotNull(loaded.Server);
+        Assert.NotNull(loaded.Server.Authentication);
+        Assert.NotNull(loaded.Settings);
+        Assert.NotNull(loaded.MonitoredNodes);
+        Assert.NotNull(loaded.Metadata);
+    }
+
+    [Fact]
+    public async Task LoadAsync_NullAuthentication_LoadsWithDefaults()
+    {
+        // Arrange
+        var filePath = Path.Combine(_tempDir, "null-auth.cfg");
+        var json = """
+        {
+            "version": "1.0",
+            "server": { "endpointUrl": "opc.tcp://localhost:4840", "authentication": null },
+            "settings": { "publishingIntervalMs": 1000 },
+            "monitoredNodes": [],
+            "metadata": {}
+        }
+        """;
+        await File.WriteAllTextAsync(filePath, json);
+
+        // Act
+        var loaded = await _service.LoadAsync(filePath);
+
+        // Assert
+        Assert.NotNull(loaded.Server.Authentication);
+        Assert.Equal("Anonymous", loaded.Server.Authentication.Type);
+    }
+
+    [Fact]
+    public async Task LoadAsync_NullVersion_DefaultsToCurrentVersion()
+    {
+        // Arrange
+        var filePath = Path.Combine(_tempDir, "null-version.cfg");
+        var json = """
+        {
+            "version": null,
+            "server": { "endpointUrl": "opc.tcp://localhost:4840" },
+            "settings": { "publishingIntervalMs": 1000 },
+            "monitoredNodes": [],
+            "metadata": {}
+        }
+        """;
+        await File.WriteAllTextAsync(filePath, json);
+
+        // Act
+        var loaded = await _service.LoadAsync(filePath);
+
+        // Assert
+        Assert.Equal("1.0", loaded.Version);
+    }
+
+    #endregion
+
+    #region Version Check Tests
+
+    [Fact]
+    public async Task LoadAsync_FutureMajorVersion_ThrowsInvalidDataException()
+    {
+        // Arrange
+        var filePath = Path.Combine(_tempDir, "future.cfg");
+        var json = """
+        {
+            "version": "2.0",
+            "server": { "endpointUrl": "opc.tcp://localhost:4840" },
+            "settings": { "publishingIntervalMs": 1000 },
+            "monitoredNodes": [],
+            "metadata": {}
+        }
+        """;
+        await File.WriteAllTextAsync(filePath, json);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidDataException>(
+            () => _service.LoadAsync(filePath));
+        Assert.Contains("newer version of opcilloscope", ex.Message);
+        Assert.Contains("2.0", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("\"1.0\"")]
+    [InlineData("\"1.5\"")]
+    [InlineData("\"not-a-version\"")]
+    public async Task LoadAsync_SameMajorOrUnparseableVersion_Loads(string versionJson)
+    {
+        // Arrange
+        var filePath = Path.Combine(_tempDir, $"version-{Guid.NewGuid():N}.cfg");
+        var json = $$"""
+        {
+            "version": {{versionJson}},
+            "server": { "endpointUrl": "opc.tcp://localhost:4840" },
+            "settings": { "publishingIntervalMs": 1000 },
+            "monitoredNodes": [],
+            "metadata": {}
+        }
+        """;
+        await File.WriteAllTextAsync(filePath, json);
+
+        // Act
+        var loaded = await _service.LoadAsync(filePath);
+
+        // Assert
+        Assert.NotNull(loaded);
+    }
+
+    [Fact]
+    public async Task LoadAsync_MissingVersion_Loads()
+    {
+        // Arrange
+        var filePath = Path.Combine(_tempDir, "no-version.cfg");
+        var json = """
+        {
+            "server": { "endpointUrl": "opc.tcp://localhost:4840" },
+            "settings": { "publishingIntervalMs": 1000 },
+            "monitoredNodes": [],
+            "metadata": {}
+        }
+        """;
+        await File.WriteAllTextAsync(filePath, json);
+
+        // Act
+        var loaded = await _service.LoadAsync(filePath);
+
+        // Assert
+        Assert.Equal("1.0", loaded.Version);
+    }
+
+    #endregion
+
     private static OpcilloscopeConfig CreateTestConfig()
     {
         return new OpcilloscopeConfig
