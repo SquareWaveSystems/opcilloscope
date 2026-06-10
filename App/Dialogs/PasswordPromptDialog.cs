@@ -38,8 +38,7 @@ public class PasswordPromptDialog : Dialog
             X = 1,
             Y = 2,
             Text = endpoint.Length > 50 ? endpoint[..47] + "..." : endpoint,
-            ColorScheme = theme.MainColorScheme
-        };
+        }.WithScheme(theme.MainColorScheme);
 
         _passwordField = new TextField
         {
@@ -49,13 +48,13 @@ public class PasswordPromptDialog : Dialog
             Secret = true
         };
 
-        var defaultButtonScheme = new ColorScheme
+        var defaultButtonScheme = new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+            Normal = new Attribute(theme.Accent, theme.Background),
+            Focus = new Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
         };
 
         var okButton = new Button
@@ -64,8 +63,7 @@ public class PasswordPromptDialog : Dialog
             Y = 6,
             Text = $"{theme.ButtonPrefix}OK{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = defaultButtonScheme
-        };
+        }.WithScheme(defaultButtonScheme);
 
         okButton.Accepting += (_, _) =>
         {
@@ -78,8 +76,7 @@ public class PasswordPromptDialog : Dialog
             X = Pos.Center() + 4,
             Y = 6,
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
-            ColorScheme = theme.ButtonColorScheme
-        };
+        }.WithScheme(theme.ButtonColorScheme);
 
         cancelButton.Accepting += (_, _) =>
         {

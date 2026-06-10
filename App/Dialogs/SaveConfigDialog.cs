@@ -77,8 +77,7 @@ public class SaveConfigDialog : Dialog
             X = Pos.Right(_directoryField) + 1,
             Y = 2,
             Text = "Browse...",
-            ColorScheme = theme.ButtonColorScheme
-        };
+        }.WithScheme(theme.ButtonColorScheme);
         browseButton.Accepting += OnBrowseDirectory;
 
         // Filename section
@@ -107,8 +106,7 @@ public class SaveConfigDialog : Dialog
             X = 1,
             Y = 6,
             Text = $"Save as type: Opcilloscope Config (*{ConfigurationService.ConfigFileExtension})",
-            ColorScheme = theme.MainColorScheme
-        };
+        }.WithScheme(theme.MainColorScheme);
 
         // Info hint about preserving filename
         var hintLabel = new Label
@@ -116,17 +114,16 @@ public class SaveConfigDialog : Dialog
             X = 1,
             Y = 7,
             Text = "Tip: Use Browse to change folder - filename is preserved",
-            ColorScheme = theme.MainColorScheme
-        };
+        }.WithScheme(theme.MainColorScheme);
 
         // Buttons
-        var defaultButtonScheme = new ColorScheme
+        var defaultButtonScheme = new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+            Normal = new Attribute(theme.Accent, theme.Background),
+            Focus = new Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
         };
 
         var saveButton = new Button
@@ -135,8 +132,7 @@ public class SaveConfigDialog : Dialog
             Y = 9,
             Text = $"{theme.ButtonPrefix}Save{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = defaultButtonScheme
-        };
+        }.WithScheme(defaultButtonScheme);
         saveButton.Accepting += OnSave;
 
         var cancelButton = new Button
@@ -144,8 +140,7 @@ public class SaveConfigDialog : Dialog
             X = Pos.Center() + 3,
             Y = 9,
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
-            ColorScheme = theme.ButtonColorScheme
-        };
+        }.WithScheme(theme.ButtonColorScheme);
         cancelButton.Accepting += OnCancel;
 
         Add(directoryLabel, _directoryField, browseButton,
@@ -225,7 +220,7 @@ public class SaveConfigDialog : Dialog
         var filename = _currentFilename.Trim();
         if (string.IsNullOrEmpty(filename))
         {
-            MessageBox.ErrorQuery("Error", "Please enter a filename", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", "Please enter a filename", "OK");
             return false;
         }
 
@@ -233,7 +228,7 @@ public class SaveConfigDialog : Dialog
         var invalidChars = Path.GetInvalidFileNameChars();
         if (filename.IndexOfAny(invalidChars) >= 0)
         {
-            MessageBox.ErrorQuery("Error", "Filename contains invalid characters", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", "Filename contains invalid characters", "OK");
             return false;
         }
 
@@ -241,7 +236,7 @@ public class SaveConfigDialog : Dialog
         var directory = _currentDirectory.Trim();
         if (string.IsNullOrEmpty(directory))
         {
-            MessageBox.ErrorQuery("Error", "Please specify a directory", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", "Please specify a directory", "OK");
             return false;
         }
 
@@ -255,7 +250,7 @@ public class SaveConfigDialog : Dialog
         }
         catch (Exception ex)
         {
-            MessageBox.ErrorQuery("Error", $"Cannot create directory: {ex.Message}", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", $"Cannot create directory: {ex.Message}", "OK");
             return false;
         }
 
@@ -263,7 +258,7 @@ public class SaveConfigDialog : Dialog
         var fullPath = FilePath;
         if (File.Exists(fullPath))
         {
-            var result = MessageBox.Query("Confirm Overwrite",
+            var result = MessageBox.Query(Application.Instance, "Confirm Overwrite",
                 $"File '{Path.GetFileName(fullPath)}' already exists.\nDo you want to replace it?",
                 "Yes", "No");
             if (result != 0) // "No" selected

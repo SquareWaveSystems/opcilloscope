@@ -2,7 +2,6 @@ using Terminal.Gui;
 using Opcilloscope.Utilities;
 using Opcilloscope.App.Themes;
 using System.Collections.ObjectModel;
-using Attribute = Terminal.Gui.Attribute;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
 namespace Opcilloscope.App.Views;
@@ -35,9 +34,8 @@ public class LogView : FrameView
             X = Pos.AnchorEnd(8),
             Y = 0,
             Height = 1,
-            ShadowStyle = ShadowStyle.None,
-            ColorScheme = theme.ButtonColorScheme
-        };
+            ShadowStyle = ShadowStyles.None,
+        }.WithScheme(theme.ButtonColorScheme);
         _copyButton.Accepting += OnCopyClicked;
 
         _listView = new ListView
@@ -94,7 +92,7 @@ public class LogView : FrameView
         Application.Invoke(() =>
         {
             BorderStyle = theme.FrameLineStyle;
-            _copyButton.ColorScheme = theme.ButtonColorScheme;
+            _copyButton.SetScheme(theme.ButtonColorScheme);
             SetNeedsLayout();
         });
     }
@@ -117,7 +115,6 @@ public class LogView : FrameView
             if (_displayedEntries.Count > 0)
             {
                 _listView.SelectedItem = _displayedEntries.Count - 1;
-                _listView.TopItem = Math.Max(0, _displayedEntries.Count - _listView.Frame.Height);
             }
         });
     }

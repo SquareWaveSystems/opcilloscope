@@ -77,10 +77,9 @@ public class SaveRecordingDialog : Dialog
             Y = 5,
             Width = Dim.Fill(1),
             Height = Dim.Fill(6),
-            ColorScheme = theme.MainColorScheme
-        };
+        }.WithScheme(theme.MainColorScheme);
 
-        _fileListView.OpenSelectedItem += OnFileListOpenSelected;
+        _fileListView.Accepting += OnFileListOpenSelected;
         _fileListView.KeyDown += OnFileListKeyDown;
 
         // Filename label and field
@@ -100,13 +99,13 @@ public class SaveRecordingDialog : Dialog
         };
 
         // Buttons
-        var defaultButtonScheme = new ColorScheme
+        var defaultButtonScheme = new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+            Normal = new Attribute(theme.Accent, theme.Background),
+            Focus = new Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
         };
 
         var saveButton = new Button
@@ -115,8 +114,7 @@ public class SaveRecordingDialog : Dialog
             Y = Pos.AnchorEnd(1),
             Text = $"{theme.ButtonPrefix}Save{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = defaultButtonScheme
-        };
+        }.WithScheme(defaultButtonScheme);
 
         saveButton.Accepting += (_, _) =>
         {
@@ -132,8 +130,7 @@ public class SaveRecordingDialog : Dialog
             X = Pos.Center() + 4,
             Y = Pos.AnchorEnd(1),
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
-            ColorScheme = theme.ButtonColorScheme
-        };
+        }.WithScheme(theme.ButtonColorScheme);
 
         cancelButton.Accepting += (_, _) =>
         {
@@ -191,11 +188,11 @@ public class SaveRecordingDialog : Dialog
         }
         catch (Exception ex)
         {
-            MessageBox.ErrorQuery("Error", $"Cannot access directory:\n{ex.Message}", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", $"Cannot access directory:\n{ex.Message}", "OK");
         }
     }
 
-    private void OnFileListOpenSelected(object? sender, ListViewItemEventArgs e)
+    private void OnFileListOpenSelected(object? sender, CommandEventArgs e)
     {
         NavigateToSelected();
     }
@@ -214,7 +211,7 @@ public class SaveRecordingDialog : Dialog
         if (_fileListView.SelectedItem < 0 || _fileListView.SelectedItem >= _fileListItems.Count)
             return;
 
-        var selected = _fileListItems[_fileListView.SelectedItem];
+        var selected = _fileListItems[_fileListView.SelectedItem!.Value];
 
         if (selected == "..")
         {
@@ -250,7 +247,7 @@ public class SaveRecordingDialog : Dialog
 
         if (string.IsNullOrEmpty(filename))
         {
-            MessageBox.ErrorQuery("Error", "Please enter a filename", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", "Please enter a filename", "OK");
             return false;
         }
 
@@ -261,7 +258,7 @@ public class SaveRecordingDialog : Dialog
         var invalidChars = Path.GetInvalidFileNameChars();
         if (filename.IndexOfAny(invalidChars) >= 0)
         {
-            MessageBox.ErrorQuery("Error", "Filename contains invalid characters", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", "Filename contains invalid characters", "OK");
             return false;
         }
 
@@ -270,7 +267,7 @@ public class SaveRecordingDialog : Dialog
         // Check if file already exists
         if (File.Exists(fullPath))
         {
-            var result = MessageBox.Query("Confirm Overwrite",
+            var result = MessageBox.Query(Application.Instance, "Confirm Overwrite",
                 $"File already exists:\n{filename}\n\nOverwrite?",
                 "Yes", "No");
             if (result != 0)

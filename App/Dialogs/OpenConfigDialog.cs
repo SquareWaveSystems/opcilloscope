@@ -43,8 +43,7 @@ public class OpenConfigDialog : Dialog
             Y = 0,
             Width = Dim.Fill(1),
             Text = configDir,
-            ColorScheme = theme.MainColorScheme
-        };
+        }.WithScheme(theme.MainColorScheme);
 
         // Scan config directory for files sorted by last modified (newest first)
         LoadFiles(configDir);
@@ -61,10 +60,9 @@ public class OpenConfigDialog : Dialog
             Y = 2,
             Width = Dim.Fill(1),
             Height = Dim.Fill(3),
-            ColorScheme = theme.MainColorScheme
-        };
+        }.WithScheme(theme.MainColorScheme);
         _fileListView.SetSource(new System.Collections.ObjectModel.ObservableCollection<string>(displayNames));
-        _fileListView.OpenSelectedItem += (_, _) => Confirm();
+        _fileListView.Accepting += (_, _) => Confirm();
 
         var openButton = new Button
         {
@@ -72,15 +70,7 @@ public class OpenConfigDialog : Dialog
             Y = Pos.AnchorEnd(1),
             Text = $"{theme.ButtonPrefix}Open{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-                Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-                HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-                HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-                Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-            }
-        };
+        }.WithScheme(new Scheme { Normal = new Attribute(theme.Accent, theme.Background), Focus = new Attribute(theme.AccentBright, theme.Background), HotNormal = new Attribute(theme.Accent, theme.Background), HotFocus = new Attribute(theme.AccentBright, theme.Background), Disabled = new Attribute(theme.MutedText, theme.Background) });
         openButton.Accepting += (_, _) => Confirm();
 
         var browseButton = new Button
@@ -88,8 +78,7 @@ public class OpenConfigDialog : Dialog
             X = Pos.Right(openButton) + 1,
             Y = Pos.AnchorEnd(1),
             Text = $"{theme.ButtonPrefix}Browse...{theme.ButtonSuffix}",
-            ColorScheme = theme.ButtonColorScheme
-        };
+        }.WithScheme(theme.ButtonColorScheme);
         browseButton.Accepting += OnBrowse;
 
         var cancelButton = new Button
@@ -97,8 +86,7 @@ public class OpenConfigDialog : Dialog
             X = Pos.Right(browseButton) + 1,
             Y = Pos.AnchorEnd(1),
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
-            ColorScheme = theme.ButtonColorScheme
-        };
+        }.WithScheme(theme.ButtonColorScheme);
         cancelButton.Accepting += (_, _) =>
         {
             _confirmed = false;
@@ -131,7 +119,7 @@ public class OpenConfigDialog : Dialog
     {
         if (_fileListView.SelectedItem >= 0 && _fileListView.SelectedItem < _files.Count)
         {
-            SelectedFilePath = _files[_fileListView.SelectedItem].FullName;
+            SelectedFilePath = _files[_fileListView.SelectedItem!.Value].FullName;
             _confirmed = true;
             Application.RequestStop();
         }

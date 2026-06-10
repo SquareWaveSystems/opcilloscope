@@ -17,7 +17,7 @@ namespace Opcilloscope.App;
 /// Main application window with layout orchestration.
 /// Implements lazygit-inspired keybinding system.
 /// </summary>
-public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
+public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 {
     private readonly Logger _logger;
     private readonly ConnectionManager _connectionManager;
@@ -85,14 +85,14 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         // Override global "Menu" ColorScheme BEFORE creating any views
         // This prevents StatusBar's blue background flash on first render
         var theme = ThemeManager.Current;
-        Colors.ColorSchemes["Menu"] = new ColorScheme
+        SchemeManager.AddScheme("Menu", new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
+            Normal = new Attribute(theme.Foreground, theme.Background),
+            Focus = new Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        });
 
         // Create theme toggle menu item
         _themeToggleItem = new MenuItem(GetThemeToggleTitle(), "", ToggleTheme);
@@ -146,14 +146,14 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         };
 
         // Also set ColorScheme directly on the StatusBar instance
-        _statusBar.ColorScheme = new ColorScheme
+        _statusBar.SetScheme(new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
+            Normal = new Attribute(theme.Foreground, theme.Background),
+            Focus = new Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        });
 
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
         // We position it dynamically based on text width
@@ -222,8 +222,10 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         // Apply initial theme (after all controls are created)
         ApplyTheme();
 
-        // Handle window resize to update connection status label position
-        Application.SizeChanging += (s, e) => UiThread.Run(UpdateConnectionStatusLabelPosition);
+        // Handle window resize to update connection status label position.
+        // Terminal.Gui 2.4 removed Application.SizeChanging; the window's own
+        // SubViewLayout fires whenever the terminal (and thus this window) is re-laid out.
+        SubViewLayout += (s, e) => UiThread.Run(UpdateConnectionStatusLabelPosition);
 
         // Run status bar startup sequence
         RunStatusBarStartup();
@@ -251,10 +253,10 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
         // Show first message immediately
         _connectionStatusLabel.Text = " Square Wave Systems 2026 ";
-        _connectionStatusLabel.ColorScheme = new ColorScheme
+        _connectionStatusLabel.SetScheme(new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background)
-        };
+            Normal = new Attribute(theme.Accent, theme.Background)
+        });
         UpdateConnectionStatusLabelPosition();
 
         _startupStatusTimer = Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
@@ -264,10 +266,10 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
             {
                 // Second message
                 _connectionStatusLabel.Text = " All systems nominal ";
-                _connectionStatusLabel.ColorScheme = new ColorScheme
+                _connectionStatusLabel.SetScheme(new Scheme
                 {
-                    Normal = new Terminal.Gui.Attribute(theme.StatusGood, theme.Background)
-                };
+                    Normal = new Attribute(theme.StatusGood, theme.Background)
+                });
                 UpdateConnectionStatusLabelPosition();
                 return true; // Continue
             }
@@ -291,14 +293,14 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
             {
                 new MenuBarItem("_File", new MenuItem[]
                 {
-                    new MenuItem("_Open Config...", "", OpenConfig, shortcutKey: Key.O.WithCtrl),
-                    new MenuItem("_Save Config", "", SaveConfig, shortcutKey: Key.S.WithCtrl),
-                    new MenuItem("Save Config _As...", "", SaveConfigAs, shortcutKey: Key.S.WithCtrl.WithShift),
+                    new MenuItem("_Open Config...", "", OpenConfig, Key.O.WithCtrl),
+                    new MenuItem("_Save Config", "", SaveConfig, Key.S.WithCtrl),
+                    new MenuItem("Save Config _As...", "", SaveConfigAs, Key.S.WithCtrl.WithShift),
                     null!, // Separator
-                    new MenuItem("Start Recording...", "", () => OnRecordRequested(), shortcutKey: Key.R.WithCtrl),
+                    new MenuItem("Start Recording...", "", () => OnRecordRequested(), Key.R.WithCtrl),
                     new MenuItem("Stop Recording", "", () => OnStopRecordingRequested()),
                     null!, // Separator
-                    new MenuItem("E_xit", "", () => RequestStop(), shortcutKey: Key.Q.WithCtrl)
+                    new MenuItem("E_xit", "", () => RequestStop(), Key.Q.WithCtrl)
                 }),
                 new MenuBarItem("_Connection", new MenuItem[]
                 {
@@ -327,47 +329,45 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         var theme = ThemeManager.Current;
 
         // Update global "Menu" ColorScheme (used by StatusBar)
-        Colors.ColorSchemes["Menu"] = new ColorScheme
+        SchemeManager.AddScheme("Menu", new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
+            Normal = new Attribute(theme.Foreground, theme.Background),
+            Focus = new Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        });
 
         // Apply main window styling - double-line for emphasis
-        ColorScheme = theme.MainColorScheme;
+        SetScheme(theme.MainColorScheme);
         BorderStyle = theme.EmphasizedBorderStyle;
 
-        // Apply highlight title color to main window border so "opcilloscope" stands out
-        if (Border != null)
-        {
-            Border.ColorScheme = theme.HighlightTitleBorderColorScheme;
-        }
+        // NOTE: Terminal.Gui 2.4 removed per-adornment schemes, so the main window border
+        // can no longer be given the distinct HighlightTitleBorderColorScheme; it inherits
+        // the window scheme. Title-highlight colouring to be revisited via Scheme VisualRoles.
 
         // Apply styling to menu bar
         ThemeStyler.ApplyToMenuBar(_menuBar, theme);
 
         // Apply clean status bar styling (no blue background)
         // Must set ColorScheme AND call SetNeedsDisplay to override Terminal.Gui defaults
-        var cleanStatusBarScheme = new ColorScheme
+        var cleanStatusBarScheme = new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+            Normal = new Attribute(theme.Foreground, theme.Background),
+            Focus = new Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
         };
-        _statusBar.ColorScheme = cleanStatusBarScheme;
+        _statusBar.SetScheme(cleanStatusBarScheme);
         _statusBar.SetNeedsLayout();
 
         // Also apply theme to connection status label
         UpdateConnectionStatusLabelStyle(_isConnected);
 
         // Apply theme to activity spinner and label (for async operations)
-        _activitySpinner.ColorScheme = cleanStatusBarScheme;
-        _activityLabel.ColorScheme = cleanStatusBarScheme;
+        _activitySpinner.SetScheme(cleanStatusBarScheme);
+        _activityLabel.SetScheme(cleanStatusBarScheme);
 
         // Apply to child views with border differentiation
         // MonitoredVariables gets double-line (emphasized)
@@ -583,14 +583,14 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         if (!variable.IsWritable)
         {
             _logger.Warning($"Node '{variable.DisplayName}' is not writable");
-            MessageBox.ErrorQuery("Write", $"Node '{variable.DisplayName}' is not writable.", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Write", $"Node '{variable.DisplayName}' is not writable.", "OK");
             return;
         }
 
         if (!OpcValueConverter.IsWriteSupported(variable.DataType))
         {
             _logger.Warning($"Write not supported for data type {variable.DataType}");
-            MessageBox.ErrorQuery("Write", $"Write not supported for data type: {variable.DataType}", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Write", $"Write not supported for data type: {variable.DataType}", "OK");
             return;
         }
 
@@ -639,14 +639,14 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         if ((accessLevel & Opc.Ua.AccessLevels.CurrentWrite) == 0)
         {
             _logger.Warning($"Node '{node.DisplayName}' is not writable");
-            UiThread.Run(() => MessageBox.ErrorQuery("Write", $"Node '{node.DisplayName}' is not writable.", "OK"));
+            UiThread.Run(() => MessageBox.ErrorQuery(Application.Instance, "Write", $"Node '{node.DisplayName}' is not writable.", "OK"));
             return;
         }
 
         if (!OpcValueConverter.IsWriteSupported(builtInType))
         {
             _logger.Warning($"Write not supported for data type {builtInType}");
-            UiThread.Run(() => MessageBox.ErrorQuery("Write", $"Write not supported for data type: {builtInType}", "OK"));
+            UiThread.Run(() => MessageBox.ErrorQuery(Application.Instance, "Write", $"Write not supported for data type: {builtInType}", "OK"));
             return;
         }
 
@@ -729,9 +729,11 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
         if (panel is FrameView frameView && frameView.Border != null)
         {
-            frameView.Border.ColorScheme = isFocused
+            // Terminal.Gui 2.4 adornments have no independent scheme; the border/title render
+            // from the FrameView's own scheme, so apply the focus scheme to the frame itself.
+            frameView.SetScheme(isFocused
                 ? theme.FocusedBorderColorScheme
-                : theme.BorderColorScheme;
+                : theme.BorderColorScheme);
             frameView.SetNeedsLayout();
         }
     }
@@ -743,7 +745,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     private void UpdateStatusBarShortcuts()
     {
         // Remove existing shortcuts (preserve activity spinner and labels)
-        var itemsToRemove = _statusBar.Subviews
+        var itemsToRemove = _statusBar.SubViews
             .OfType<Shortcut>()
             .ToList();
 
@@ -783,7 +785,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     private void OnApplicationKeyDown(object? sender, Key e)
     {
         if (e.Handled) return;
-        if (Application.Top != this) return; // Don't fire during dialogs
+        if (Application.TopRunnable != this) return; // Don't fire during dialogs
 
         if (IsViewNavigationKey(e)) return; // Let Enter/Space/etc reach local handlers
 
@@ -879,7 +881,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     {
         UiThread.Run(() =>
         {
-            MessageBox.ErrorQuery("Connection Error", message, "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Connection Error", message, "OK");
         });
     }
 
@@ -917,21 +919,21 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     private void UpdateConnectionStatusLabelStyle(bool isConnected)
     {
         var theme = ThemeManager.Current;
-        _connectionStatusLabel.ColorScheme = new ColorScheme
+        _connectionStatusLabel.SetScheme(new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(
+            Normal = new Attribute(
                 isConnected ? theme.StatusGood : theme.Accent,
                 theme.Background),
-            Focus = new Terminal.Gui.Attribute(
+            Focus = new Attribute(
                 isConnected ? theme.StatusGood : theme.Accent,
                 theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(
+            HotNormal = new Attribute(
                 isConnected ? theme.StatusGood : theme.Accent,
                 theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(
+            HotFocus = new Attribute(
                 isConnected ? theme.StatusGood : theme.Accent,
                 theme.Background)
-        };
+        });
     }
 
     private void ToggleRecording()
@@ -1001,7 +1003,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     {
         if (_connectionManager.SubscriptionManager == null)
         {
-            MessageBox.Query("Scope", "Connect to a server first.", "OK");
+            MessageBox.Query(Application.Instance, "Scope", "Connect to a server first.", "OK");
             return;
         }
 
@@ -1009,7 +1011,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
         if (selectedNodes.Count == 0)
         {
-            MessageBox.Query("Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored variables.", "OK");
+            MessageBox.Query(Application.Instance, "Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored variables.", "OK");
             return;
         }
 
@@ -1028,7 +1030,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         var subscriptionManager = _connectionManager.SubscriptionManager;
         if (subscriptionManager == null || !subscriptionManager.MonitoredVariables.Any())
         {
-            MessageBox.Query("Record", "No variables to record. Subscribe to variables first.", "OK");
+            MessageBox.Query(Application.Instance, "Record", "No variables to record. Subscribe to variables first.", "OK");
             return;
         }
 
@@ -1036,7 +1038,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         var selectedCount = _monitoredVariablesView.ScopeSelectionCount;
         if (selectedCount == 0)
         {
-            MessageBox.Query("Record",
+            MessageBox.Query(Application.Instance, "Record",
                 "No variables selected for recording.\n\n" +
                 "Use Space to select variables in the Sel column (◉).\n" +
                 "Selected variables will be recorded and shown in Scope.", "OK");
@@ -1061,7 +1063,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
             }
             else
             {
-                MessageBox.ErrorQuery("Recording Error", "Failed to start recording", "OK");
+                MessageBox.ErrorQuery(Application.Instance, "Recording Error", "Failed to start recording", "OK");
             }
         }
     }
@@ -1076,7 +1078,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         StopRecordingStatusUpdates();
         _csvRecordingManager.StopRecording();
         _monitoredVariablesView.UpdateRecordingStatus("", false);
-        MessageBox.Query("Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
+        MessageBox.Query(Application.Instance, "Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
     }
 
     private void StartRecordingStatusUpdates()
@@ -1137,7 +1139,7 @@ Built with:
 © 2026 Square Wave Systems
 License: MIT
 ";
-        MessageBox.Query("About opcilloscope", about, "OK");
+        MessageBox.Query(Application.Instance, "About opcilloscope", about, "OK");
     }
 
     #region Configuration File Handling
@@ -1272,7 +1274,7 @@ License: MIT
                 else
                 {
                     _logger.Error($"Failed to connect to {config.Server.EndpointUrl}");
-                    MessageBox.ErrorQuery("Connection Failed", 
+                    MessageBox.ErrorQuery(Application.Instance, "Connection Failed", 
                         $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection and data have been preserved.", 
                         "OK");
                 }
@@ -1297,7 +1299,7 @@ License: MIT
         catch (Exception ex)
         {
             _logger.Error($"Failed to load configuration: {ex.Message}");
-            MessageBox.ErrorQuery("Error", $"Failed to load configuration:\n{ex.Message}", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to load configuration:\n{ex.Message}", "OK");
         }
         finally
         {
@@ -1342,7 +1344,7 @@ License: MIT
         catch (Exception ex)
         {
             _logger.Error($"Failed to save configuration: {ex.Message}");
-            MessageBox.ErrorQuery("Error", $"Failed to save:\n{ex.Message}", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to save:\n{ex.Message}", "OK");
         }
         finally
         {
@@ -1371,7 +1373,7 @@ License: MIT
     /// <returns>True if the user confirms, false to cancel the operation.</returns>
     private bool ConfirmDiscardChanges()
     {
-        var result = MessageBox.Query(
+        var result = MessageBox.Query(Application.Instance, 
             "Unsaved Changes",
             "You have unsaved changes. Do you want to discard them?",
             "Discard",

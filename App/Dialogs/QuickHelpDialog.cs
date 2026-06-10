@@ -1,7 +1,6 @@
 using Terminal.Gui;
 using Opcilloscope.App.Keybindings;
 using Opcilloscope.App.Themes;
-using Attribute = Terminal.Gui.Attribute;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
 namespace Opcilloscope.App.Dialogs;
@@ -45,7 +44,7 @@ public class QuickHelpDialog : Dialog
         var theme = ThemeManager.Current;
 
         // Apply theme styling
-        ColorScheme = theme.MainColorScheme;
+        SetScheme(theme.MainColorScheme);
         BorderStyle = theme.EmphasizedBorderStyle;
 
         // Create content with keybindings
@@ -60,15 +59,7 @@ public class QuickHelpDialog : Dialog
             ReadOnly = true,
             WordWrap = false,
             Text = content,
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Attribute(theme.Foreground, theme.Background),
-                Focus = new Attribute(theme.Foreground, theme.Background),
-                HotNormal = new Attribute(theme.Foreground, theme.Background),
-                HotFocus = new Attribute(theme.Foreground, theme.Background),
-                Disabled = new Attribute(theme.MutedText, theme.Background)
-            }
-        };
+        }.WithScheme(new Scheme { Normal = new Attribute(theme.Foreground, theme.Background), Focus = new Attribute(theme.Foreground, theme.Background), HotNormal = new Attribute(theme.Foreground, theme.Background), HotFocus = new Attribute(theme.Foreground, theme.Background), Disabled = new Attribute(theme.MutedText, theme.Background) });
 
         // Close on any key
         KeyDown += (_, e) =>
@@ -86,8 +77,7 @@ public class QuickHelpDialog : Dialog
             X = Pos.Center(),
             Y = Pos.AnchorEnd(1),
             IsDefault = true,
-            ColorScheme = theme.ButtonColorScheme
-        };
+        }.WithScheme(theme.ButtonColorScheme);
         closeButton.Accepting += (_, _) => RequestStop();
 
         Add(textView);
