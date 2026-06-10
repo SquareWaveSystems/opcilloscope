@@ -43,6 +43,43 @@ get_latest_version() {
         sed -E 's/.*"([^"]+)".*/\1/'
 }
 
+# Verify the downloaded archive against the SHA256SUMS published with the release.
+# Degrades gracefully (warning only) when SHA256SUMS is unavailable (older releases).
+verify_checksum() {
+    local version="$1" archive_name="$2" archive_path="$3" tmp_dir="$4"
+    local sums_url="https://github.com/${REPO}/releases/download/${version}/SHA256SUMS"
+    local expected actual
+
+    if ! curl -fsSL "$sums_url" -o "${tmp_dir}/SHA256SUMS" 2>/dev/null; then
+        warn "SHA256SUMS not found for ${version} (older release?). Skipping checksum verification."
+        return 0
+    fi
+
+    expected=$(grep " ${archive_name}\$" "${tmp_dir}/SHA256SUMS" | awk '{print $1}')
+    if [ -z "$expected" ]; then
+        warn "No checksum entry for ${archive_name} in SHA256SUMS. Skipping checksum verification."
+        return 0
+    fi
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual=$(sha256sum "$archive_path" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+        actual=$(shasum -a 256 "$archive_path" | awk '{print $1}')
+    else
+        warn "Neither sha256sum nor shasum is available. Skipping checksum verification."
+        return 0
+    fi
+
+    if [ "$actual" != "$expected" ]; then
+        echo ""
+        echo "  Expected: ${expected}"
+        echo "  Actual:   ${actual}"
+        error "Checksum mismatch for ${archive_name}. The download may be corrupted or tampered with. Aborting."
+    fi
+
+    info "Checksum verified (SHA-256)."
+}
+
 # Download and install
 install() {
     local platform version download_url tmp_dir
@@ -67,6 +104,9 @@ install() {
     if ! curl -fsSL "$download_url" -o "${tmp_dir}/opcilloscope.tar.gz"; then
         error "Download failed. Check if the release exists for platform: ${platform}"
     fi
+
+    info "Verifying checksum..."
+    verify_checksum "$version" "opcilloscope-${platform}.tar.gz" "${tmp_dir}/opcilloscope.tar.gz" "$tmp_dir"
 
     info "Extracting..."
     tar -xzf "${tmp_dir}/opcilloscope.tar.gz" -C "${tmp_dir}"
@@ -121,25 +161,6 @@ main() {
     # Check for required commands
     command -v curl >/dev/null 2>&1 || error "curl is required but not installed"
     command -v tar >/dev/null 2>&1 || error "tar is required but not installed"
-
-    # Check for ICU libraries (required at runtime by .NET for globalization)
-    if [ "$(uname -s)" = "Linux" ]; then
-        local icu_found=false
-        if command -v ldconfig >/dev/null 2>&1; then
-            ldconfig -p 2>/dev/null | grep -q libicu && icu_found=true
-        elif compgen -G '/usr/lib/*/libicu*.so*' >/dev/null 2>&1 \
-          || compgen -G '/usr/lib/libicu*.so*' >/dev/null 2>&1 \
-          || compgen -G '/usr/lib64/libicu*.so*' >/dev/null 2>&1; then
-            icu_found=true
-        fi
-        if [ "$icu_found" = false ]; then
-            warn "ICU libraries not found. opcilloscope requires libicu at runtime."
-            echo "  Install with:"
-            echo "    Debian/Ubuntu: sudo apt install libicu72  (or libicu-dev)"
-            echo "    Fedora/RHEL:   sudo dnf install libicu"
-            echo ""
-        fi
-    fi
 
     install
 }

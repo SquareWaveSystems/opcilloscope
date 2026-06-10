@@ -101,25 +101,14 @@ irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/instal
 
 Or grab a binary from [GitHub Releases](https://github.com/SquareWaveSystems/opcilloscope/releases).
 
+> **macOS note:** the binaries are unsigned, so archives downloaded with a browser are
+> quarantined by Gatekeeper. Either use the curl installer above, or clear the
+> quarantine attribute after extracting: `xattr -d com.apple.quarantine <binary>`.
+
 Then run:
 ```bash
 opcilloscope
 ```
-
-<details>
-<summary>Linux dependency: ICU libraries</summary>
-
-opcilloscope requires ICU libraries at runtime for globalization support.
-
-```bash
-# Debian 13 / Ubuntu 24.04+
-sudo apt install libicu72       # or: sudo apt install libicu-dev
-
-# Fedora / RHEL
-sudo dnf install libicu
-```
-
-</details>
 
 <details>
 <summary>Uninstall</summary>

@@ -6,6 +6,10 @@ on:
 
 jobs:
   claude-review:
+    # Skip fork PRs: secrets.CLAUDE_CODE_OAUTH_TOKEN is not available to forks,
+    # so the job would always fail with a red X on external contributions.
+    if: github.event.pull_request.head.repo.fork == false
+
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||
