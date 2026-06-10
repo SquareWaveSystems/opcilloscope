@@ -16,7 +16,6 @@ public static class DefaultKeybindings
         // Navigation
         void SwitchPane();
         void ShowHelp();
-        void ShowQuickHelp();
 
         // Address Space
         void SubscribeSelected();

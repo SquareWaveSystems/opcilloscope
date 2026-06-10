@@ -619,7 +619,11 @@ public class ScopeView : View
             int x = plotLeft + (int)(fraction * (plotWidth - 1));
             // Center the label around x
             int labelX = x - label.Length / 2;
-            labelX = Math.Clamp(labelX, plotLeft, plotLeft + plotWidth - label.Length);
+            int maxLabelX = plotLeft + plotWidth - label.Length;
+            if (maxLabelX < plotLeft)
+                continue; // Label wider than the plot area (tiny terminal) - skip it
+
+            labelX = Math.Clamp(labelX, plotLeft, maxLabelX);
 
             Move(labelX, labelY);
             Driver!.AddStr(label);

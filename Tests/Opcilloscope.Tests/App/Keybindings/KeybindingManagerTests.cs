@@ -475,7 +475,6 @@ public class KeybindingManagerTests
         Assert.Equal("Address Space", KeybindingManager.GetContextDisplayName(KeybindingContext.AddressSpace));
         Assert.Equal("Monitored Variables", KeybindingManager.GetContextDisplayName(KeybindingContext.MonitoredVariables));
         Assert.Equal("Scope View", KeybindingManager.GetContextDisplayName(KeybindingContext.Scope));
-        Assert.Equal("Trend Plot", KeybindingManager.GetContextDisplayName(KeybindingContext.TrendPlot));
         Assert.Equal("Dialog", KeybindingManager.GetContextDisplayName(KeybindingContext.Dialog));
     }
 

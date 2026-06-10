@@ -57,33 +57,42 @@ class Program
                 }
             }
 
+            // Validate the config file path before initializing the terminal, so the error
+            // message is printed to the regular screen rather than being lost in the
+            // alternate screen buffer (same pattern as --help above).
+            if (!string.IsNullOrEmpty(configPath) && !File.Exists(configPath))
+            {
+                Console.Error.WriteLine($"Error: Configuration file not found: {configPath}");
+                return 1;
+            }
+
 #pragma warning disable IL2026 // Terminal.Gui Application.Init uses reflection and is not AOT-compatible
             Application.Init();
 #pragma warning restore IL2026
             initialized = true;
 
             var mainWindow = new MainWindow();
-
-            // Load config file if specified (takes precedence over URL)
-            if (!string.IsNullOrEmpty(configPath))
+            try
             {
-                if (!File.Exists(configPath))
+                // Load config file if specified (takes precedence over URL)
+                if (!string.IsNullOrEmpty(configPath))
                 {
-                    Console.Error.WriteLine($"Error: Configuration file not found: {configPath}");
-                    return 1;
+                    mainWindow.LoadConfigFromCommandLine(configPath);
                 }
-                mainWindow.LoadConfigFromCommandLine(configPath);
-            }
-            // Otherwise, if auto-connect URL provided, show warning (not yet implemented)
-            else if (!string.IsNullOrEmpty(autoConnectUrl))
-            {
-                Console.Error.WriteLine(
-                    $"Warning: Auto-connect via command-line URL ('{autoConnectUrl}') is not currently implemented. " +
-                    "Please use a configuration file with an endpoint URL instead.");
-            }
+                // Otherwise, if auto-connect URL provided, show warning (not yet implemented)
+                else if (!string.IsNullOrEmpty(autoConnectUrl))
+                {
+                    Console.Error.WriteLine(
+                        $"Warning: Auto-connect via command-line URL ('{autoConnectUrl}') is not currently implemented. " +
+                        "Please use a configuration file with an endpoint URL instead.");
+                }
 
-            Application.Run(mainWindow);
-            mainWindow.Dispose();
+                Application.Run(mainWindow);
+            }
+            finally
+            {
+                mainWindow.Dispose();
+            }
         }
         catch (Exception ex)
         {

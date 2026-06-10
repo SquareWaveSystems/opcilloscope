@@ -86,8 +86,7 @@ Opcilloscope/
 │   │   ├── ScopeDialog.cs          # Multi-signal scope dialog (up to 5 signals)
 │   │   ├── SaveConfigDialog.cs     # Save configuration file dialog
 │   │   ├── SaveRecordingDialog.cs  # Save CSV recording dialog
-│   │   ├── HelpDialog.cs           # Full help/documentation dialog
-│   │   └── QuickHelpDialog.cs      # Quick keyboard shortcuts reference
+│   │   └── HelpDialog.cs           # Full help/documentation dialog
 │   ├── Keybindings/
 │   │   ├── Keybinding.cs           # Keybinding model (key, action, context)
 │   │   ├── KeybindingContext.cs    # Context enum (Global, AddressSpace, etc.)

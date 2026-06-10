@@ -120,6 +120,11 @@ public class NodeDetailsView : FrameView
 
         Application.Invoke(() =>
         {
+            // Guard against stale responses: rapid selection changes can complete
+            // out of order, so only apply this result if it is still the current node.
+            if (!Equals(_currentNodeId, nodeId))
+                return;
+
             if (attrs == null)
             {
                 _detailsLabel.Text = $"NodeId: {nodeId}\nFailed to read attributes";
@@ -165,14 +170,20 @@ public class NodeDetailsView : FrameView
             return;
         }
 
-        _currentNodeId = node.NodeId;
-        var attrs = await _nodeBrowser.GetNodeAttributesAsync(node.NodeId);
+        var nodeId = node.NodeId;
+        _currentNodeId = nodeId;
+        var attrs = await _nodeBrowser.GetNodeAttributesAsync(nodeId);
 
         Application.Invoke(() =>
         {
+            // Guard against stale responses: rapid selection changes can complete
+            // out of order, so only apply this result if it is still the current node.
+            if (!Equals(_currentNodeId, nodeId))
+                return;
+
             if (attrs == null)
             {
-                _detailsLabel.Text = $"NodeId: {node.NodeId}\nFailed to read attributes";
+                _detailsLabel.Text = $"NodeId: {nodeId}\nFailed to read attributes";
                 _copyButton.Enabled = false;
                 SetNormalColor();
                 return;
