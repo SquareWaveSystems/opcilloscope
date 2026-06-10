@@ -111,10 +111,13 @@ public class LogView : FrameView
                 _displayedEntries.RemoveAt(0);
             }
 
-            // Auto-scroll to bottom
+            // Auto-scroll to bottom. Terminal.Gui 2.4 removed ListView.TopItem; moving the
+            // selection to the newest entry and asking the list to reveal it keeps the log
+            // following new lines.
             if (_displayedEntries.Count > 0)
             {
                 _listView.SelectedItem = _displayedEntries.Count - 1;
+                _listView.EnsureSelectedItemVisible();
             }
         });
     }
