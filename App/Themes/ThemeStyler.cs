@@ -18,17 +18,14 @@ public static class ThemeStyler
         theme ??= ThemeManager.Current;
 
         // Apply color scheme
-        frame.ColorScheme = theme.MainColorScheme;
+        frame.SetScheme(theme.MainColorScheme);
 
         // Note: BorderStyle is NOT set here - callers should set it explicitly
         // to control emphasized vs secondary border styling
 
-        // Configure border colors - use BorderColorScheme for consistent grey borders
-        // that don't change to amber/yellow when focused (avoids terminal inconsistencies)
-        if (frame.Border != null)
-        {
-            frame.Border.ColorScheme = theme.BorderColorScheme;
-        }
+        // NOTE: Terminal.Gui 2.4 made adornments (Border/Margin/Padding) non-View objects
+        // without their own Scheme, so borders now render with the view's scheme. The former
+        // per-border grey/focus colouring (BorderColorScheme) no longer applies here.
 
         // Apply margin and padding from theme
         if (frame.Margin != null)
@@ -49,13 +46,8 @@ public static class ThemeStyler
     {
         theme ??= ThemeManager.Current;
 
-        dialog.ColorScheme = theme.DialogColorScheme;
+        dialog.SetScheme(theme.DialogColorScheme);
         dialog.BorderStyle = theme.BorderLineStyle;
-
-        if (dialog.Border != null)
-        {
-            dialog.Border.ColorScheme = theme.BorderColorScheme;
-        }
     }
 
     /// <summary>
@@ -64,22 +56,22 @@ public static class ThemeStyler
     public static void ApplyToMenuBar(MenuBar menuBar, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
-        menuBar.ColorScheme = theme.MenuColorScheme;
+        menuBar.SetScheme(theme.MenuColorScheme);
     }
 
     /// <summary>
     /// Creates the accent-colored scheme used to highlight a dialog's default button.
     /// </summary>
-    public static ColorScheme CreateAccentButtonScheme(AppTheme? theme = null)
+    public static Scheme CreateAccentButtonScheme(AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
-        return new ColorScheme
+        return new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+            Normal = new Attribute(theme.Accent, theme.Background),
+            Focus = new Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
         };
     }
 
@@ -87,16 +79,16 @@ public static class ThemeStyler
     /// Creates the flat menu/status bar scheme. Unlike MenuColorScheme this keeps the
     /// theme background on focus, avoiding inverted highlight flashes on the bars.
     /// </summary>
-    public static ColorScheme CreateFlatBarScheme(AppTheme? theme = null)
+    public static Scheme CreateFlatBarScheme(AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
-        return new ColorScheme
+        return new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
+            Normal = new Attribute(theme.Foreground, theme.Background),
+            Focus = new Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
         };
     }
 }

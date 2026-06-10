@@ -1,5 +1,4 @@
 using Terminal.Gui;
-using Attribute = Terminal.Gui.Attribute;
 
 namespace Opcilloscope.App.Themes;
 
@@ -124,16 +123,16 @@ public abstract class AppTheme
     public virtual bool EnableGlow => true;
 
     // === Cached Color Schemes for Terminal.Gui Widgets ===
-    private ColorScheme? _mainColorScheme;
-    private ColorScheme? _dialogColorScheme;
-    private ColorScheme? _menuColorScheme;
-    private ColorScheme? _buttonColorScheme;
-    private ColorScheme? _frameColorScheme;
-    private ColorScheme? _borderColorScheme;
-    private ColorScheme? _focusedBorderColorScheme;
-    private ColorScheme? _highlightTitleBorderColorScheme;
+    private Scheme? _mainColorScheme;
+    private Scheme? _dialogColorScheme;
+    private Scheme? _menuColorScheme;
+    private Scheme? _buttonColorScheme;
+    private Scheme? _frameColorScheme;
+    private Scheme? _borderColorScheme;
+    private Scheme? _focusedBorderColorScheme;
+    private Scheme? _highlightTitleBorderColorScheme;
 
-    public virtual ColorScheme MainColorScheme => _mainColorScheme ??= new()
+    public virtual Scheme MainColorScheme => _mainColorScheme ??= new()
     {
         Normal = NormalAttr,
         Focus = BrightAttr,
@@ -142,7 +141,7 @@ public abstract class AppTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public virtual ColorScheme DialogColorScheme => _dialogColorScheme ??= new()
+    public virtual Scheme DialogColorScheme => _dialogColorScheme ??= new()
     {
         Normal = DimAttr,
         Focus = BrightAttr,
@@ -151,7 +150,7 @@ public abstract class AppTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public virtual ColorScheme MenuColorScheme => _menuColorScheme ??= new()
+    public virtual Scheme MenuColorScheme => _menuColorScheme ??= new()
     {
         Normal = NormalAttr,
         Focus = new Attribute(Background, Foreground),
@@ -160,7 +159,7 @@ public abstract class AppTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public virtual ColorScheme ButtonColorScheme => _buttonColorScheme ??= new()
+    public virtual Scheme ButtonColorScheme => _buttonColorScheme ??= new()
     {
         Normal = BorderAttr,
         Focus = BrightAttr,
@@ -169,7 +168,7 @@ public abstract class AppTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public virtual ColorScheme FrameColorScheme => _frameColorScheme ??= new()
+    public virtual Scheme FrameColorScheme => _frameColorScheme ??= new()
     {
         Normal = BorderAttr,
         Focus = BrightAttr,
@@ -182,7 +181,7 @@ public abstract class AppTheme
     /// Color scheme for structural borders - uses grey for border lines,
     /// but accent color for titles (HotNormal is used for title text).
     /// </summary>
-    public virtual ColorScheme BorderColorScheme => _borderColorScheme ??= new()
+    public virtual Scheme BorderColorScheme => _borderColorScheme ??= new()
     {
         Normal = BorderAttr,
         Focus = BorderAttr,
@@ -195,7 +194,7 @@ public abstract class AppTheme
     /// Color scheme for the main window border - uses bright accent for the title
     /// so "opcilloscope" stands out prominently from sub-panel titles.
     /// </summary>
-    public virtual ColorScheme HighlightTitleBorderColorScheme => _highlightTitleBorderColorScheme ??= new()
+    public virtual Scheme HighlightTitleBorderColorScheme => _highlightTitleBorderColorScheme ??= new()
     {
         Normal = BorderAttr,
         Focus = BorderAttr,
@@ -208,7 +207,7 @@ public abstract class AppTheme
     /// Color scheme for focused view borders - uses accent color to highlight
     /// which panel currently has keyboard focus.
     /// </summary>
-    public virtual ColorScheme FocusedBorderColorScheme => _focusedBorderColorScheme ??= new()
+    public virtual Scheme FocusedBorderColorScheme => _focusedBorderColorScheme ??= new()
     {
         Normal = AccentAttr,
         Focus = AccentAttr,

@@ -36,10 +36,10 @@ public class NodeDetailsView : FrameView
             X = Pos.AnchorEnd(8),
             Y = 0,
             Height = 1,
-            ShadowStyle = ShadowStyle.None,
-            ColorScheme = theme.ButtonColorScheme,
+            ShadowStyle = ShadowStyles.None,
             Enabled = false
         };
+        _copyButton.SetScheme(theme.ButtonColorScheme);
         _copyButton.Accepting += OnCopyClicked;
 
         _detailsLabel = new Label
@@ -50,11 +50,7 @@ public class NodeDetailsView : FrameView
             Height = Dim.Fill(),
             Text = "",
             TextAlignment = Alignment.Start,
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-            }
-        };
+        }.WithScheme(new Scheme { Normal = new Attribute(theme.MutedText, theme.Background) });
 
         // Subscribe to theme changes
         ThemeManager.ThemeChanged += OnThemeChanged;
@@ -68,23 +64,23 @@ public class NodeDetailsView : FrameView
         Application.Invoke(() =>
         {
             // Update copy button styling
-            _copyButton.ColorScheme = theme.ButtonColorScheme;
+            _copyButton.SetScheme(theme.ButtonColorScheme);
 
             // When showing empty state, keep muted color
             if (_detailsLabel.Text == "" ||
                 _detailsLabel.Text == "Not connected")
             {
-                _detailsLabel.ColorScheme = new ColorScheme
+                _detailsLabel.SetScheme(new Scheme
                 {
-                    Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-                };
+                    Normal = new Attribute(theme.MutedText, theme.Background)
+                });
             }
             else
             {
-                _detailsLabel.ColorScheme = new ColorScheme
+                _detailsLabel.SetScheme(new Scheme
                 {
-                    Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background)
-                };
+                    Normal = new Attribute(theme.Foreground, theme.Background)
+                });
             }
             SetNeedsLayout();
         });
@@ -225,19 +221,19 @@ public class NodeDetailsView : FrameView
     private void SetMutedColor()
     {
         var theme = ThemeManager.Current;
-        _detailsLabel.ColorScheme = new ColorScheme
+        _detailsLabel.SetScheme(new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
+            Normal = new Attribute(theme.MutedText, theme.Background)
+        });
     }
 
     private void SetNormalColor()
     {
         var theme = ThemeManager.Current;
-        _detailsLabel.ColorScheme = new ColorScheme
+        _detailsLabel.SetScheme(new Scheme
         {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background)
-        };
+            Normal = new Attribute(theme.Foreground, theme.Background)
+        });
     }
 
     private static string FormatValueRank(int? valueRank)

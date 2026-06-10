@@ -3,7 +3,6 @@ using Opcilloscope.OpcUa.Models;
 using Opcilloscope.App.Themes;
 using System.Collections.Concurrent;
 using System.Data;
-using Attribute = Terminal.Gui.Attribute;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
 namespace Opcilloscope.App.Views;
@@ -58,9 +57,10 @@ public class MonitoredVariablesView : FrameView
     {
         get
         {
-            if (_tableView.SelectedRow >= 0 && _tableView.SelectedRow < _dataTable.Rows.Count)
+            var selectedRow = _tableView.Value?.SelectedCell.Y ?? -1;
+            if (selectedRow >= 0 && selectedRow < _dataTable.Rows.Count)
             {
-                var row = _dataTable.Rows[_tableView.SelectedRow];
+                var row = _dataTable.Rows[selectedRow];
                 return row["_VariableRef"] as MonitoredNode;
             }
             return null;
@@ -127,20 +127,12 @@ public class MonitoredVariablesView : FrameView
             Height = Dim.Fill(),
             Table = new DataTableSource(_dataTable),
             FullRowSelect = true,
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Attribute(theme.Foreground, theme.Background),
-                Focus = new Attribute(theme.ForegroundBright, theme.Background),
-                HotNormal = new Attribute(theme.Accent, theme.Background),
-                HotFocus = new Attribute(theme.AccentBright, theme.Background),
-                Disabled = new Attribute(theme.MutedText, theme.Background)
-            }
-        };
+        }.WithScheme(new Scheme { Normal = new Attribute(theme.Foreground, theme.Background), Focus = new Attribute(theme.ForegroundBright, theme.Background), HotNormal = new Attribute(theme.Accent, theme.Background), HotFocus = new Attribute(theme.AccentBright, theme.Background), Disabled = new Attribute(theme.MutedText, theme.Background) });
 
         // Configure table style for cleaner look
         _tableView.Style.ShowHorizontalHeaderOverline = false;
         _tableView.Style.ShowHorizontalHeaderUnderline = true;
-        _tableView.Style.ShowHorizontalBottomline = false;
+        _tableView.Style.ShowHorizontalBottomLine = false;
         _tableView.Style.AlwaysShowHeaders = true;
         _tableView.Style.ShowVerticalCellLines = false;
         _tableView.Style.ShowVerticalHeaderLines = false;
@@ -154,8 +146,8 @@ public class MonitoredVariablesView : FrameView
         // Terminal.Gui v2 TableView doesn't support per-row coloring
 
         _tableView.KeyDown += HandleKeyDown;
-        _tableView.MouseClick += HandleMouseClick;
-        _tableView.SelectedCellChanged += OnSelectedCellChanged;
+        _tableView.MouseEvent += HandleMouseClick;
+        _tableView.ValueChanged += OnSelectedCellChanged;
 
         // Create empty state label
         _emptyStateLabel = new Label
@@ -163,15 +155,7 @@ public class MonitoredVariablesView : FrameView
             X = Pos.Center(),
             Y = Pos.Center(),
             Text = "",
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Attribute(theme.MutedText, theme.Background),
-                Focus = new Attribute(theme.MutedText, theme.Background),
-                HotNormal = new Attribute(theme.MutedText, theme.Background),
-                HotFocus = new Attribute(theme.MutedText, theme.Background),
-                Disabled = new Attribute(theme.MutedText, theme.Background)
-            }
-        };
+        }.WithScheme(new Scheme { Normal = new Attribute(theme.MutedText, theme.Background), Focus = new Attribute(theme.MutedText, theme.Background), HotNormal = new Attribute(theme.MutedText, theme.Background), HotFocus = new Attribute(theme.MutedText, theme.Background), Disabled = new Attribute(theme.MutedText, theme.Background) });
 
         // Recording indicator (left of record button in title bar area)
         _recordingIndicatorLabel = new Label
@@ -180,15 +164,7 @@ public class MonitoredVariablesView : FrameView
             Y = 0,
             Text = "",
             Visible = false,
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Attribute(theme.MutedText, theme.Background),
-                Focus = new Attribute(theme.MutedText, theme.Background),
-                HotNormal = new Attribute(theme.MutedText, theme.Background),
-                HotFocus = new Attribute(theme.MutedText, theme.Background),
-                Disabled = new Attribute(theme.MutedText, theme.Background)
-            }
-        };
+        }.WithScheme(new Scheme { Normal = new Attribute(theme.MutedText, theme.Background), Focus = new Attribute(theme.MutedText, theme.Background), HotNormal = new Attribute(theme.MutedText, theme.Background), HotFocus = new Attribute(theme.MutedText, theme.Background), Disabled = new Attribute(theme.MutedText, theme.Background) });
 
         // Recording toggle button (right-aligned, matching LogView Copy button)
         _recordButton = new Button
@@ -198,9 +174,8 @@ public class MonitoredVariablesView : FrameView
             Y = 0,
             Width = 10,
             Height = 1,
-            ShadowStyle = ShadowStyle.None,
-            ColorScheme = theme.ButtonColorScheme
-        };
+            ShadowStyle = ShadowStyles.None,
+        }.WithScheme(theme.ButtonColorScheme);
         _recordButton.Accepting += OnRecordButtonClicked;
 
         // Subscribe to theme changes
@@ -230,27 +205,27 @@ public class MonitoredVariablesView : FrameView
             BorderStyle = theme.EmphasizedBorderStyle;
 
             // Update empty state label color
-            _emptyStateLabel.ColorScheme = new ColorScheme
+            _emptyStateLabel.SetScheme(new Scheme
             {
                 Normal = new Attribute(theme.MutedText, theme.Background),
                 Focus = new Attribute(theme.MutedText, theme.Background),
                 HotNormal = new Attribute(theme.MutedText, theme.Background),
                 HotFocus = new Attribute(theme.MutedText, theme.Background),
                 Disabled = new Attribute(theme.MutedText, theme.Background)
-            };
+            });
 
             // Update table view colors
-            _tableView.ColorScheme = new ColorScheme
+            _tableView.SetScheme(new Scheme
             {
                 Normal = new Attribute(theme.Foreground, theme.Background),
                 Focus = new Attribute(theme.ForegroundBright, theme.Background),
                 HotNormal = new Attribute(theme.Accent, theme.Background),
                 HotFocus = new Attribute(theme.AccentBright, theme.Background),
                 Disabled = new Attribute(theme.MutedText, theme.Background)
-            };
+            });
 
             // Update record button colors
-            _recordButton.ColorScheme = theme.ButtonColorScheme;
+            _recordButton.SetScheme(theme.ButtonColorScheme);
 
             SetNeedsLayout();
         });
@@ -443,11 +418,12 @@ public class MonitoredVariablesView : FrameView
         RecordToggleRequested?.Invoke();
     }
 
-    private void OnSelectedCellChanged(object? sender, SelectedCellChangedEventArgs e)
+    private void OnSelectedCellChanged(object? sender, ValueChangedEventArgs<TableSelection?> e)
     {
-        if (e.NewRow >= 0 && e.NewRow < _dataTable.Rows.Count)
+        var newRow = e.NewValue?.SelectedCell.Y ?? -1;
+        if (newRow >= 0 && newRow < _dataTable.Rows.Count)
         {
-            var row = _dataTable.Rows[e.NewRow];
+            var row = _dataTable.Rows[newRow];
             if (row["_VariableRef"] is MonitoredNode node)
             {
                 SelectedVariableChanged?.Invoke(node);
@@ -477,10 +453,14 @@ public class MonitoredVariablesView : FrameView
         }
     }
 
-    private void HandleMouseClick(object? sender, MouseEventArgs e)
+    private void HandleMouseClick(object? sender, Mouse e)
     {
+        // Only react to a discrete click, not move/press/release events
+        if (!e.IsSingleClicked || e.Position is not { } pos)
+            return;
+
         // Convert screen position to table cell
-        _tableView.ScreenToCell(e.Position.X, e.Position.Y, out int? columnIndex, out int? rowIndex);
+        _tableView.ScreenToCell(pos.X, pos.Y, out int? columnIndex, out int? rowIndex);
 
         // Only toggle selection when clicking on the "Sel" column (column 0)
         if (columnIndex.HasValue && columnIndex.Value == 0 &&
@@ -511,14 +491,14 @@ public class MonitoredVariablesView : FrameView
                 // Show feedback that max is reached
                 var theme = ThemeManager.Current;
                 _selectionFeedback.Text = $"Max {MaxScopeSelections} variables for Scope/Recording";
-                _selectionFeedback.ColorScheme = new ColorScheme
+                _selectionFeedback.SetScheme(new Scheme
                 {
                     Normal = new Attribute(theme.Warning, theme.Background),
                     Focus = new Attribute(theme.Warning, theme.Background),
                     HotNormal = new Attribute(theme.Warning, theme.Background),
                     HotFocus = new Attribute(theme.Warning, theme.Background),
                     Disabled = new Attribute(theme.Warning, theme.Background)
-                };
+                });
                 _selectionFeedback.Visible = true;
 
                 // Hide after a delay
@@ -561,14 +541,14 @@ public class MonitoredVariablesView : FrameView
 
         _recordingIndicatorLabel.Text = text;
         _recordingIndicatorLabel.Visible = !string.IsNullOrEmpty(text);
-        _recordingIndicatorLabel.ColorScheme = new ColorScheme
+        _recordingIndicatorLabel.SetScheme(new Scheme
         {
             Normal = new Attribute(color, theme.Background),
             Focus = new Attribute(color, theme.Background),
             HotNormal = new Attribute(color, theme.Background),
             HotFocus = new Attribute(color, theme.Background),
             Disabled = new Attribute(color, theme.Background)
-        };
+        });
 
         SetNeedsLayout();
     }
@@ -591,8 +571,8 @@ public class MonitoredVariablesView : FrameView
 
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _recordButton.Accepting -= OnRecordButtonClicked;
-            _tableView.MouseClick -= HandleMouseClick;
-            _tableView.SelectedCellChanged -= OnSelectedCellChanged;
+            _tableView.MouseEvent -= HandleMouseClick;
+            _tableView.ValueChanged -= OnSelectedCellChanged;
             _tableView.KeyDown -= HandleKeyDown;
         }
         base.Dispose(disposing);
