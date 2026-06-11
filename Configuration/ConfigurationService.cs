@@ -64,6 +64,18 @@ public class ConfigurationService
     private const long MaxConfigFileSizeBytes = 1024 * 1024;
 
     /// <summary>
+    /// The configuration file format version written by this build.
+    /// </summary>
+    private const string CurrentConfigVersion = "1.0";
+
+    /// <summary>
+    /// The major component of <see cref="CurrentConfigVersion"/>, derived from it
+    /// so the two cannot drift apart when the version is bumped.
+    /// </summary>
+    private static readonly int CurrentConfigMajorVersion =
+        int.Parse(CurrentConfigVersion.Split('.')[0]);
+
+    /// <summary>
     /// Loads a configuration from the specified file path.
     /// </summary>
     /// <param name="filePath">Path to the configuration file.</param>
@@ -83,6 +95,10 @@ public class ConfigurationService
         var config = JsonSerializer.Deserialize(json, OpcilloscopeJsonContext.Default.OpcilloscopeConfig)
             ?? throw new InvalidDataException("Invalid configuration file");
 
+        // Normalize explicit JSON nulls ("settings": null, etc.) so they behave
+        // like absent sections instead of crashing later code with null references.
+        NormalizeConfig(config);
+
         // Handle version migrations if needed
         config = MigrateIfNeeded(config);
 
@@ -98,12 +114,74 @@ public class ConfigurationService
     }
 
     /// <summary>
+    /// Replaces sections deserialized as explicit JSON nulls with their default
+    /// instances, matching the behavior of absent fields. System.Text.Json assigns
+    /// null over the property initializers when the file contains e.g. "settings": null.
+    /// </summary>
+    /// <param name="config">The configuration to normalize.</param>
+    private static void NormalizeConfig(OpcilloscopeConfig config)
+    {
+        if (string.IsNullOrEmpty(config.Version))
+        {
+            config.Version = CurrentConfigVersion;
+        }
+
+        if (config.Server is null)
+        {
+            config.Server = new ServerConfig();
+        }
+
+        if (config.Server.Authentication is null)
+        {
+            config.Server.Authentication = new AuthenticationConfig();
+        }
+
+        if (config.Settings is null)
+        {
+            config.Settings = new SubscriptionSettings();
+        }
+
+        if (config.MonitoredNodes is null)
+        {
+            config.MonitoredNodes = new List<MonitoredNodeConfig>();
+        }
+
+        if (config.Metadata is null)
+        {
+            config.Metadata = new ConfigMetadata();
+        }
+    }
+
+    /// <summary>
     /// Validates a configuration object for common issues.
     /// </summary>
     /// <param name="config">The configuration to validate.</param>
     /// <exception cref="InvalidDataException">Thrown if validation fails.</exception>
     private void ValidateConfiguration(OpcilloscopeConfig config)
     {
+        // Backstop null checks with meaningful messages; LoadAsync normalizes
+        // explicit JSON nulls before validation, but callers constructing
+        // configurations programmatically may still pass null sections.
+        if (config.Server is null)
+        {
+            throw new InvalidDataException("Configuration is missing the 'server' section.");
+        }
+
+        if (config.Settings is null)
+        {
+            throw new InvalidDataException("Configuration is missing the 'settings' section.");
+        }
+
+        if (config.MonitoredNodes is null)
+        {
+            throw new InvalidDataException("Configuration is missing the 'monitoredNodes' section.");
+        }
+
+        if (config.Metadata is null)
+        {
+            throw new InvalidDataException("Configuration is missing the 'metadata' section.");
+        }
+
         // Validate publishing interval
         if (config.Settings.PublishingIntervalMs < 0)
         {
@@ -204,16 +282,39 @@ public class ConfigurationService
             settings.QueueSize = sourceSettings.QueueSize;
         }
 
+        var monitoredNodes = monitoredVariables.Select(m => new MonitoredNodeConfig
+        {
+            NodeId = m.NodeId.ToString(),
+            DisplayName = m.DisplayName,
+            Enabled = true
+        }).ToList();
+
+        // Preserve disabled entries from the loaded configuration so a load/save
+        // round-trip does not silently delete them (only enabled nodes are
+        // subscribed on load, so they never appear in the live list). Entries the
+        // user actively unsubscribed were enabled in the loaded config and are
+        // intentionally dropped.
+        if (_loadedConfig?.MonitoredNodes is not null)
+        {
+            var liveNodeIds = monitoredNodes
+                .Select(n => n.NodeId)
+                .ToHashSet(StringComparer.Ordinal);
+
+            monitoredNodes.AddRange(_loadedConfig.MonitoredNodes
+                .Where(n => !n.Enabled && !liveNodeIds.Contains(n.NodeId))
+                .Select(n => new MonitoredNodeConfig
+                {
+                    NodeId = n.NodeId,
+                    DisplayName = n.DisplayName,
+                    Enabled = false
+                }));
+        }
+
         return new OpcilloscopeConfig
         {
             Server = server,
             Settings = settings,
-            MonitoredNodes = monitoredVariables.Select(m => new MonitoredNodeConfig
-            {
-                NodeId = m.NodeId.ToString(),
-                DisplayName = m.DisplayName,
-                Enabled = true
-            }).ToList(),
+            MonitoredNodes = monitoredNodes,
             Metadata = existingMetadata ?? new ConfigMetadata
             {
                 CreatedAt = DateTime.UtcNow,
@@ -248,8 +349,25 @@ public class ConfigurationService
     /// <summary>
     /// Handles version migrations for configuration files.
     /// </summary>
+    /// <exception cref="InvalidDataException">
+    /// Thrown if the configuration was created by a newer major version of opcilloscope.
+    /// </exception>
     private OpcilloscopeConfig MigrateIfNeeded(OpcilloscopeConfig config)
     {
+        // Reject files from a newer major version: unknown fields are dropped on
+        // deserialization, so loading and re-saving would silently destroy data.
+        // Null, empty, or unparseable versions are treated as the current version.
+        var version = config.Version;
+        if (!string.IsNullOrWhiteSpace(version)
+            && int.TryParse(version.Split('.')[0], out var major)
+            && major > CurrentConfigMajorVersion)
+        {
+            throw new InvalidDataException(
+                $"Configuration file version '{version}' was created by a newer version of opcilloscope. " +
+                $"This build supports configuration version {CurrentConfigVersion}. " +
+                "Please upgrade opcilloscope to open this file.");
+        }
+
         // Future: handle "1.0" -> "1.1" migrations, etc.
         // For now, just return the config as-is
         return config;
