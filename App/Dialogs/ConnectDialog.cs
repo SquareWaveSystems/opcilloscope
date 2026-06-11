@@ -30,8 +30,10 @@ public class ConnectDialog : Dialog
         _authTypeRadio.Value == 1 ? AuthenticationType.UserName : AuthenticationType.Anonymous;
     public string? Username => SelectedAuthType == AuthenticationType.UserName
         ? _usernameField.Text?.Trim() : null;
+    // An untouched password box is "no password" (null), not an empty-string password;
+    // downstream the two are sent identically (Password ?? string.Empty).
     public string? Password => SelectedAuthType == AuthenticationType.UserName
-        ? _passwordField.Text : null;
+        && !string.IsNullOrEmpty(_passwordField.Text) ? _passwordField.Text : null;
 
     public ConnectDialog(
         string? initialEndpoint = null,

@@ -228,6 +228,8 @@ public class AddressSpaceView : FrameView
     {
         // Terminal.Gui 2.4 replaced TreeView.ObjectActivated (which carried the object)
         // with the generic Activated command event; read the current selection instead.
+        // Safe from activate/select races: Activated is raised synchronously on the UI
+        // thread by the command that acted on the selection, so it still matches.
         var activated = _treeView.SelectedObject;
         if (activated != null && activated.NodeClass == Opc.Ua.NodeClass.Variable)
         {

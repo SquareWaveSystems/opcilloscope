@@ -127,7 +127,14 @@ public class MonitoredVariablesView : FrameView
             Height = Dim.Fill(),
             Table = new DataTableSource(_dataTable),
             FullRowSelect = true,
-        }.WithScheme(new Scheme { Normal = new Attribute(theme.Foreground, theme.Background), Focus = new Attribute(theme.ForegroundBright, theme.Background), HotNormal = new Attribute(theme.Accent, theme.Background), HotFocus = new Attribute(theme.AccentBright, theme.Background), Disabled = new Attribute(theme.MutedText, theme.Background) });
+        }.WithScheme(new Scheme
+        {
+            Normal = new Attribute(theme.Foreground, theme.Background),
+            Focus = new Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Attribute(theme.Accent, theme.Background),
+            HotFocus = new Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        });
 
         // Configure table style for cleaner look
         _tableView.Style.ShowHorizontalHeaderOverline = false;
@@ -155,7 +162,14 @@ public class MonitoredVariablesView : FrameView
             X = Pos.Center(),
             Y = Pos.Center(),
             Text = "",
-        }.WithScheme(new Scheme { Normal = new Attribute(theme.MutedText, theme.Background), Focus = new Attribute(theme.MutedText, theme.Background), HotNormal = new Attribute(theme.MutedText, theme.Background), HotFocus = new Attribute(theme.MutedText, theme.Background), Disabled = new Attribute(theme.MutedText, theme.Background) });
+        }.WithScheme(new Scheme
+        {
+            Normal = new Attribute(theme.MutedText, theme.Background),
+            Focus = new Attribute(theme.MutedText, theme.Background),
+            HotNormal = new Attribute(theme.MutedText, theme.Background),
+            HotFocus = new Attribute(theme.MutedText, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        });
 
         // Recording indicator (left of record button in title bar area)
         _recordingIndicatorLabel = new Label
@@ -164,7 +178,14 @@ public class MonitoredVariablesView : FrameView
             Y = 0,
             Text = "",
             Visible = false,
-        }.WithScheme(new Scheme { Normal = new Attribute(theme.MutedText, theme.Background), Focus = new Attribute(theme.MutedText, theme.Background), HotNormal = new Attribute(theme.MutedText, theme.Background), HotFocus = new Attribute(theme.MutedText, theme.Background), Disabled = new Attribute(theme.MutedText, theme.Background) });
+        }.WithScheme(new Scheme
+        {
+            Normal = new Attribute(theme.MutedText, theme.Background),
+            Focus = new Attribute(theme.MutedText, theme.Background),
+            HotNormal = new Attribute(theme.MutedText, theme.Background),
+            HotFocus = new Attribute(theme.MutedText, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        });
 
         // Recording toggle button (right-aligned, matching LogView Copy button)
         _recordButton = new Button

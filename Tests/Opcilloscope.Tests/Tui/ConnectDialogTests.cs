@@ -14,7 +14,7 @@ public class ConnectDialogTests
     [Fact]
     public void EndpointUrl_AlwaysCarriesProtocolPrefix()
     {
-        var dialog = new ConnectDialog(initialEndpoint: "localhost:4840");
+        using var dialog = new ConnectDialog(initialEndpoint: "localhost:4840");
 
         Assert.Equal("opc.tcp://localhost:4840", dialog.EndpointUrl);
     }
@@ -23,7 +23,7 @@ public class ConnectDialogTests
     public void EndpointUrl_StripsAPastedProtocolPrefix()
     {
         // A pasted endpoint that already contains the scheme must not be double-prefixed.
-        var dialog = new ConnectDialog(initialEndpoint: "opc.tcp://server:4840");
+        using var dialog = new ConnectDialog(initialEndpoint: "opc.tcp://server:4840");
 
         Assert.Equal("opc.tcp://server:4840", dialog.EndpointUrl);
     }
@@ -31,7 +31,7 @@ public class ConnectDialogTests
     [Fact]
     public void PublishingInterval_IsTakenFromConstructor()
     {
-        var dialog = new ConnectDialog(initialEndpoint: "x:1", publishingInterval: 750);
+        using var dialog = new ConnectDialog(initialEndpoint: "x:1", publishingInterval: 750);
 
         Assert.Equal(750, dialog.PublishingInterval);
     }
@@ -39,7 +39,7 @@ public class ConnectDialogTests
     [Fact]
     public void Anonymous_AuthExposesNoCredentials()
     {
-        var dialog = new ConnectDialog(initialEndpoint: "x:1", authType: AuthenticationType.Anonymous);
+        using var dialog = new ConnectDialog(initialEndpoint: "x:1", authType: AuthenticationType.Anonymous);
 
         Assert.Equal(AuthenticationType.Anonymous, dialog.SelectedAuthType);
         Assert.Null(dialog.Username);
@@ -49,12 +49,14 @@ public class ConnectDialogTests
     [Fact]
     public void Username_AuthExposesUsername()
     {
-        var dialog = new ConnectDialog(
+        using var dialog = new ConnectDialog(
             initialEndpoint: "x:1",
             authType: AuthenticationType.UserName,
             username: "operator");
 
         Assert.Equal(AuthenticationType.UserName, dialog.SelectedAuthType);
         Assert.Equal("operator", dialog.Username);
+        // The credential-hiding logic depends on an absent password staying null.
+        Assert.Null(dialog.Password);
     }
 }

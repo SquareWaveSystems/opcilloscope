@@ -193,6 +193,9 @@ public abstract class AppTheme
     /// <summary>
     /// Color scheme for the main window border - uses bright accent for the title
     /// so "opcilloscope" stands out prominently from sub-panel titles.
+    /// TODO: currently unused — Terminal.Gui 2.4 removed per-adornment schemes, so this
+    /// can no longer be applied to the main window border. Kept for the planned
+    /// reintroduction of title highlighting via Scheme VisualRoles (see MainWindow.ApplyTheme).
     /// </summary>
     public virtual Scheme HighlightTitleBorderColorScheme => _highlightTitleBorderColorScheme ??= new()
     {

@@ -36,7 +36,14 @@ public class HelpDialog : Dialog
             Height = Dim.Fill(2),
             ReadOnly = true,
             WordWrap = true,
-        }.WithScheme(new Scheme { Normal = new Attribute(theme.Foreground, theme.Background), Focus = new Attribute(theme.Foreground, theme.Background), HotNormal = new Attribute(theme.Foreground, theme.Background), HotFocus = new Attribute(theme.Foreground, theme.Background), Disabled = new Attribute(theme.MutedText, theme.Background) });
+        }.WithScheme(new Scheme
+        {
+            Normal = new Attribute(theme.Foreground, theme.Background),
+            Focus = new Attribute(theme.Foreground, theme.Background),
+            HotNormal = new Attribute(theme.Foreground, theme.Background),
+            HotFocus = new Attribute(theme.Foreground, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        });
 
         contentView.Text = GenerateHelpFromBindings(keybindingManager);
 

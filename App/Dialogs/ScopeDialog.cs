@@ -47,7 +47,7 @@ public class ScopeDialog : Dialog
             Y = Pos.Bottom(_scopeView),
             Width = Dim.Fill(),
             Height = 2,
-        }.WithScheme(GetScheme()!);
+        }.WithScheme(GetScheme() ?? Theme.MainColorScheme);
 
         _pauseButton = new Button
         {

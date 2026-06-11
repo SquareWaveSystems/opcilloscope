@@ -15,6 +15,7 @@ public class ThemeSchemeTests
     {
         new object[] { new DarkTheme() },
         new object[] { new LightTheme() },
+        new object[] { new TerminalTheme() },
     };
 
     [Theory]
@@ -41,7 +42,7 @@ public class ThemeSchemeTests
     public void ThemeStyler_ApplyToFrame_SetsTheViewScheme()
     {
         var theme = new DarkTheme();
-        var view = new FrameView();
+        using var view = new FrameView();
 
         ThemeStyler.ApplyToFrame(view, theme);
 
@@ -49,5 +50,19 @@ public class ThemeSchemeTests
         Assert.NotNull(applied);
         Assert.Equal(theme.Foreground, applied!.Normal.Foreground);
         Assert.Equal(theme.Background, applied.Normal.Background);
+    }
+
+    [Fact]
+    public void WithScheme_AppliesTheSchemeAndReturnsTheSameView()
+    {
+        // Guards the load-bearing migration glue: SetScheme() cannot be used in an
+        // object initializer, so WithScheme() must both apply and chain.
+        var scheme = new DarkTheme().MainColorScheme;
+        using var label = new Label { Text = "x" };
+
+        var returned = label.WithScheme(scheme);
+
+        Assert.Same(label, returned);
+        Assert.Same(scheme, label.GetScheme());
     }
 }

@@ -45,3 +45,6 @@ dotnet test Tests/Opcilloscope.E2ETests          # publishes the binary on first
 ```
 
 See `Tests/Opcilloscope.E2ETests/README.md` for details and CI notes.
+
+> **Note:** the E2E project is not yet delivered — it arrives in the follow-up
+> layer-2 (PTY harness) PR. The references above describe the planned layout.

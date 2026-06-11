@@ -30,7 +30,7 @@ public class MonitoredVariablesViewTests
     [Fact]
     public void NewView_StartsEmpty()
     {
-        var view = new MonitoredVariablesView();
+        using var view = new MonitoredVariablesView();
 
         Assert.Null(view.SelectedVariable);
         Assert.Empty(view.ScopeSelectedNodes);
@@ -40,7 +40,7 @@ public class MonitoredVariablesViewTests
     [Fact]
     public void AddVariable_AddsScopeSelectedNodeToScopeCollection()
     {
-        var view = new MonitoredVariablesView();
+        using var view = new MonitoredVariablesView();
 
         view.AddVariable(Node(1, "Counter", scope: true));
         view.AddVariable(Node(2, "SineWave", scope: false));
@@ -53,7 +53,7 @@ public class MonitoredVariablesViewTests
     [Fact]
     public void AddVariable_IsIdempotentPerClientHandle()
     {
-        var view = new MonitoredVariablesView();
+        using var view = new MonitoredVariablesView();
 
         view.AddVariable(Node(1, "Counter", scope: true));
         view.AddVariable(Node(1, "Counter", scope: true)); // same handle - ignored
@@ -64,7 +64,7 @@ public class MonitoredVariablesViewTests
     [Fact]
     public void RemoveVariable_RemovesFromScopeSelection()
     {
-        var view = new MonitoredVariablesView();
+        using var view = new MonitoredVariablesView();
         view.AddVariable(Node(1, "Counter", scope: true));
         view.AddVariable(Node(2, "SineWave", scope: true));
 

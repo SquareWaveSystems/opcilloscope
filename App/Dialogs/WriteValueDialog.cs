@@ -116,7 +116,14 @@ public class WriteValueDialog : Dialog
             Y = Pos.Bottom(_valueField),
             Width = Dim.Fill()! - 1,
             Text = "",
-        }.WithScheme(new Scheme { Normal = new Attribute(theme.Error, theme.Background), Focus = new Attribute(theme.Error, theme.Background), HotNormal = new Attribute(theme.Error, theme.Background), HotFocus = new Attribute(theme.Error, theme.Background), Disabled = new Attribute(theme.Error, theme.Background) });
+        }.WithScheme(new Scheme
+        {
+            Normal = new Attribute(theme.Error, theme.Background),
+            Focus = new Attribute(theme.Error, theme.Background),
+            HotNormal = new Attribute(theme.Error, theme.Background),
+            HotFocus = new Attribute(theme.Error, theme.Background),
+            Disabled = new Attribute(theme.Error, theme.Background)
+        });
 
         // Real-time validation
         _valueField.TextChanged += (_, _) => ValidateInput();
