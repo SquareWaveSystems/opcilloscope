@@ -23,8 +23,9 @@ public class TerminalTheme : AppTheme
     public override LineStyle EmphasizedBorderStyle => LineStyle.Double;
     public override LineStyle SecondaryBorderStyle => LineStyle.Single;
 
-    // All colors use the exact RGB values Terminal.Gui maps to the 16
-    // ANSI color indices, so GetClosestNamedColor16 resolves them exactly
+    // All colors are constructed from ColorName16 enum values, so
+    // GetClosestNamedColor16 resolves them to the exact ANSI index
+    // (no nearest-color approximation)
 
     public override Color Background => new(ColorName16.Black);          // ANSI 0
 
