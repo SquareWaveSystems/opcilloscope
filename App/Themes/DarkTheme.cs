@@ -1,5 +1,4 @@
 using Terminal.Gui;
-using Attribute = Terminal.Gui.Attribute;
 
 namespace Opcilloscope.App.Themes;
 
@@ -75,10 +74,10 @@ public class DarkTheme : AppTheme
     public override bool EnableGlow => true;
 
     // Override color schemes for dark display with amber highlights
-    private ColorScheme? _mainColorScheme;
-    private ColorScheme? _menuColorScheme;
+    private Scheme? _mainColorScheme;
+    private Scheme? _menuColorScheme;
 
-    public override ColorScheme MainColorScheme => _mainColorScheme ??= new()
+    public override Scheme MainColorScheme => _mainColorScheme ??= new()
     {
         Normal = NormalAttr,
         Focus = new Attribute(ForegroundBright, new Color(45, 45, 45)),  // #2d2d2d panel background
@@ -87,7 +86,7 @@ public class DarkTheme : AppTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public override ColorScheme MenuColorScheme => _menuColorScheme ??= new()
+    public override Scheme MenuColorScheme => _menuColorScheme ??= new()
     {
         Normal = NormalAttr,
         Focus = new Attribute(Background, Foreground),  // Inverted for menu focus

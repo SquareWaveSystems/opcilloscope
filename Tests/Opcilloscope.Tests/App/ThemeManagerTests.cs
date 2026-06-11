@@ -123,8 +123,11 @@ public class ThemeManagerTests
     }
 
     [Fact]
-    public void ThemeManager_SetTerminalTheme_TogglesForce16Colors()
+    public void ThemeManager_SetTerminalTheme_TogglesTerminalColorMode()
     {
+        // Terminal.Gui 2.4 removed the static Application.Force16Colors; the flag now
+        // lives on Application.Driver, which is null in headless tests. Assert on the
+        // theme property that ThemeManager propagates to the driver when one exists.
         try
         {
             // Act - Terminal theme enables 16-color ANSI output
@@ -132,13 +135,13 @@ public class ThemeManagerTests
 
             // Assert
             Assert.IsType<TerminalTheme>(ThemeManager.Current);
-            Assert.True(Terminal.Gui.Application.Force16Colors);
+            Assert.True(ThemeManager.Current.UseTerminalColors);
 
             // Act - switching back restores 24-bit color output
             ThemeManager.SetTheme("Dark");
 
             // Assert
-            Assert.False(Terminal.Gui.Application.Force16Colors);
+            Assert.False(ThemeManager.Current.UseTerminalColors);
         }
         finally
         {

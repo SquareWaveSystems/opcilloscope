@@ -1,5 +1,4 @@
 using Terminal.Gui;
-using Attribute = Terminal.Gui.Attribute;
 
 namespace Opcilloscope.App.Themes;
 
@@ -82,10 +81,10 @@ public class TerminalTheme : AppTheme
 
     // Override color schemes - focus highlight uses a DarkGray band since
     // panel-background shades are not available in the 16-color palette
-    private ColorScheme? _mainColorScheme;
-    private ColorScheme? _menuColorScheme;
+    private Scheme? _mainColorScheme;
+    private Scheme? _menuColorScheme;
 
-    public override ColorScheme MainColorScheme => _mainColorScheme ??= new()
+    public override Scheme MainColorScheme => _mainColorScheme ??= new()
     {
         Normal = NormalAttr,
         Focus = new Attribute(ForegroundBright, new Color(ColorName16.DarkGray)),
@@ -94,7 +93,7 @@ public class TerminalTheme : AppTheme
         Disabled = new Attribute(StatusInactive, Background)
     };
 
-    public override ColorScheme MenuColorScheme => _menuColorScheme ??= new()
+    public override Scheme MenuColorScheme => _menuColorScheme ??= new()
     {
         Normal = NormalAttr,
         Focus = new Attribute(Background, Foreground),  // Inverted for menu focus

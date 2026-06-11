@@ -15,7 +15,7 @@ public class ConnectDialog : Dialog
     private const string ProtocolPrefix = "opc.tcp://";
     private readonly TextField _endpointField;
     private readonly NumericUpDown<int> _publishIntervalField;
-    private readonly RadioGroup _authTypeRadio;
+    private readonly OptionSelector _authTypeRadio;
     private readonly Label _usernameLabel;
     private readonly TextField _usernameField;
     private readonly Label _passwordLabel;
@@ -27,11 +27,13 @@ public class ConnectDialog : Dialog
     public bool Confirmed => _confirmed;
     public int PublishingInterval => _publishIntervalField.Value;
     public AuthenticationType SelectedAuthType =>
-        _authTypeRadio.SelectedItem == 1 ? AuthenticationType.UserName : AuthenticationType.Anonymous;
+        _authTypeRadio.Value == 1 ? AuthenticationType.UserName : AuthenticationType.Anonymous;
     public string? Username => SelectedAuthType == AuthenticationType.UserName
         ? _usernameField.Text?.Trim() : null;
+    // An untouched password box is "no password" (null), not an empty-string password;
+    // downstream the two are sent identically (Password ?? string.Empty).
     public string? Password => SelectedAuthType == AuthenticationType.UserName
-        ? _passwordField.Text : null;
+        && !string.IsNullOrEmpty(_passwordField.Text) ? _passwordField.Text : null;
 
     public ConnectDialog(
         string? initialEndpoint = null,
@@ -60,8 +62,7 @@ public class ConnectDialog : Dialog
             X = 1,
             Y = 2,
             Text = ProtocolPrefix,
-            ColorScheme = theme.MainColorScheme
-        };
+        }.WithScheme(theme.MainColorScheme);
 
         _endpointField = new TextField
         {
@@ -95,8 +96,7 @@ public class ConnectDialog : Dialog
             X = 1,
             Y = 6,
             Text = "How often the server sends data updates (100-10000)",
-            ColorScheme = theme.MainColorScheme
-        };
+        }.WithScheme(theme.MainColorScheme);
 
         // Authentication section
         var authLabel = new Label
@@ -106,13 +106,13 @@ public class ConnectDialog : Dialog
             Text = "Authentication:"
         };
 
-        _authTypeRadio = new RadioGroup
+        _authTypeRadio = new OptionSelector
         {
             X = 1,
             Y = 9,
-            RadioLabels = ["Anonymous", "Username/Password"],
+            Labels = ["Anonymous", "Username/Password"],
             Orientation = Orientation.Horizontal,
-            SelectedItem = authType == AuthenticationType.UserName ? 1 : 0
+            Value = authType == AuthenticationType.UserName ? 1 : 0
         };
 
         _usernameLabel = new Label
@@ -149,9 +149,9 @@ public class ConnectDialog : Dialog
             Visible = authType == AuthenticationType.UserName
         };
 
-        _authTypeRadio.SelectedItemChanged += (_, _) =>
+        _authTypeRadio.ValueChanged += (_, _) =>
         {
-            var showCredentials = _authTypeRadio.SelectedItem == 1;
+            var showCredentials = _authTypeRadio.Value == 1;
             _usernameLabel.Visible = showCredentials;
             _usernameField.Visible = showCredentials;
             _passwordLabel.Visible = showCredentials;
@@ -167,8 +167,7 @@ public class ConnectDialog : Dialog
             Y = 14,
             Text = $"{theme.ButtonPrefix}Connect{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = defaultButtonScheme
-        };
+        }.WithScheme(defaultButtonScheme);
 
         connectButton.Accepting += (_, _) =>
         {
@@ -184,8 +183,7 @@ public class ConnectDialog : Dialog
             X = Pos.Center() + 4,
             Y = 14,
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
-            ColorScheme = theme.ButtonColorScheme
-        };
+        }.WithScheme(theme.ButtonColorScheme);
 
         cancelButton.Accepting += (_, _) =>
         {
@@ -208,7 +206,7 @@ public class ConnectDialog : Dialog
 
         if (string.IsNullOrEmpty(serverAddress))
         {
-            MessageBox.ErrorQuery("Error", "Please enter a server address", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", "Please enter a server address", "OK");
             return false;
         }
 
@@ -217,20 +215,20 @@ public class ConnectDialog : Dialog
             var uri = new Uri(EndpointUrl);
             if (string.IsNullOrEmpty(uri.Host))
             {
-                MessageBox.ErrorQuery("Error", "Invalid host in server address", "OK");
+                MessageBox.ErrorQuery(Application.Instance, "Error", "Invalid host in server address", "OK");
                 return false;
             }
         }
         catch
         {
-            MessageBox.ErrorQuery("Error", "Invalid server address format", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", "Invalid server address format", "OK");
             return false;
         }
 
         var interval = _publishIntervalField.Value;
         if (interval < 100 || interval > 10000)
         {
-            MessageBox.ErrorQuery("Error", "Publishing interval must be between 100 and 10000 ms", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Error", "Publishing interval must be between 100 and 10000 ms", "OK");
             return false;
         }
 
@@ -239,7 +237,7 @@ public class ConnectDialog : Dialog
             var username = _usernameField.Text?.Trim() ?? string.Empty;
             if (string.IsNullOrEmpty(username))
             {
-                MessageBox.ErrorQuery("Error", "Please enter a username", "OK");
+                MessageBox.ErrorQuery(Application.Instance, "Error", "Please enter a username", "OK");
                 _usernameField.SetFocus();
                 return false;
             }
@@ -247,7 +245,7 @@ public class ConnectDialog : Dialog
             var password = _passwordField.Text ?? string.Empty;
             if (string.IsNullOrEmpty(password))
             {
-                MessageBox.ErrorQuery("Error", "Please enter a password", "OK");
+                MessageBox.ErrorQuery(Application.Instance, "Error", "Please enter a password", "OK");
                 _passwordField.SetFocus();
                 return false;
             }
@@ -275,7 +273,7 @@ public class ConnectDialog : Dialog
             {
                 _endpointField.Text = cleaned;
                 // Move cursor to end
-                _endpointField.CursorPosition = cleaned.Length;
+                _endpointField.MoveEnd();
             }
             finally
             {

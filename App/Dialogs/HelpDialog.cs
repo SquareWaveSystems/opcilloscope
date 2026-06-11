@@ -1,7 +1,6 @@
 using Terminal.Gui;
 using Opcilloscope.App.Keybindings;
 using Opcilloscope.App.Themes;
-using Attribute = Terminal.Gui.Attribute;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
 namespace Opcilloscope.App.Dialogs;
@@ -25,7 +24,7 @@ public class HelpDialog : Dialog
         var theme = ThemeManager.Current;
 
         // Apply theme styling with emphasized border (double-line)
-        ColorScheme = theme.MainColorScheme;
+        SetScheme(theme.MainColorScheme);
         BorderStyle = theme.EmphasizedBorderStyle;
 
         // Create content view with the help text
@@ -37,20 +36,19 @@ public class HelpDialog : Dialog
             Height = Dim.Fill(2),
             ReadOnly = true,
             WordWrap = true,
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Attribute(theme.Foreground, theme.Background),
-                Focus = new Attribute(theme.Foreground, theme.Background),
-                HotNormal = new Attribute(theme.Foreground, theme.Background),
-                HotFocus = new Attribute(theme.Foreground, theme.Background),
-                Disabled = new Attribute(theme.MutedText, theme.Background)
-            }
-        };
+        }.WithScheme(new Scheme
+        {
+            Normal = new Attribute(theme.Foreground, theme.Background),
+            Focus = new Attribute(theme.Foreground, theme.Background),
+            HotNormal = new Attribute(theme.Foreground, theme.Background),
+            HotFocus = new Attribute(theme.Foreground, theme.Background),
+            Disabled = new Attribute(theme.MutedText, theme.Background)
+        });
 
         contentView.Text = GenerateHelpFromBindings(keybindingManager);
 
         // OK button - highlighted with accent color (default action)
-        var defaultButtonScheme = new ColorScheme
+        var defaultButtonScheme = new Scheme
         {
             Normal = new Attribute(theme.Accent, theme.Background),
             Focus = new Attribute(theme.AccentBright, theme.Background),
@@ -65,8 +63,7 @@ public class HelpDialog : Dialog
             X = Pos.Center(),
             Y = Pos.AnchorEnd(1),
             IsDefault = true,
-            ColorScheme = defaultButtonScheme
-        };
+        }.WithScheme(defaultButtonScheme);
         okButton.Accepting += (_, _) => RequestStop();
 
         Add(contentView);
@@ -126,7 +123,7 @@ public class HelpDialog : Dialog
     {
         Application.Invoke(() =>
         {
-            ColorScheme = theme.MainColorScheme;
+            SetScheme(theme.MainColorScheme);
             BorderStyle = theme.EmphasizedBorderStyle;
             SetNeedsLayout();
         });

@@ -47,7 +47,6 @@ public class AddressSpaceView : FrameView
         // Configure tree style for cleaner look
         _treeView.Style.CollapseableSymbol = new Rune('▼');
         _treeView.Style.ExpandableSymbol = new Rune('▶');
-        _treeView.Style.LeaveLastRow = false;
 
         _treeView.SelectionChanged += (_, args) =>
         {
@@ -58,7 +57,7 @@ public class AddressSpaceView : FrameView
         };
 
         _treeView.KeyDown += HandleKeyDown;
-        _treeView.ObjectActivated += HandleObjectActivated;
+        _treeView.Activated += HandleObjectActivated;
 
         // Create empty state label
         _emptyStateLabel = new Label
@@ -66,11 +65,7 @@ public class AddressSpaceView : FrameView
             X = Pos.Center(),
             Y = Pos.Center(),
             Text = "",
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-            }
-        };
+        }.WithScheme(new Scheme { Normal = new Attribute(theme.MutedText, theme.Background) });
 
         Add(_treeView);
         Add(_emptyStateLabel);
@@ -87,10 +82,10 @@ public class AddressSpaceView : FrameView
     {
         Application.Invoke(() =>
         {
-            _emptyStateLabel.ColorScheme = new ColorScheme
+            _emptyStateLabel.SetScheme(new Scheme
             {
-                Normal = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-            };
+                Normal = new Attribute(theme.MutedText, theme.Background)
+            });
             SetNeedsLayout();
         });
     }
@@ -229,11 +224,16 @@ public class AddressSpaceView : FrameView
         }
     }
 
-    private void HandleObjectActivated(object? _, ObjectActivatedEventArgs<BrowsedNode> e)
+    private void HandleObjectActivated(object? _, EventArgs<ICommandContext?> e)
     {
-        if (e.ActivatedObject != null && e.ActivatedObject.NodeClass == Opc.Ua.NodeClass.Variable)
+        // Terminal.Gui 2.4 replaced TreeView.ObjectActivated (which carried the object)
+        // with the generic Activated command event; read the current selection instead.
+        // Safe from activate/select races: Activated is raised synchronously on the UI
+        // thread by the command that acted on the selection, so it still matches.
+        var activated = _treeView.SelectedObject;
+        if (activated != null && activated.NodeClass == Opc.Ua.NodeClass.Variable)
         {
-            NodeSubscribeRequested?.Invoke(e.ActivatedObject);
+            NodeSubscribeRequested?.Invoke(activated);
         }
     }
 
@@ -243,7 +243,7 @@ public class AddressSpaceView : FrameView
         {
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _treeView.KeyDown -= HandleKeyDown;
-            _treeView.ObjectActivated -= HandleObjectActivated;
+            _treeView.Activated -= HandleObjectActivated;
         }
         base.Dispose(disposing);
     }

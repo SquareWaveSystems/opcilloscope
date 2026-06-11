@@ -53,7 +53,7 @@ public class FocusManager
 
     private bool PollFocus()
     {
-        var focused = Application.Top?.MostFocused;
+        var focused = Application.TopRunnableView?.MostFocused;
         var newPane = FindContainingPane(focused);
 
         if (newPane != _currentPane)

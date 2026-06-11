@@ -47,16 +47,14 @@ public class ScopeDialog : Dialog
             Y = Pos.Bottom(_scopeView),
             Width = Dim.Fill(),
             Height = 2,
-            ColorScheme = ColorScheme
-        };
+        }.WithScheme(GetScheme() ?? Theme.MainColorScheme);
 
         _pauseButton = new Button
         {
             X = 1,
             Y = 0,
             Text = $"{Theme.ButtonPrefix}PAUSE{Theme.ButtonSuffix}",
-            ColorScheme = Theme.ButtonColorScheme
-        };
+        }.WithScheme(Theme.ButtonColorScheme);
         _pauseButton.Accepting += OnPauseToggle;
 
         _closeButton = new Button
@@ -64,8 +62,7 @@ public class ScopeDialog : Dialog
             X = Pos.Right(_pauseButton) + 2,
             Y = 0,
             Text = $"{Theme.ButtonPrefix}CLOSE{Theme.ButtonSuffix}",
-            ColorScheme = Theme.ButtonColorScheme
-        };
+        }.WithScheme(Theme.ButtonColorScheme);
         _closeButton.Accepting += (_, _) => Application.RequestStop();
 
         buttonFrame.Add(_pauseButton, _closeButton);
@@ -109,10 +106,10 @@ public class ScopeDialog : Dialog
             _pauseButton.Text = _scopeView.IsPaused
                 ? $"{theme.ButtonPrefix}RESUME{theme.ButtonSuffix}"
                 : $"{theme.ButtonPrefix}PAUSE{theme.ButtonSuffix}";
-            _pauseButton.ColorScheme = theme.ButtonColorScheme;
+            _pauseButton.SetScheme(theme.ButtonColorScheme);
 
             _closeButton.Text = $"{theme.ButtonPrefix}CLOSE{theme.ButtonSuffix}";
-            _closeButton.ColorScheme = theme.ButtonColorScheme;
+            _closeButton.SetScheme(theme.ButtonColorScheme);
 
             _scopeView.SetNeedsLayout();
         });

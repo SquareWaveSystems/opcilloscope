@@ -3,7 +3,6 @@ using Opcilloscope.OpcUa;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.App.Themes;
 using Opcilloscope.Utilities;
-using Attribute = Terminal.Gui.Attribute;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
 namespace Opcilloscope.App.Views;
@@ -27,7 +26,7 @@ public class ScopeView : View
     {
         public MonitoredNode Node { get; init; } = null!;
         public List<TimestampedSample> Samples { get; } = new(2000);
-        public Terminal.Gui.Color LineColor { get; init; }
+        public Color LineColor { get; init; }
 
         // Stats tracking
         public float CurrentValue { get; set; } = float.NaN;
@@ -47,13 +46,13 @@ public class ScopeView : View
     private const double TimeWindowZoomFactor = 1.5;
 
     // Distinct colors for up to 5 series
-    private static readonly Terminal.Gui.Color[] SeriesColors =
+    private static readonly Color[] SeriesColors =
     {
-        Terminal.Gui.Color.Green,
-        Terminal.Gui.Color.Cyan,
-        Terminal.Gui.Color.Yellow,
-        Terminal.Gui.Color.Magenta,
-        Terminal.Gui.Color.White
+        Color.Green,
+        Color.Cyan,
+        Color.Yellow,
+        Color.Magenta,
+        Color.White
     };
 
     // Layout constants
@@ -103,7 +102,6 @@ public class ScopeView : View
         ThemeManager.ThemeChanged += OnThemeChanged;
 
         CanFocus = true;
-        WantMousePositionReports = false;
 
         _startTime = DateTime.Now;
     }
@@ -116,14 +114,14 @@ public class ScopeView : View
             theme = _currentTheme;
         }
 
-        ColorScheme = new ColorScheme
+        SetScheme(new Scheme
         {
             Normal = theme.NormalAttr,
             Focus = theme.BrightAttr,
             HotNormal = theme.AccentAttr,
             HotFocus = theme.BrightAttr,
             Disabled = theme.DimAttr
-        };
+        });
     }
 
     private void OnThemeChanged(AppTheme newTheme)
@@ -304,8 +302,6 @@ public class ScopeView : View
     /// </summary>
     protected override bool OnDrawingContent(DrawContext? context)
     {
-        if (Driver is null) return false;
-
         AppTheme theme;
         lock (_themeLock)
         {
@@ -336,12 +332,12 @@ public class ScopeView : View
 
         // Clear the viewport
         var normalAttr = theme.NormalAttr;
-        Driver!.SetAttribute(normalAttr);
+        SetAttribute(normalAttr);
         for (int y = 0; y < totalHeight; y++)
         {
             Move(0, y);
             for (int x = 0; x < totalWidth; x++)
-                Driver!.AddRune(' ');
+                AddRune(' ');
         }
 
         // === Draw header ===
@@ -478,8 +474,8 @@ public class ScopeView : View
                 char brailleChar = canvas.GetCellFiltered(cx, cy);
                 if (brailleChar == '\u2800')
                 {
-                    Driver!.SetAttribute(normalAttr);
-                    Driver!.AddRune(' ');
+                    SetAttribute(normalAttr);
+                    AddRune(' ');
                     continue;
                 }
 
@@ -488,19 +484,19 @@ public class ScopeView : View
                 if (dominantLayer == 100)
                 {
                     // Cursor
-                    Driver!.SetAttribute(accentAttr);
+                    SetAttribute(accentAttr);
                 }
                 else if (dominantLayer >= 0 && dominantLayer < signalAttrs.Length)
                 {
-                    Driver!.SetAttribute(signalAttrs[dominantLayer]);
+                    SetAttribute(signalAttrs[dominantLayer]);
                 }
                 else
                 {
                     // Grid or unknown
-                    Driver!.SetAttribute(gridAttr);
+                    SetAttribute(gridAttr);
                 }
 
-                Driver!.AddRune(brailleChar);
+                AddRune(brailleChar);
             }
         }
 
@@ -523,9 +519,9 @@ public class ScopeView : View
             int msgY = plotTop + plotHeight / 2;
             if (msgX >= 0 && msgY >= 0)
             {
-                Driver!.SetAttribute(theme.DimAttr);
+                SetAttribute(theme.DimAttr);
                 Move(msgX, msgY);
-                Driver!.AddStr(msg);
+                AddStr(msg);
             }
         }
 
@@ -546,10 +542,10 @@ public class ScopeView : View
         string activityIndicator = !_isPaused && (_frameCount % 10) < 5 ? "●" : "○";
         string headerText = $"{theme.TitleDecoration} {title} {theme.TitleDecoration}  {statusIndicator} {activityIndicator}";
 
-        Driver!.SetAttribute(theme.BrightAttr);
+        SetAttribute(theme.BrightAttr);
         int headerX = Math.Max(0, (totalWidth - headerText.Length) / 2);
         Move(headerX, 0);
-        Driver!.AddStr(headerText.Length <= totalWidth ? headerText : headerText[..totalWidth]);
+        AddStr(headerText.Length <= totalWidth ? headerText : headerText[..totalWidth]);
 
         // Legend line
         var legendParts = seriesCopy.Select((s, i) =>
@@ -557,10 +553,10 @@ public class ScopeView : View
             .ToList();
 
         string legendText = string.Join("  ", legendParts);
-        Driver!.SetAttribute(theme.DimAttr);
+        SetAttribute(theme.DimAttr);
         int legendX = Math.Max(0, (totalWidth - legendText.Length) / 2);
         Move(legendX, 1);
-        Driver!.AddStr(legendText.Length <= totalWidth ? legendText : legendText[..totalWidth]);
+        AddStr(legendText.Length <= totalWidth ? legendText : legendText[..totalWidth]);
     }
 
     private void DrawGrid(BrailleCanvas canvas, int pixelW, int pixelH)
@@ -585,7 +581,7 @@ public class ScopeView : View
     private void DrawYAxisLabels(AppTheme theme, int plotTop, int plotHeight,
                                   float visibleMin, float visibleMax)
     {
-        Driver!.SetAttribute(theme.DimAttr);
+        SetAttribute(theme.DimAttr);
 
         int numLabels = Math.Min(plotHeight, 5);
         for (int i = 0; i <= numLabels; i++)
@@ -598,14 +594,14 @@ public class ScopeView : View
             // Right-align the label
             int x = Math.Max(0, YAxisLabelWidth - 1 - label.Length);
             Move(x, y);
-            Driver!.AddStr(label);
+            AddStr(label);
         }
     }
 
     private void DrawXAxisLabels(AppTheme theme, int plotLeft, int labelY,
                                   int plotWidth, double windowDuration)
     {
-        Driver!.SetAttribute(theme.DimAttr);
+        SetAttribute(theme.DimAttr);
 
         int numLabels = Math.Min(plotWidth / 8, 6); // At least 8 chars apart
         if (numLabels < 2) numLabels = 2;
@@ -626,7 +622,7 @@ public class ScopeView : View
             labelX = Math.Clamp(labelX, plotLeft, maxLabelX);
 
             Move(labelX, labelY);
-            Driver!.AddStr(label);
+            AddStr(label);
         }
     }
 
@@ -657,9 +653,9 @@ public class ScopeView : View
 
             // Use signal color for the stat line
             var attr = new Attribute(s.LineColor, theme.Background);
-            Driver!.SetAttribute(attr);
+            SetAttribute(attr);
             Move(x, y);
-            Driver!.AddStr(statsText.Length <= plotWidth ? statsText : statsText[..plotWidth]);
+            AddStr(statsText.Length <= plotWidth ? statsText : statsText[..plotWidth]);
         }
     }
 
@@ -730,8 +726,8 @@ public class ScopeView : View
 
         foreach (var seg in segments)
         {
-            Driver!.SetAttribute(seg.IsKey ? keyAttr : labelAttr);
-            Driver!.AddStr(seg.Text);
+            SetAttribute(seg.IsKey ? keyAttr : labelAttr);
+            AddStr(seg.Text);
         }
     }
 
@@ -762,13 +758,13 @@ public class ScopeView : View
         return (float)(before.Value + t * (after.Value - before.Value));
     }
 
-    private static string GetColorName(Terminal.Gui.Color color)
+    private static string GetColorName(Color color)
     {
-        if (color == Terminal.Gui.Color.Green) return "GRN";
-        if (color == Terminal.Gui.Color.Cyan) return "CYN";
-        if (color == Terminal.Gui.Color.Yellow) return "YEL";
-        if (color == Terminal.Gui.Color.Magenta) return "MAG";
-        if (color == Terminal.Gui.Color.White) return "WHT";
+        if (color == Color.Green) return "GRN";
+        if (color == Color.Cyan) return "CYN";
+        if (color == Color.Yellow) return "YEL";
+        if (color == Color.Magenta) return "MAG";
+        if (color == Color.White) return "WHT";
         return "???";
     }
 

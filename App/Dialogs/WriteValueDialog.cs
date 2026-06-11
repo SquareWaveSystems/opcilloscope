@@ -116,15 +116,14 @@ public class WriteValueDialog : Dialog
             Y = Pos.Bottom(_valueField),
             Width = Dim.Fill()! - 1,
             Text = "",
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Terminal.Gui.Attribute(theme.Error, theme.Background),
-                Focus = new Terminal.Gui.Attribute(theme.Error, theme.Background),
-                HotNormal = new Terminal.Gui.Attribute(theme.Error, theme.Background),
-                HotFocus = new Terminal.Gui.Attribute(theme.Error, theme.Background),
-                Disabled = new Terminal.Gui.Attribute(theme.Error, theme.Background)
-            }
-        };
+        }.WithScheme(new Scheme
+        {
+            Normal = new Attribute(theme.Error, theme.Background),
+            Focus = new Attribute(theme.Error, theme.Background),
+            HotNormal = new Attribute(theme.Error, theme.Background),
+            HotFocus = new Attribute(theme.Error, theme.Background),
+            Disabled = new Attribute(theme.Error, theme.Background)
+        });
 
         // Real-time validation
         _valueField.TextChanged += (_, _) => ValidateInput();
@@ -137,21 +136,19 @@ public class WriteValueDialog : Dialog
         {
             Text = $"{theme.ButtonPrefix}Write{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = defaultButtonScheme
-        };
+        }.WithScheme(defaultButtonScheme);
 
         var cancelButton = new Button
         {
             Text = $"{theme.ButtonPrefix}Cancel{theme.ButtonSuffix}",
-            ColorScheme = theme.ButtonColorScheme
-        };
+        }.WithScheme(theme.ButtonColorScheme);
 
         writeButton.Accepting += (_, _) =>
         {
             if (ValidateAndParse())
             {
                 // Show confirmation dialog before writing
-                var confirmResult = MessageBox.Query(
+                var confirmResult = MessageBox.Query(Application.Instance, 
                     "Confirm Write",
                     $"Write '{_valueField.Text}' to {nodeName}?",
                     "Yes", "No");
@@ -213,7 +210,7 @@ public class WriteValueDialog : Dialog
         // Check if write is supported for this data type
         if (!OpcValueConverter.IsWriteSupported(_dataType))
         {
-            MessageBox.ErrorQuery("Write Error", $"Write not supported for data type: {_dataType}", "OK");
+            MessageBox.ErrorQuery(Application.Instance, "Write Error", $"Write not supported for data type: {_dataType}", "OK");
             return false;
         }
 

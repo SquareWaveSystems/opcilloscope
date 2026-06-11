@@ -82,10 +82,8 @@ public static class ThemeManager
     /// </summary>
     private static void ApplyTerminalColorMode(AppTheme theme)
     {
-        Application.Force16Colors = theme.UseTerminalColors;
-
-        // The v2 facade driver caches its own flag rather than reading
-        // Application.Force16Colors, so propagate explicitly when running
+        // Terminal.Gui 2.4 removed the static Application.Force16Colors;
+        // the flag now lives on the driver itself.
         if (Application.Driver is { } driver)
         {
             driver.Force16Colors = theme.UseTerminalColors;
