@@ -17,36 +17,6 @@ public class NodeBrowser
     // data type names for multiple variables in parallel.
     private readonly ConcurrentDictionary<string, string> _dataTypeCache = new();
 
-    // Common data type NodeIds
-    private static readonly Dictionary<uint, string> BuiltInDataTypes = new()
-    {
-        { 1, "Boolean" },
-        { 2, "SByte" },
-        { 3, "Byte" },
-        { 4, "Int16" },
-        { 5, "UInt16" },
-        { 6, "Int32" },
-        { 7, "UInt32" },
-        { 8, "Int64" },
-        { 9, "UInt64" },
-        { 10, "Float" },
-        { 11, "Double" },
-        { 12, "String" },
-        { 13, "DateTime" },
-        { 14, "Guid" },
-        { 15, "ByteString" },
-        { 16, "XmlElement" },
-        { 17, "NodeId" },
-        { 18, "ExpandedNodeId" },
-        { 19, "StatusCode" },
-        { 20, "QualifiedName" },
-        { 21, "LocalizedText" },
-        { 22, "ExtensionObject" },
-        { 23, "DataValue" },
-        { 24, "Variant" },
-        { 25, "DiagnosticInfo" },
-    };
-
     public NodeBrowser(OpcUaClientWrapper client, Logger logger)
     {
         _client = client;
@@ -142,13 +112,9 @@ public class NodeBrowser
             var attrs = await _client.ReadAttributesAsync(nodeId, Attributes.DataType);
             if (attrs.Count > 0 && attrs[0].Value is NodeId dataTypeId)
             {
-                // Check built-in types first - already a dictionary lookup, no caching needed
-                if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == IdType.Numeric)
-                {
-                    var id = (uint)dataTypeId.Identifier;
-                    if (BuiltInDataTypes.TryGetValue(id, out var builtIn))
-                        return builtIn;
-                }
+                // Check built-in types first - resolved without a network call, no caching needed
+                if (DataTypeResolver.TryGetBuiltInName(dataTypeId, out var builtIn))
+                    return builtIn;
 
                 var key = dataTypeId.ToString();
                 if (_dataTypeCache.TryGetValue(key, out var cached))
@@ -393,12 +359,8 @@ public class NodeBrowser
 
     private async Task<string?> GetDataTypeNameByIdAsync(NodeId dataTypeId)
     {
-        if (dataTypeId.NamespaceIndex == 0 && dataTypeId.IdType == IdType.Numeric)
-        {
-            var id = (uint)dataTypeId.Identifier;
-            if (BuiltInDataTypes.TryGetValue(id, out var name))
-                return name;
-        }
+        if (DataTypeResolver.TryGetBuiltInName(dataTypeId, out var builtInName))
+            return builtInName;
 
         try
         {

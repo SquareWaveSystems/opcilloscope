@@ -168,23 +168,4 @@ public class RecentFilesManagerTests : IDisposable
         Assert.Single(result);
         Assert.Equal(Path.GetFullPath(existing), result[0]);
     }
-
-    [Fact]
-    public void CleanupMissingFiles_RemovesMissingAndPersists()
-    {
-        var manager = CreateManager();
-        var existing = MakePath("exists.cfg");
-        File.WriteAllText(existing, "{}");
-        manager.Add(existing);
-        manager.Add(MakePath("missing.cfg"));
-
-        manager.CleanupMissingFiles();
-
-        Assert.Single(manager.Files);
-        Assert.Equal(Path.GetFullPath(existing), manager.Files[0]);
-
-        // Cleanup must be persisted.
-        var reloaded = CreateManager();
-        Assert.Single(reloaded.Files);
-    }
 }

@@ -14,16 +14,4 @@ public static class UiThread
     {
         Application.Invoke(action);
     }
-
-    /// <summary>
-    /// Executes an action on the UI thread after a delay.
-    /// </summary>
-    public static void RunDelayed(Action action, TimeSpan delay)
-    {
-        Application.AddTimeout(delay, () =>
-        {
-            action();
-            return false; // Don't repeat
-        });
-    }
 }

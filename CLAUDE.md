@@ -77,12 +77,15 @@ Opcilloscope/
 │   ├── FocusManager.cs             # Keyboard focus navigation between panes
 │   ├── Views/
 │   │   ├── AddressSpaceView.cs     # TreeView for OPC UA address space navigation
+│   │   ├── BrailleCanvas.cs        # High-resolution braille-character drawing canvas
 │   │   ├── MonitoredVariablesView.cs # TableView for subscribed variables with selection
 │   │   ├── NodeDetailsView.cs      # Node attribute display panel
 │   │   ├── LogView.cs              # Application log display
 │   │   └── ScopeView.cs            # Real-time multi-signal oscilloscope view
 │   ├── Dialogs/
 │   │   ├── ConnectDialog.cs        # Server connection dialog with publishing interval
+│   │   ├── OpenConfigDialog.cs     # Open configuration file dialog with recent files
+│   │   ├── PasswordPromptDialog.cs # Password prompt for authenticated connections
 │   │   ├── WriteValueDialog.cs     # Write value to node dialog
 │   │   ├── ScopeDialog.cs          # Multi-signal scope dialog (up to 5 signals)
 │   │   ├── SaveConfigDialog.cs     # Save configuration file dialog
@@ -110,7 +113,9 @@ Opcilloscope/
 │
 ├── OpcUa/
 │   ├── OpcUaClientWrapper.cs       # OPC Foundation Session wrapper with connection management
+│   ├── ConnectionCredentials.cs    # Username/password credentials for authenticated sessions
 │   ├── ConnectionManager.cs        # Connection lifecycle orchestration (connect/disconnect/reconnect)
+│   ├── DataTypeResolver.cs         # Built-in OPC UA data type name/BuiltInType lookup
 │   ├── NodeBrowser.cs              # Address space navigation and browsing
 │   ├── SubscriptionManager.cs      # OPC UA Subscription with MonitoredVariables
 │   └── Models/
@@ -136,21 +141,29 @@ Opcilloscope/
 │   └── Opcilloscope.Tests/             # Unit and integration tests (xUnit)
 │       ├── Opcilloscope.Tests.csproj
 │       ├── Infrastructure/
+│       │   ├── TestModuleInitializer.cs # Test assembly initialization
 │       │   └── TestServerFixture.cs # xUnit fixture with IAsyncLifetime
 │       ├── Integration/
 │       │   ├── OpcUaIntegrationTests.cs
+│       │   ├── AuthenticationIntegrationTests.cs
 │       │   ├── ConnectionManagerIntegrationTests.cs
 │       │   ├── ErrorHandlingIntegrationTests.cs
 │       │   ├── NodeBrowserIntegrationTests.cs
-│       │   └── SubscriptionManagerIntegrationTests.cs
+│       │   ├── ReconnectIntegrationTests.cs
+│       │   ├── SubscriptionManagerIntegrationTests.cs
+│       │   └── WriteIntegrationTests.cs
 │       ├── App/
 │       │   ├── ThemeManagerTests.cs
 │       │   ├── AppThemeTests.cs
+│       │   ├── FocusManagerTests.cs
+│       │   ├── Views/
+│       │   │   └── BrailleCanvasTests.cs
 │       │   └── Keybindings/
 │       │       ├── KeybindingTests.cs
 │       │       └── KeybindingManagerTests.cs
 │       ├── Configuration/
-│       │   └── ConfigurationServiceTests.cs
+│       │   ├── ConfigurationServiceTests.cs
+│       │   └── RecentFilesManagerTests.cs
 │       ├── OpcUa/
 │       │   ├── SubscriptionManagerTests.cs
 │       │   ├── NodeAttributesTests.cs
@@ -160,13 +173,11 @@ Opcilloscope/
 │       └── Utilities/
 │           ├── LoggerTests.cs
 │           ├── CsvRecordingManagerTests.cs
+│           ├── NodeAttributeFormatterTests.cs
 │           ├── OpcValueConverterTests.cs
 │           └── ConnectionIdentifierTests.cs
 │
-├── docs/
-│   ├── MARKETING_DESCRIPTION.md    # Product marketing copy
-│   ├── UAT-CHECKLIST.md            # User acceptance testing guide
-│   └── plan.md                     # Development plan
+├── docs/                           # Screenshots and promotional images
 │
 └── .github/workflows/
     ├── ci.yml                      # Build and test on push/PR

@@ -162,6 +162,21 @@ public static class ConnectionIdentifier
     }
 
     /// <summary>
+    /// Sanitizes a full URL to be used as part of a filename.
+    /// Strips the protocol prefix and replaces invalid filename characters with underscores.
+    /// </summary>
+    /// <param name="url">The URL to sanitize.</param>
+    /// <returns>A filename-safe string derived from the URL.</returns>
+    public static string SanitizeUrlForFilename(string? url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return "unknown";
+
+        var sanitized = SanitizeComponent(RemoveProtocolPrefix(url));
+        return LimitLength(sanitized);
+    }
+
+    /// <summary>
     /// Limits the length of an identifier to avoid overly long filenames.
     /// </summary>
     /// <param name="identifier">The identifier to limit.</param>

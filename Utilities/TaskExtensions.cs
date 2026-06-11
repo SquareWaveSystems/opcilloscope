@@ -32,25 +32,4 @@ public static class TaskExtensions
             System.Diagnostics.Debug.WriteLine($"{message}\n{ex}");
         }
     }
-
-    /// <summary>
-    /// Safely executes a task without awaiting, using a custom error handler.
-    /// </summary>
-    /// <param name="task">The task to execute.</param>
-    /// <param name="onError">Action to execute when an error occurs.</param>
-    public static async void FireAndForget(this Task task, Action<Exception> onError)
-    {
-        try
-        {
-            await task.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Cancellation is expected
-        }
-        catch (Exception ex)
-        {
-            onError(ex);
-        }
-    }
 }

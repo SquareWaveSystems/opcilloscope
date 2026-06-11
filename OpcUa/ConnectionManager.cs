@@ -17,10 +17,11 @@ public sealed class ConnectionManager : IDisposable
     private bool _disposed;
     private int _isReconnecting;
 
-    // Intervals from the most recent ConnectAsync, so subscription restoration
-    // after a reconnect does not silently fall back to the defaults.
+    // Subscription settings from the most recent ConnectAsync, so subscription
+    // restoration after a reconnect does not silently fall back to the defaults.
     private int _publishingInterval = 250;
     private int _samplingInterval = 250;
+    private uint _queueSize = 10;
 
     // Stored event handler references for proper unsubscription
     private Action<Models.MonitoredNode>? _valueChangedHandler;
@@ -120,7 +121,8 @@ public sealed class ConnectionManager : IDisposable
     /// <param name="credentials">Authentication credentials (defaults to anonymous).</param>
     /// <param name="securityMode">Requested message security mode (e.g. None, Sign, SignAndEncrypt). When null/None, an unsecured endpoint is selected.</param>
     /// <param name="securityPolicy">Requested security policy URI or shorthand (e.g. Basic256Sha256). Honored when a matching endpoint exists.</param>
-    /// <param name="samplingInterval">Sampling interval in milliseconds for monitored items.</param>
+    /// <param name="samplingInterval">Sampling interval in milliseconds for monitored items (0 = as fast as the server allows).</param>
+    /// <param name="queueSize">Server-side notification queue size for monitored items.</param>
     /// <returns>True if connection succeeded, false otherwise.</returns>
     public async Task<bool> ConnectAsync(
         string endpoint,
@@ -128,7 +130,8 @@ public sealed class ConnectionManager : IDisposable
         ConnectionCredentials? credentials = null,
         string? securityMode = null,
         string? securityPolicy = null,
-        int samplingInterval = 250)
+        int samplingInterval = 250,
+        uint queueSize = 10)
     {
         // Async teardown: the synchronous Disconnect() blocks on the OPC UA close
         // round-trip (up to the transport timeout against a dead server), which froze
@@ -139,6 +142,7 @@ public sealed class ConnectionManager : IDisposable
         _credentials = credentials ?? ConnectionCredentials.Anonymous;
         _publishingInterval = publishingInterval;
         _samplingInterval = samplingInterval;
+        _queueSize = queueSize;
         StateChanged?.Invoke(ConnectionState.Connecting);
 
         try
@@ -338,6 +342,7 @@ public sealed class ConnectionManager : IDisposable
         _subscriptionManager = new SubscriptionManager(_client, _logger);
         _subscriptionManager.PublishingInterval = _publishingInterval;
         _subscriptionManager.SamplingInterval = _samplingInterval;
+        _subscriptionManager.QueueSize = _queueSize;
         var initialized = await _subscriptionManager.InitializeAsync();
 
         // Store handler references for proper unsubscription

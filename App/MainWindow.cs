@@ -88,14 +88,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         // Override global "Menu" ColorScheme BEFORE creating any views
         // This prevents StatusBar's blue background flash on first render
         var theme = ThemeManager.Current;
-        Colors.ColorSchemes["Menu"] = new ColorScheme
-        {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
+        Colors.ColorSchemes["Menu"] = ThemeStyler.CreateFlatBarScheme(theme);
 
         // Create theme toggle menu item
         _themeToggleItem = new MenuItem(GetThemeToggleTitle(), "", ToggleTheme);
@@ -149,14 +142,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         };
 
         // Also set ColorScheme directly on the StatusBar instance
-        _statusBar.ColorScheme = new ColorScheme
-        {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
+        _statusBar.ColorScheme = ThemeStyler.CreateFlatBarScheme(theme);
 
         // Connection status indicator (colored) - FAR RIGHT, overlaid on status bar row
         // We position it dynamically based on text width
@@ -330,14 +316,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         var theme = ThemeManager.Current;
 
         // Update global "Menu" ColorScheme (used by StatusBar)
-        Colors.ColorSchemes["Menu"] = new ColorScheme
-        {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
+        Colors.ColorSchemes["Menu"] = ThemeStyler.CreateFlatBarScheme(theme);
 
         // Apply main window styling - double-line for emphasis
         ColorScheme = theme.MainColorScheme;
@@ -354,14 +333,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
         // Apply clean status bar styling (no blue background)
         // Must set ColorScheme AND call SetNeedsDisplay to override Terminal.Gui defaults
-        var cleanStatusBarScheme = new ColorScheme
-        {
-            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
+        var cleanStatusBarScheme = ThemeStyler.CreateFlatBarScheme(theme);
         _statusBar.ColorScheme = cleanStatusBarScheme;
         _statusBar.SetNeedsLayout();
 
@@ -626,7 +598,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
                 if (Opc.Ua.StatusCode.IsGood(attrs[1].StatusCode) && attrs[1].Value is Opc.Ua.NodeId dataTypeNodeId)
                 {
-                    (builtInType, dataTypeName) = SubscriptionManager.ResolveDataType(dataTypeNodeId);
+                    (builtInType, dataTypeName) = DataTypeResolver.Resolve(dataTypeNodeId);
                 }
             }
 
@@ -1251,15 +1223,16 @@ License: MIT
                 // old server while (or after) the new connection is attempted.
                 await DisconnectAsync();
 
-                // Honor the config's security and sampling settings (the connect dialog has
-                // no UI for these, so the config file is their only source).
+                // Honor the config's security and subscription settings (the connect dialog
+                // has no UI for these, so the config file is their only source).
                 var connected = await _connectionManager.ConnectAsync(
                     config.Server.EndpointUrl,
                     config.Settings.PublishingIntervalMs,
                     credentials,
                     config.Server.SecurityMode,
                     config.Server.SecurityPolicy,
-                    config.Settings.SamplingIntervalMs);
+                    config.Settings.SamplingIntervalMs,
+                    config.Settings.QueueSize);
 
                 if (connected)
                 {

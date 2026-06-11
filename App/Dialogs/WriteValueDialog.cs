@@ -131,14 +131,7 @@ public class WriteValueDialog : Dialog
 
 
         // Default button highlighted with amber
-        var defaultButtonScheme = new ColorScheme
-        {
-            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-        };
+        var defaultButtonScheme = ThemeStyler.CreateAccentButtonScheme(theme);
 
         var writeButton = new Button
         {

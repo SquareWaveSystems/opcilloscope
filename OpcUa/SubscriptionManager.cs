@@ -22,6 +22,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     private uint _nextClientHandle = 1;
     private int _publishingInterval = 250;
     private int _samplingInterval = 250;
+    private uint _queueSize = 10;
     private bool _isInitialized;
     private readonly object _lock = new();
 
@@ -54,6 +55,15 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     {
         get => _samplingInterval;
         set => _samplingInterval = Math.Max(0, Math.Min(60000, value));
+    }
+
+    /// <summary>
+    /// Server-side notification queue size applied to newly created monitored items.
+    /// </summary>
+    public uint QueueSize
+    {
+        get => _queueSize;
+        set => _queueSize = Math.Max(1, Math.Min(1000, value));
     }
 
     public IReadOnlyCollection<MonitoredNode> MonitoredVariables
@@ -143,7 +153,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 StartNodeId = nodeId,
                 AttributeId = Attributes.Value,
                 SamplingInterval = _samplingInterval,
-                QueueSize = 10,
+                QueueSize = _queueSize,
                 DiscardOldest = true
             };
 
@@ -282,7 +292,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 // DataType - this is a NodeId that we need to resolve
                 if (StatusCode.IsGood(results[1].StatusCode) && results[1].Value is NodeId dataTypeNodeId)
                 {
-                    var (builtInType, typeName) = ResolveDataType(dataTypeNodeId);
+                    var (builtInType, typeName) = DataTypeResolver.Resolve(dataTypeNodeId);
                     item.DataType = builtInType;
                     item.DataTypeName = typeName;
                 }
@@ -295,49 +305,6 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         {
             _logger.Warning($"Failed to read attributes for {item.DisplayName}: {ex.Message}");
         }
-    }
-
-    internal static (BuiltInType, string) ResolveDataType(NodeId dataTypeNodeId)
-    {
-        // Compare against standard OPC UA DataType NodeIds explicitly for clarity and maintainability
-        if (dataTypeNodeId.NamespaceIndex == 0 && dataTypeNodeId.IdType == IdType.Numeric)
-        {
-            if (dataTypeNodeId.Equals(DataTypeIds.Boolean))
-                return (BuiltInType.Boolean, "Boolean");
-            if (dataTypeNodeId.Equals(DataTypeIds.SByte))
-                return (BuiltInType.SByte, "SByte");
-            if (dataTypeNodeId.Equals(DataTypeIds.Byte))
-                return (BuiltInType.Byte, "Byte");
-            if (dataTypeNodeId.Equals(DataTypeIds.Int16))
-                return (BuiltInType.Int16, "Int16");
-            if (dataTypeNodeId.Equals(DataTypeIds.UInt16))
-                return (BuiltInType.UInt16, "UInt16");
-            if (dataTypeNodeId.Equals(DataTypeIds.Int32))
-                return (BuiltInType.Int32, "Int32");
-            if (dataTypeNodeId.Equals(DataTypeIds.UInt32))
-                return (BuiltInType.UInt32, "UInt32");
-            if (dataTypeNodeId.Equals(DataTypeIds.Int64))
-                return (BuiltInType.Int64, "Int64");
-            if (dataTypeNodeId.Equals(DataTypeIds.UInt64))
-                return (BuiltInType.UInt64, "UInt64");
-            if (dataTypeNodeId.Equals(DataTypeIds.Float))
-                return (BuiltInType.Float, "Float");
-            if (dataTypeNodeId.Equals(DataTypeIds.Double))
-                return (BuiltInType.Double, "Double");
-            if (dataTypeNodeId.Equals(DataTypeIds.String))
-                return (BuiltInType.String, "String");
-            if (dataTypeNodeId.Equals(DataTypeIds.DateTime))
-                return (BuiltInType.DateTime, "DateTime");
-            if (dataTypeNodeId.Equals(DataTypeIds.Guid))
-                return (BuiltInType.Guid, "Guid");
-            if (dataTypeNodeId.Equals(DataTypeIds.ByteString))
-                return (BuiltInType.ByteString, "ByteString");
-
-            // Fallback for other namespace 0 numeric types
-            return (BuiltInType.Variant, dataTypeNodeId.ToString());
-        }
-
-        return (BuiltInType.Variant, dataTypeNodeId.ToString());
     }
 
     public async Task<bool> RemoveNodeAsync(uint clientHandle)
@@ -379,21 +346,6 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         _logger.Info($"Unsubscribed from {variable.DisplayName}");
         VariableRemoved?.Invoke(clientHandle);
         return true;
-    }
-
-    public async Task<bool> RemoveNodeByNodeIdAsync(NodeId nodeId)
-    {
-        MonitoredNode? variable;
-        lock (_lock)
-        {
-            variable = _monitoredVariables.Values.FirstOrDefault(m => m.NodeId.EqualsNodeId(nodeId));
-        }
-
-        if (variable != null)
-        {
-            return await RemoveNodeAsync(variable.ClientHandle);
-        }
-        return false;
     }
 
     private void ProcessValueChange(MonitoredNode variable, DataValue dataValue)
@@ -605,7 +557,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                     StartNodeId = nodeId,
                     AttributeId = Attributes.Value,
                     SamplingInterval = _samplingInterval,
-                    QueueSize = 10,
+                    QueueSize = _queueSize,
                     DiscardOldest = true
                 };
 

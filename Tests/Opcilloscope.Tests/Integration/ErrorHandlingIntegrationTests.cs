@@ -114,21 +114,6 @@ public class ErrorHandlingIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task SubscriptionManager_RemoveNodeByNodeIdAsync_NonExistent_ReturnsFalse()
-    {
-        // Arrange
-        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
-        await subscriptionManager.InitializeAsync();
-        var nonExistentNodeId = new NodeId("NonExistent", 99);
-
-        // Act
-        var result = await subscriptionManager.RemoveNodeByNodeIdAsync(nonExistentNodeId);
-
-        // Assert
-        Assert.False(result);
-    }
-
-    [Fact]
     public async Task ConnectionManager_ConnectAsync_InvalidHost_DoesNotThrow()
     {
         // Arrange

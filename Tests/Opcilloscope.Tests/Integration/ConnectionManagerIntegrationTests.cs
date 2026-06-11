@@ -64,6 +64,24 @@ public class ConnectionManagerIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ConnectAsync_AppliesSubscriptionSettings()
+    {
+        // Act
+        await _connectionManager!.ConnectAsync(
+            _fixture.EndpointUrl,
+            publishingInterval: 500,
+            samplingInterval: 1000,
+            queueSize: 25);
+
+        // Assert - settings flow through to the subscription manager
+        var subscriptionManager = _connectionManager.SubscriptionManager;
+        Assert.NotNull(subscriptionManager);
+        Assert.Equal(500, subscriptionManager.PublishingInterval);
+        Assert.Equal(1000, subscriptionManager.SamplingInterval);
+        Assert.Equal(25u, subscriptionManager.QueueSize);
+    }
+
+    [Fact]
     public async Task ConnectAsync_FiresStateChangedEvents()
     {
         // Arrange

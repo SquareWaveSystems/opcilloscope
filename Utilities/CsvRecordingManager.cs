@@ -97,7 +97,7 @@ public class CsvRecordingManager : IDisposable
 
         if (!string.IsNullOrEmpty(connectionUrl))
         {
-            baseName = SanitizeUrlForFilename(connectionUrl);
+            baseName = ConnectionIdentifier.SanitizeUrlForFilename(connectionUrl);
         }
         else
         {
@@ -105,62 +105,6 @@ public class CsvRecordingManager : IDisposable
         }
 
         return $"{baseName}_{variableCount}vars_{timestamp}{RecordingFileExtension}";
-    }
-
-    /// <summary>
-    /// Sanitizes a URL to be used as part of a filename.
-    /// Replaces invalid filename characters with underscores.
-    /// </summary>
-    /// <param name="url">The URL to sanitize.</param>
-    /// <returns>A filename-safe string derived from the URL.</returns>
-    public static string SanitizeUrlForFilename(string url)
-    {
-        if (string.IsNullOrEmpty(url))
-            return "unknown";
-
-        // Remove protocol prefix
-        var sanitized = url;
-        if (sanitized.StartsWith("opc.tcp://", StringComparison.OrdinalIgnoreCase))
-            sanitized = sanitized.Substring(10);
-        else if (sanitized.StartsWith("opc.https://", StringComparison.OrdinalIgnoreCase))
-            sanitized = sanitized.Substring(12);
-        else if (sanitized.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            sanitized = sanitized.Substring(8);
-        else if (sanitized.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-            sanitized = sanitized.Substring(7);
-
-        // Replace invalid filename characters with underscores
-        var invalidChars = Path.GetInvalidFileNameChars();
-        foreach (var c in invalidChars)
-        {
-            sanitized = sanitized.Replace(c, '_');
-        }
-
-        // Also replace common URL special characters
-        sanitized = sanitized
-            .Replace(':', '_')
-            .Replace('/', '_')
-            .Replace('\\', '_')
-            .Replace('?', '_')
-            .Replace('&', '_')
-            .Replace('=', '_');
-
-        // Remove consecutive underscores
-        while (sanitized.Contains("__"))
-        {
-            sanitized = sanitized.Replace("__", "_");
-        }
-
-        // Trim underscores from start and end
-        sanitized = sanitized.Trim('_');
-
-        // Limit length to avoid overly long filenames
-        if (sanitized.Length > 50)
-        {
-            sanitized = sanitized.Substring(0, 50).TrimEnd('_');
-        }
-
-        return string.IsNullOrEmpty(sanitized) ? "unknown" : sanitized;
     }
 
     /// <summary>

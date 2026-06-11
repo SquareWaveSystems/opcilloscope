@@ -253,6 +253,38 @@ public class ConnectionIdentifierTests
         Assert.DoesNotContain(":", result);
     }
 
+    [Theory]
+    [InlineData("opc.tcp://localhost:4840", "localhost_4840")]
+    [InlineData("opc.tcp://192.168.1.100:4840", "192.168.1.100_4840")]
+    [InlineData("opc.https://server.example.com:443", "server.example.com_443")]
+    [InlineData("opc.tcp://server:4840/UA/MyServer", "server_4840_UA_MyServer")]
+    [InlineData("", "unknown")]
+    [InlineData(null, "unknown")]
+    public void SanitizeUrlForFilename_ProducesFilenameSafeName(string? url, string expected)
+    {
+        var result = ConnectionIdentifier.SanitizeUrlForFilename(url);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void SanitizeUrlForFilename_RemovesConsecutiveUnderscores()
+    {
+        var result = ConnectionIdentifier.SanitizeUrlForFilename("opc.tcp://server:4840//path");
+
+        Assert.DoesNotContain("__", result);
+    }
+
+    [Fact]
+    public void SanitizeUrlForFilename_TruncatesLongUrls()
+    {
+        var longUrl = "opc.tcp://" + new string('a', 100) + ".example.com:4840";
+
+        var result = ConnectionIdentifier.SanitizeUrlForFilename(longUrl);
+
+        Assert.True(result.Length <= 50, $"Result should be <= 50 chars, was {result.Length}");
+    }
+
     [Fact]
     public void LimitLength_WithShortIdentifier_ReturnsUnchanged()
     {

@@ -9,48 +9,37 @@ namespace Opcilloscope.App.Themes;
 public static class ThemeStyler
 {
     /// <summary>
-    /// Applies full theme styling to a view including borders, colors, and spacing.
+    /// Applies full theme styling to a frame including borders, colors, and spacing.
     /// Note: Does NOT override BorderStyle - caller should set that explicitly to control
     /// whether a view uses emphasized (double-line) or secondary (single-line) borders.
     /// </summary>
-    public static void ApplyTo(View view, AppTheme? theme = null)
+    public static void ApplyToFrame(FrameView frame, AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
 
         // Apply color scheme
-        view.ColorScheme = theme.MainColorScheme;
+        frame.ColorScheme = theme.MainColorScheme;
 
         // Note: BorderStyle is NOT set here - callers should set it explicitly
         // to control emphasized vs secondary border styling
 
         // Configure border colors - use BorderColorScheme for consistent grey borders
         // that don't change to amber/yellow when focused (avoids terminal inconsistencies)
-        if (view.Border != null)
+        if (frame.Border != null)
         {
-            view.Border.ColorScheme = theme.BorderColorScheme;
+            frame.Border.ColorScheme = theme.BorderColorScheme;
         }
 
         // Apply margin and padding from theme
-        if (view.Margin != null)
+        if (frame.Margin != null)
         {
-            view.Margin.Thickness = theme.MarginThickness;
+            frame.Margin.Thickness = theme.MarginThickness;
         }
 
-        if (view.Padding != null)
+        if (frame.Padding != null)
         {
-            view.Padding.Thickness = theme.PaddingThickness;
+            frame.Padding.Thickness = theme.PaddingThickness;
         }
-    }
-
-    /// <summary>
-    /// Applies styling to a FrameView with themed borders.
-    /// </summary>
-    public static void ApplyToFrame(FrameView frame, AppTheme? theme = null)
-    {
-        theme ??= ThemeManager.Current;
-
-        // Apply base styling
-        ApplyTo(frame, theme);
     }
 
     /// <summary>
@@ -70,15 +59,6 @@ public static class ThemeStyler
     }
 
     /// <summary>
-    /// Applies styling to a button.
-    /// </summary>
-    public static void ApplyToButton(Button button, AppTheme? theme = null)
-    {
-        theme ??= ThemeManager.Current;
-        button.ColorScheme = theme.ButtonColorScheme;
-    }
-
-    /// <summary>
     /// Applies menu bar styling.
     /// </summary>
     public static void ApplyToMenuBar(MenuBar menuBar, AppTheme? theme = null)
@@ -88,50 +68,35 @@ public static class ThemeStyler
     }
 
     /// <summary>
-    /// Applies status bar styling.
+    /// Creates the accent-colored scheme used to highlight a dialog's default button.
     /// </summary>
-    public static void ApplyToStatusBar(StatusBar statusBar, AppTheme? theme = null)
+    public static ColorScheme CreateAccentButtonScheme(AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
-        statusBar.ColorScheme = theme.MenuColorScheme;
-    }
-
-    /// <summary>
-    /// Creates a styled label with theme colors.
-    /// </summary>
-    public static Label CreateLabel(string text, AppTheme? theme = null)
-    {
-        theme ??= ThemeManager.Current;
-        return new Label
+        return new ColorScheme
         {
-            Text = text,
-            ColorScheme = theme.MainColorScheme
+            Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
     }
 
     /// <summary>
-    /// Creates a styled TextField with theme colors.
+    /// Creates the flat menu/status bar scheme. Unlike MenuColorScheme this keeps the
+    /// theme background on focus, avoiding inverted highlight flashes on the bars.
     /// </summary>
-    public static TextField CreateTextField(string text = "", AppTheme? theme = null)
+    public static ColorScheme CreateFlatBarScheme(AppTheme? theme = null)
     {
         theme ??= ThemeManager.Current;
-        return new TextField
+        return new ColorScheme
         {
-            Text = text,
-            ColorScheme = theme.MainColorScheme
-        };
-    }
-
-    /// <summary>
-    /// Creates a styled button with theme decorations.
-    /// </summary>
-    public static Button CreateButton(string text, AppTheme? theme = null)
-    {
-        theme ??= ThemeManager.Current;
-        return new Button
-        {
-            Text = text,
-            ColorScheme = theme.ButtonColorScheme
+            Normal = new Terminal.Gui.Attribute(theme.Foreground, theme.Background),
+            Focus = new Terminal.Gui.Attribute(theme.ForegroundBright, theme.Background),
+            HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
+            HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
+            Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
         };
     }
 }

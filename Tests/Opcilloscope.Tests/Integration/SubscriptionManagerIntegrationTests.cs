@@ -194,29 +194,6 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task RemoveNodeByNodeIdAsync_UnsubscribesFromNode()
-    {
-        // Arrange
-        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
-        await subscriptionManager.InitializeAsync();
-        var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
-        var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
-
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
-
-        // Act
-        var result = await subscriptionManager.RemoveNodeByNodeIdAsync(nodeId);
-
-        // Assert
-        Assert.True(result);
-        Assert.Empty(subscriptionManager.MonitoredVariables);
-    }
-
-    [Fact]
     public async Task ValueChanged_ReceivesUpdates_WhenValueChanges()
     {
         // Arrange
@@ -306,6 +283,41 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
 
         // Assert
         Assert.Equal(10000, subscriptionManager.PublishingInterval);
+    }
+
+    [Fact]
+    public async Task SamplingInterval_AppliedToNewMonitoredItems()
+    {
+        // Arrange
+        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
+        subscriptionManager.SamplingInterval = 1000;
+        subscriptionManager.QueueSize = 25;
+        await subscriptionManager.InitializeAsync();
+        var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
+
+        // Act
+        var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
+
+        // Assert
+        Assert.NotNull(node);
+        Assert.Equal(1000, subscriptionManager.SamplingInterval);
+        Assert.Equal(25u, subscriptionManager.QueueSize);
+    }
+
+    // SamplingInterval clamping is covered by the unit tests in
+    // SubscriptionManagerTests (0-60000 range).
+
+    [Theory]
+    [InlineData(0u, 1u)]      // zero clamps to minimum of 1
+    [InlineData(10u, 10u)]
+    [InlineData(5000u, 1000u)] // above maximum clamps to 1000
+    public void QueueSize_ClampsToValidRange(uint input, uint expected)
+    {
+        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
+
+        subscriptionManager.QueueSize = input;
+
+        Assert.Equal(expected, subscriptionManager.QueueSize);
     }
 
     [Fact]

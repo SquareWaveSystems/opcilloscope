@@ -72,14 +72,7 @@ public class OpenConfigDialog : Dialog
             Y = Pos.AnchorEnd(1),
             Text = $"{theme.ButtonPrefix}Open{theme.ButtonSuffix}",
             IsDefault = true,
-            ColorScheme = new ColorScheme
-            {
-                Normal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-                Focus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-                HotNormal = new Terminal.Gui.Attribute(theme.Accent, theme.Background),
-                HotFocus = new Terminal.Gui.Attribute(theme.AccentBright, theme.Background),
-                Disabled = new Terminal.Gui.Attribute(theme.MutedText, theme.Background)
-            }
+            ColorScheme = ThemeStyler.CreateAccentButtonScheme(theme)
         };
         openButton.Accepting += (_, _) => Confirm();
 
