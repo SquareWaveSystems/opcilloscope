@@ -21,6 +21,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     private readonly Dictionary<uint, uint> _opcHandleToClientHandle = new();
     private uint _nextClientHandle = 1;
     private int _publishingInterval = 250;
+    private int _samplingInterval = 250;
     private bool _isInitialized;
     private readonly object _lock = new();
 
@@ -43,6 +44,16 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     {
         get => _publishingInterval;
         set => _publishingInterval = Math.Max(100, Math.Min(10000, value));
+    }
+
+    /// <summary>
+    /// Sampling interval in milliseconds applied to monitored items.
+    /// 0 requests the server's fastest practical rate.
+    /// </summary>
+    public int SamplingInterval
+    {
+        get => _samplingInterval;
+        set => _samplingInterval = Math.Max(0, Math.Min(60000, value));
     }
 
     public IReadOnlyCollection<MonitoredNode> MonitoredVariables
@@ -107,6 +118,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             return null;
         }
 
+        uint clientHandle;
         lock (_lock)
         {
             // Check if already monitoring this node
@@ -115,11 +127,14 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 _logger.Warning($"Node {displayName} is already being monitored");
                 return null;
             }
+
+            // Allocate the handle under the lock: it keys three dictionaries, and an
+            // unsynchronized increment lets two concurrent adds collide on one handle.
+            clientHandle = _nextClientHandle++;
         }
 
         try
         {
-            var clientHandle = _nextClientHandle++;
 
             // Create OPC UA monitored item
             var monitoredItem = new MonitoredItem(_subscription.DefaultItem)
@@ -127,7 +142,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 DisplayName = displayName,
                 StartNodeId = nodeId,
                 AttributeId = Attributes.Value,
-                SamplingInterval = 250,
+                SamplingInterval = _samplingInterval,
                 QueueSize = 10,
                 DiscardOldest = true
             };
@@ -589,7 +604,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                     DisplayName = displayName,
                     StartNodeId = nodeId,
                     AttributeId = Attributes.Value,
-                    SamplingInterval = 250,
+                    SamplingInterval = _samplingInterval,
                     QueueSize = 10,
                     DiscardOldest = true
                 };

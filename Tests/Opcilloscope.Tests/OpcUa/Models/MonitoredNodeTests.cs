@@ -23,6 +23,38 @@ public class MonitoredNodeTests
     }
 
     [Fact]
+    public void MonitoredNode_IsGood_ReturnsTrueForGoodWithInfoBits()
+    {
+        // GoodClamped (0x00300000): Good severity with informational sub-status bits.
+        var node = new MonitoredNode
+        {
+            NodeId = new NodeId(1000),
+            DisplayName = "Test",
+            StatusCode = 0x00300000
+        };
+
+        // Assert
+        Assert.True(node.IsGood);
+        Assert.False(node.IsUncertain);
+        Assert.False(node.IsBad);
+    }
+
+    [Fact]
+    public void MonitoredNode_StatusString_ReturnsGoodWithCodeForGoodWithInfoBits()
+    {
+        var node = new MonitoredNode
+        {
+            NodeId = new NodeId(1000),
+            DisplayName = "Test",
+            StatusCode = 0x00300000 // GoodClamped
+        };
+
+        // Assert
+        Assert.StartsWith("Good", node.StatusString);
+        Assert.Contains("0x00300000", node.StatusString);
+    }
+
+    [Fact]
     public void MonitoredNode_IsBad_ReturnsTrueWhenBadBitSet()
     {
         // Arrange

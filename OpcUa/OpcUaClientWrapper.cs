@@ -15,6 +15,7 @@ public class OpcUaClientWrapper : IDisposable
     private readonly Logger _logger;
     private string? _currentEndpoint;
     private CancellationTokenSource? _reconnectCts;
+    private readonly object _reconnectCtsLock = new();
     private bool _disposed;
     private ApplicationConfiguration? _appConfig;
     private ConfiguredEndpoint? _lastConfiguredEndpoint;
@@ -287,14 +288,22 @@ public class OpcUaClientWrapper : IDisposable
 
     /// <summary>
     /// Cancels and disposes the reconnect cancellation token source, if any.
+    /// Safe to race with <see cref="ReconnectAsync"/>: the field swap happens
+    /// under a lock, so two callers can never dispose the same instance twice.
     /// </summary>
     private void DisposeReconnectCts()
     {
-        if (_reconnectCts != null)
+        CancellationTokenSource? cts;
+        lock (_reconnectCtsLock)
         {
-            try { _reconnectCts.Cancel(); } catch (ObjectDisposedException) { }
-            _reconnectCts.Dispose();
+            cts = _reconnectCts;
             _reconnectCts = null;
+        }
+
+        if (cts != null)
+        {
+            try { cts.Cancel(); } catch (ObjectDisposedException) { }
+            cts.Dispose();
         }
     }
 
@@ -313,14 +322,23 @@ public class OpcUaClientWrapper : IDisposable
         }
 
         DisposeReconnectCts();
-        _reconnectCts = new CancellationTokenSource();
+
+        // Work with a local reference throughout: a concurrent Disconnect() can null
+        // and dispose the field at any time, so re-reading it mid-loop would NRE or
+        // touch a disposed CTS.
+        var cts = new CancellationTokenSource();
+        lock (_reconnectCtsLock)
+        {
+            _reconnectCts = cts;
+        }
+        var token = cts.Token;
 
         // Exponential backoff: 1s, 2s, 4s, 8s
         int[] delays = { 1000, 2000, 4000, 8000 };
 
         for (int attempt = 0; attempt < delays.Length; attempt++)
         {
-            if (_reconnectCts.Token.IsCancellationRequested)
+            if (token.IsCancellationRequested)
                 return false;
 
             _logger.Info($"Reconnection attempt {attempt + 1}/{delays.Length}...");
@@ -330,8 +348,8 @@ public class OpcUaClientWrapper : IDisposable
                 // Strategy 1: Try to reconnect the existing session (preserves subscriptions automatically)
                 if (_session != null)
                 {
-                    var reconnectResult = await TrySessionReconnectAsync();
-                    if (reconnectResult)
+                    var reconnectResult = await TrySessionReconnectAsync(token);
+                    if (reconnectResult && !token.IsCancellationRequested)
                     {
                         _logger.Info("Session reconnected successfully (subscriptions preserved)");
                         Connected?.Invoke();
@@ -340,9 +358,18 @@ public class OpcUaClientWrapper : IDisposable
                 }
 
                 // Strategy 2: Recreate session and transfer subscriptions
-                var recreateResult = await TryRecreateSessionAsync();
+                var recreateResult = await TryRecreateSessionAsync(token);
                 if (recreateResult)
                 {
+                    if (token.IsCancellationRequested)
+                    {
+                        // The user disconnected while the session was being recreated;
+                        // don't resurrect a connection they asked to close.
+                        _logger.Info("Reconnect cancelled after session recreation - closing the new session");
+                        await DisconnectAsync();
+                        return false;
+                    }
+
                     _logger.Info("Session recreated successfully (subscriptions transferred)");
                     Connected?.Invoke();
                     return true;
@@ -356,7 +383,7 @@ public class OpcUaClientWrapper : IDisposable
             // Wait before next attempt
             try
             {
-                await Task.Delay(delays[attempt], _reconnectCts.Token);
+                await Task.Delay(delays[attempt], token);
             }
             catch (OperationCanceledException)
             {
@@ -373,7 +400,7 @@ public class OpcUaClientWrapper : IDisposable
     /// Tries to reconnect the existing session using OPC UA Reconnect service.
     /// This preserves the session ID and all subscriptions automatically.
     /// </summary>
-    private async Task<bool> TrySessionReconnectAsync()
+    private async Task<bool> TrySessionReconnectAsync(CancellationToken cancellationToken)
     {
         if (_session == null)
             return false;
@@ -381,7 +408,7 @@ public class OpcUaClientWrapper : IDisposable
         try
         {
             _logger.Info("Attempting session reconnect...");
-            await _session.ReconnectAsync(_reconnectCts?.Token ?? CancellationToken.None);
+            await _session.ReconnectAsync(cancellationToken);
             return _session.Connected;
         }
         catch (ServiceResultException ex)
@@ -395,7 +422,7 @@ public class OpcUaClientWrapper : IDisposable
     /// Recreates the session and transfers existing subscriptions to it.
     /// Used when direct reconnect fails (e.g., session timed out on server).
     /// </summary>
-    private async Task<bool> TryRecreateSessionAsync()
+    private async Task<bool> TryRecreateSessionAsync(CancellationToken cancellationToken)
     {
         if (_lastConfiguredEndpoint == null || string.IsNullOrEmpty(_currentEndpoint))
             return false;
@@ -450,7 +477,7 @@ public class OpcUaClientWrapper : IDisposable
             {
                 if (subscriptionsToTransfer != null && subscriptionsToTransfer.Count > 0)
                 {
-                    var transferred = await TransferSubscriptionsAsync(subscriptionsToTransfer);
+                    var transferred = await TransferSubscriptionsAsync(subscriptionsToTransfer, cancellationToken);
                     _logger.Info($"Transferred {transferred} of {subscriptionsToTransfer.Count} subscription(s)");
                 }
             }
@@ -487,7 +514,7 @@ public class OpcUaClientWrapper : IDisposable
     /// <summary>
     /// Transfers subscriptions from a previous session to the current session.
     /// </summary>
-    private async Task<int> TransferSubscriptionsAsync(SubscriptionCollection subscriptions)
+    private async Task<int> TransferSubscriptionsAsync(SubscriptionCollection subscriptions, CancellationToken cancellationToken)
     {
         if (_session == null || subscriptions == null)
             return 0;
@@ -500,7 +527,7 @@ public class OpcUaClientWrapper : IDisposable
             var success = await _session.TransferSubscriptionsAsync(
                 subscriptions,
                 sendInitialValues: true,
-                _reconnectCts?.Token ?? CancellationToken.None);
+                cancellationToken);
 
             if (success)
             {
@@ -742,6 +769,14 @@ public class OpcUaClientWrapper : IDisposable
         }
 
         _logger.Info($"Selected endpoint: {selectedEndpoint.SecurityMode} / {selectedEndpoint.SecurityPolicyUri}");
+
+        if (_credentials.Type != AuthenticationType.Anonymous
+            && selectedEndpoint.SecurityMode == MessageSecurityMode.None)
+        {
+            _logger.Warning(
+                "Credentials will be sent over an UNENCRYPTED channel: the selected endpoint uses SecurityMode=None. " +
+                "Anyone on the network can read the username and password. Prefer a server endpoint with Sign or SignAndEncrypt.");
+        }
 
         // Update the endpoint URL to use the requested host if different
         // (handles cases where server returns localhost but we connected via IP/hostname)
