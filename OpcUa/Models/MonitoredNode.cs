@@ -11,6 +11,17 @@ public class MonitoredNode
     public NodeId NodeId { get; init; } = ObjectIds.RootFolder;
     public string DisplayName { get; init; } = string.Empty;
     public string Value { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Full-precision, culture-invariant representation of the last value,
+    /// captured at the same point the display <see cref="Value"/> is set
+    /// (see <c>SubscriptionManager.FormatRawValue</c>). Used for CSV recording
+    /// so exported data is lossless and locale-independent, while
+    /// <see cref="Value"/> remains a culture-aware display string ("F2" for
+    /// floating point). Arrays are serialized as semicolon-joined elements.
+    /// </summary>
+    public string RawValue { get; set; } = string.Empty;
+
     public DateTime? Timestamp { get; set; }
     public uint StatusCode { get; set; }
     public bool IsGood => StatusCode == 0; // StatusCode.Good = 0

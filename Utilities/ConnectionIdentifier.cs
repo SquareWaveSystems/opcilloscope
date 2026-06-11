@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Opcilloscope.Utilities;
 
 /// <summary>
@@ -16,7 +18,9 @@ public static class ConnectionIdentifier
     /// <returns>A standardized identifier string (e.g., "192.168.1.67-50000_20260107_1234").</returns>
     public static string Generate(string? endpointUrl, DateTime? timestamp = null, string timestampFormat = "yyyyMMdd_HHmm")
     {
-        var ts = (timestamp ?? DateTime.Now).ToString(timestampFormat);
+        // InvariantCulture pins the Gregorian calendar and separators so the
+        // identifier is stable regardless of the user's locale.
+        var ts = (timestamp ?? DateTime.Now).ToString(timestampFormat, CultureInfo.InvariantCulture);
 
         if (string.IsNullOrEmpty(endpointUrl))
             return $"config_{ts}";
