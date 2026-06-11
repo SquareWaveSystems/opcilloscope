@@ -701,6 +701,107 @@ public class CsvRecordingManagerTests : IDisposable
     }
 
     [Fact]
+    public void RecordValue_NeutralizesFormulaInjection_InDisplayName()
+    {
+        // Arrange - DisplayName originates from the (potentially untrusted)
+        // OPC UA server. "=cmd|'/C calc'!A0" executes as a formula when the
+        // CSV is opened in Excel/LibreOffice (CWE-1236).
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        var node = new MonitoredNode
+        {
+            DisplayName = "=cmd|'/C calc'!A0",
+            NodeId = new NodeId(1234),
+            Value = "100"
+        };
+
+        // Act
+        _manager.RecordValue(node);
+        _manager.StopRecording(); // waits for the background writer to drain
+
+        // Assert - the field must be prefixed with a single quote so
+        // spreadsheets treat it as text.
+        var content = File.ReadAllText(filePath);
+        Assert.Contains(",'=cmd|'/C calc'!A0,", content);
+        Assert.DoesNotContain(",=cmd", content);
+    }
+
+    [Fact]
+    public void RecordValue_DoesNotNeutralizeNegativeNumericValue()
+    {
+        // Arrange - recorded values are routinely negative numbers; they are
+        // inert in spreadsheets and prefixing them would corrupt the data
+        // column for downstream tools.
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        var node = new MonitoredNode
+        {
+            DisplayName = "TestNode",
+            NodeId = new NodeId(1234),
+            Value = "-12.5",
+            RawValue = "-12.5"
+        };
+
+        // Act
+        _manager.RecordValue(node);
+        _manager.StopRecording();
+
+        // Assert - written verbatim, no neutralization prefix.
+        var content = File.ReadAllText(filePath);
+        Assert.Contains(",-12.5,", content);
+        Assert.DoesNotContain("'-12.5", content);
+    }
+
+    [Fact]
+    public void RecordValue_NeutralizesPlusPrefixedDisplayName()
+    {
+        // Arrange - "+SomeTag" starts with a formula trigger and is not a
+        // valid invariant-culture number, so it must be neutralized.
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        var node = new MonitoredNode
+        {
+            DisplayName = "+SomeTag",
+            NodeId = new NodeId(1234),
+            Value = "100"
+        };
+
+        // Act
+        _manager.RecordValue(node);
+        _manager.StopRecording();
+
+        // Assert
+        var content = File.ReadAllText(filePath);
+        Assert.Contains(",'+SomeTag,", content);
+        Assert.DoesNotContain(",+SomeTag,", content);
+    }
+
+    [Fact]
+    public void RecordValue_CombinesNeutralizationWithRfc4180Quoting()
+    {
+        // Arrange - a field that both starts with a formula trigger and
+        // contains a comma must be neutralized AND wrapped in quotes.
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        var node = new MonitoredNode
+        {
+            DisplayName = "=HYPERLINK(\"http://evil\",\"click\")",
+            NodeId = new NodeId(1234),
+            Value = "=1+2,cmd"
+        };
+
+        // Act
+        _manager.RecordValue(node);
+        _manager.StopRecording();
+
+        // Assert - neutralizing quote prefix inside the RFC 4180 quoted field,
+        // with internal quotes doubled.
+        var content = File.ReadAllText(filePath);
+        Assert.Contains("\"'=HYPERLINK(\"\"http://evil\"\",\"\"click\"\")\"", content);
+        Assert.Contains("\"'=1+2,cmd\"", content);
+    }
+
+    [Fact]
     public void StartRecording_ClearsStaleQueueFromPreviousSession()
     {
         // Arrange - first session leaves a record queued but is stopped.
