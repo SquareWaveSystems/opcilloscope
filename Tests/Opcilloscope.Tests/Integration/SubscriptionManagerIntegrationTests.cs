@@ -304,19 +304,8 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         Assert.Equal(25u, subscriptionManager.QueueSize);
     }
 
-    [Theory]
-    [InlineData(-100, 0)]    // negative clamps to 0 (server-decided rate)
-    [InlineData(0, 0)]
-    [InlineData(500, 500)]
-    [InlineData(20000, 10000)] // above maximum clamps to 10000
-    public void SamplingInterval_ClampsToValidRange(int input, int expected)
-    {
-        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
-
-        subscriptionManager.SamplingInterval = input;
-
-        Assert.Equal(expected, subscriptionManager.SamplingInterval);
-    }
+    // SamplingInterval clamping is covered by the unit tests in
+    // SubscriptionManagerTests (0-60000 range).
 
     [Theory]
     [InlineData(0u, 1u)]      // zero clamps to minimum of 1
