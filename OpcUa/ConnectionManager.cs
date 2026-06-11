@@ -123,7 +123,10 @@ public sealed class ConnectionManager : IDisposable
         string? securityMode = null,
         string? securityPolicy = null)
     {
-        Disconnect();
+        // Async teardown: the synchronous Disconnect() blocks on the OPC UA close
+        // round-trip (up to the transport timeout against a dead server), which froze
+        // the UI thread when reconnecting over an existing or dead connection.
+        await DisconnectAsync();
 
         _lastEndpoint = endpoint;
         _credentials = credentials ?? ConnectionCredentials.Anonymous;
@@ -135,7 +138,17 @@ public sealed class ConnectionManager : IDisposable
 
             if (success)
             {
-                await InitializeSubscriptionAsync(publishingInterval);
+                if (!await InitializeSubscriptionAsync(publishingInterval))
+                {
+                    // Without a subscription the session is useless for monitoring;
+                    // fail the connect rather than reporting Connected.
+                    var msg = "Connected, but the server refused the monitoring subscription. Disconnecting.";
+                    _logger.Error(msg);
+                    ConnectionError?.Invoke(msg);
+                    await DisconnectAsync();
+                    return false;
+                }
+
                 StateChanged?.Invoke(ConnectionState.Connected);
             }
             else
@@ -300,11 +313,11 @@ public sealed class ConnectionManager : IDisposable
         return _client.WriteValueAsync(nodeId, value);
     }
 
-    private async Task InitializeSubscriptionAsync(int publishingInterval = 250)
+    private async Task<bool> InitializeSubscriptionAsync(int publishingInterval = 250)
     {
         _subscriptionManager = new SubscriptionManager(_client, _logger);
         _subscriptionManager.PublishingInterval = publishingInterval;
-        await _subscriptionManager.InitializeAsync();
+        var initialized = await _subscriptionManager.InitializeAsync();
 
         // Store handler references for proper unsubscription
         _valueChangedHandler = node => ValueChanged?.Invoke(node);
@@ -314,6 +327,8 @@ public sealed class ConnectionManager : IDisposable
         _subscriptionManager.ValueChanged += _valueChangedHandler;
         _subscriptionManager.VariableAdded += _variableAddedHandler;
         _subscriptionManager.VariableRemoved += _variableRemovedHandler;
+
+        return initialized;
     }
 
     private void DisposeSubscription()

@@ -1207,9 +1207,6 @@ License: MIT
 
             var config = await _configService.LoadAsync(filePath);
 
-            // Store metadata
-            _currentMetadata = config.Metadata;
-
             // Connect to server and subscribe to nodes
             if (!string.IsNullOrEmpty(config.Server.EndpointUrl))
             {
@@ -1226,6 +1223,11 @@ License: MIT
 
                     if (!pwDialog.Confirmed)
                     {
+                        // Nothing was torn down, but the load already switched the Ctrl+S
+                        // target to this file; revert to untitled so a save cannot write
+                        // the still-running session's state over it.
+                        _configService.Reset();
+                        UpdateWindowTitle();
                         _logger.Info("Password prompt cancelled - skipping connection");
                         return;
                     }
@@ -1236,16 +1238,17 @@ License: MIT
                         pwDialog.Password);
                 }
 
+                // Tear down the current session first: stops any active recording and
+                // clears the views, so the UI cannot keep showing dead rows from the
+                // old server while (or after) the new connection is attempted.
+                await DisconnectAsync();
+
                 var connected = await _connectionManager.ConnectAsync(config.Server.EndpointUrl, config.Settings.PublishingIntervalMs, credentials);
 
                 if (connected)
                 {
                     _lastEndpoint = config.Server.EndpointUrl;
-
-                    // Only after successful connection, disconnect old and clear views
-                    _addressSpaceView.Clear();
-                    _monitoredVariablesView.Clear();
-                    _nodeDetailsView.Clear();
+                    _currentMetadata = config.Metadata;
 
                     _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
 
@@ -1271,24 +1274,25 @@ License: MIT
                 }
                 else
                 {
+                    // Revert to untitled: leaving the failed file as the Ctrl+S target
+                    // would let a save overwrite it with the now-empty session state.
+                    _configService.Reset();
+                    _currentMetadata = null;
+                    UpdateWindowTitle();
+
                     _logger.Error($"Failed to connect to {config.Server.EndpointUrl}");
-                    MessageBox.ErrorQuery("Connection Failed", 
-                        $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection and data have been preserved.", 
+                    MessageBox.ErrorQuery("Connection Failed",
+                        $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection has been closed. Use Connect to reconnect.",
                         "OK");
                 }
             }
             else
             {
-                // No endpoint URL, just clear views and apply settings
-                if (_connectionManager.IsConnected)
-                {
-                    await _connectionManager.DisconnectAsync();
-                }
+                // No endpoint URL: tear down any current session (stops recording,
+                // clears views) and just adopt the loaded settings.
+                await DisconnectAsync();
 
-                _addressSpaceView.Clear();
-                _monitoredVariablesView.Clear();
-                _nodeDetailsView.Clear();
-                
+                _currentMetadata = config.Metadata;
                 _recentFiles.Add(filePath);
                 UpdateWindowTitle();
                 _logger.Info("Configuration loaded (no server connection)");
