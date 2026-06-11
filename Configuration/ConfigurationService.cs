@@ -69,9 +69,11 @@ public class ConfigurationService
     private const string CurrentConfigVersion = "1.0";
 
     /// <summary>
-    /// The major component of <see cref="CurrentConfigVersion"/>.
+    /// The major component of <see cref="CurrentConfigVersion"/>, derived from it
+    /// so the two cannot drift apart when the version is bumped.
     /// </summary>
-    private const int CurrentConfigMajorVersion = 1;
+    private static readonly int CurrentConfigMajorVersion =
+        int.Parse(CurrentConfigVersion.Split('.')[0]);
 
     /// <summary>
     /// Loads a configuration from the specified file path.
