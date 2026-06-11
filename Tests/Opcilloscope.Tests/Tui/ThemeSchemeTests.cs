@@ -38,12 +38,12 @@ public class ThemeSchemeTests
     }
 
     [Fact]
-    public void ThemeStyler_ApplyTo_SetsTheViewScheme()
+    public void ThemeStyler_ApplyToFrame_SetsTheViewScheme()
     {
         var theme = new DarkTheme();
-        var view = new View();
+        var view = new FrameView();
 
-        ThemeStyler.ApplyTo(view, theme);
+        ThemeStyler.ApplyToFrame(view, theme);
 
         Scheme? applied = view.GetScheme();
         Assert.NotNull(applied);
