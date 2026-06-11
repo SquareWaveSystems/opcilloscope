@@ -22,9 +22,10 @@ public class ThemeManagerTests
         var themes = ThemeManager.AvailableThemes;
 
         // Assert
-        Assert.Equal(2, themes.Count);
+        Assert.Equal(3, themes.Count);
         Assert.Contains(themes, t => t is DarkTheme);
         Assert.Contains(themes, t => t is LightTheme);
+        Assert.Contains(themes, t => t is TerminalTheme);
     }
 
     [Fact]
@@ -122,15 +123,41 @@ public class ThemeManagerTests
     }
 
     [Fact]
+    public void ThemeManager_SetTerminalTheme_TogglesForce16Colors()
+    {
+        try
+        {
+            // Act - Terminal theme enables 16-color ANSI output
+            ThemeManager.SetTheme("Terminal");
+
+            // Assert
+            Assert.IsType<TerminalTheme>(ThemeManager.Current);
+            Assert.True(Terminal.Gui.Application.Force16Colors);
+
+            // Act - switching back restores 24-bit color output
+            ThemeManager.SetTheme("Dark");
+
+            // Assert
+            Assert.False(Terminal.Gui.Application.Force16Colors);
+        }
+        finally
+        {
+            // Cleanup
+            ThemeManager.SetTheme(new DarkTheme());
+        }
+    }
+
+    [Fact]
     public void ThemeManager_GetThemeNames_ReturnsAllNames()
     {
         // Act
         var names = ThemeManager.GetThemeNames();
 
         // Assert
-        Assert.Equal(2, names.Length);
+        Assert.Equal(3, names.Length);
         Assert.Contains("Dark", names);
         Assert.Contains("Light", names);
+        Assert.Contains("Terminal", names);
     }
 
     [Fact]

@@ -52,6 +52,7 @@ public class AppThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
+    [InlineData(typeof(TerminalTheme))]
     public void AllThemes_HaveNonNullColors(Type themeType)
     {
         var theme = (AppTheme)Activator.CreateInstance(themeType)!;
@@ -73,6 +74,7 @@ public class AppThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
+    [InlineData(typeof(TerminalTheme))]
     public void AllThemes_HaveNonNullAttributes(Type themeType)
     {
         var theme = (AppTheme)Activator.CreateInstance(themeType)!;
@@ -85,6 +87,7 @@ public class AppThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
+    [InlineData(typeof(TerminalTheme))]
     public void AllThemes_HaveNonNullColorSchemes(Type themeType)
     {
         var theme = (AppTheme)Activator.CreateInstance(themeType)!;
@@ -99,6 +102,7 @@ public class AppThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
+    [InlineData(typeof(TerminalTheme))]
     public void AllThemes_HaveSingleLineBoxDrawingCharacters(Type themeType)
     {
         var theme = (AppTheme)Activator.CreateInstance(themeType)!;
@@ -115,6 +119,7 @@ public class AppThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
+    [InlineData(typeof(TerminalTheme))]
     public void AllThemes_HaveUIDecorations(Type themeType)
     {
         var theme = (AppTheme)Activator.CreateInstance(themeType)!;
@@ -125,6 +130,66 @@ public class AppThemeTests
         Assert.NotNull(theme.StatusLive);
         Assert.NotNull(theme.StatusHold);
         Assert.NotNull(theme.NoSignalMessage);
+    }
+
+    [Fact]
+    public void TerminalTheme_HasCorrectName()
+    {
+        var theme = new TerminalTheme();
+        Assert.Equal("Terminal", theme.Name);
+    }
+
+    [Fact]
+    public void TerminalTheme_HasCorrectDescription()
+    {
+        var theme = new TerminalTheme();
+        Assert.Equal("Inherits the terminal's ANSI color palette", theme.Description);
+    }
+
+    [Fact]
+    public void TerminalTheme_UsesTerminalColors()
+    {
+        var theme = new TerminalTheme();
+        Assert.True(theme.UseTerminalColors);
+    }
+
+    [Theory]
+    [InlineData(typeof(DarkTheme))]
+    [InlineData(typeof(LightTheme))]
+    public void NonTerminalThemes_DoNotUseTerminalColors(Type themeType)
+    {
+        var theme = (AppTheme)Activator.CreateInstance(themeType)!;
+        Assert.False(theme.UseTerminalColors);
+    }
+
+    [Fact]
+    public void TerminalTheme_AllColorsMapExactlyToAnsiColors()
+    {
+        var theme = new TerminalTheme();
+
+        // Every color must round-trip exactly through the 16-color ANSI map
+        // so the terminal's own palette is used without approximation
+        var colors = new[]
+        {
+            theme.Background, theme.Foreground, theme.ForegroundBright,
+            theme.ForegroundDim, theme.Accent, theme.AccentBright,
+            theme.Border, theme.Grid, theme.StatusActive, theme.StatusInactive,
+            theme.Error, theme.Warning, theme.StatusGood, theme.StatusBad,
+            theme.StatusUncertain, theme.MutedText
+        };
+
+        foreach (var color in colors)
+        {
+            var roundTripped = new Color(color.GetClosestNamedColor16());
+            Assert.Equal(roundTripped, color);
+        }
+    }
+
+    [Fact]
+    public void TerminalTheme_UsesAnsiBlackBackground()
+    {
+        var theme = new TerminalTheme();
+        Assert.Equal(new Color(ColorName16.Black), theme.Background);
     }
 
     [Fact]
@@ -222,6 +287,7 @@ public class AppThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme), "Dark")]
     [InlineData(typeof(LightTheme), "Light")]
+    [InlineData(typeof(TerminalTheme), "Terminal")]
     public void AllThemes_NameMatchesExpected(Type themeType, string expectedName)
     {
         var theme = (AppTheme)Activator.CreateInstance(themeType)!;
@@ -264,6 +330,7 @@ public class AppThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
+    [InlineData(typeof(TerminalTheme))]
     public void AllThemes_UseDoubleBorderAndSingleFrame(Type themeType)
     {
         var theme = (AppTheme)Activator.CreateInstance(themeType)!;
@@ -277,6 +344,7 @@ public class AppThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
+    [InlineData(typeof(TerminalTheme))]
     public void AllThemes_HaveStatusColors(Type themeType)
     {
         var theme = (AppTheme)Activator.CreateInstance(themeType)!;
@@ -291,6 +359,7 @@ public class AppThemeTests
     [Theory]
     [InlineData(typeof(DarkTheme))]
     [InlineData(typeof(LightTheme))]
+    [InlineData(typeof(TerminalTheme))]
     public void AllThemes_HaveConnectionIndicators(Type themeType)
     {
         var theme = (AppTheme)Activator.CreateInstance(themeType)!;
