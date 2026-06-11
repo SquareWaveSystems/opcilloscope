@@ -6,6 +6,7 @@ set -e
 
 INSTALL_DIR="${OPCILLOSCOPE_INSTALL_DIR:-$HOME/.local/bin}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opcilloscope"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/opcilloscope"
 
 # Colors
 RED='\033[0;31m'
@@ -54,6 +55,26 @@ uninstall() {
             info "Removed config directory: ${CONFIG_DIR}"
         else
             info "Kept config directory: ${CONFIG_DIR}"
+        fi
+    fi
+
+    # Remove data directory (OPC UA certificate stores)
+    if [ -d "$DATA_DIR" ]; then
+        echo ""
+        echo -n "Remove OPC UA certificates directory ${DATA_DIR}? [y/N] "
+        # When piped from curl, stdin is the script itself, so default to no
+        if [ -t 0 ]; then
+            read -r answer
+        else
+            answer="n"
+            echo "(skipped — run interactively to remove certificate files)"
+        fi
+
+        if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+            rm -rf "$DATA_DIR"
+            info "Removed certificates directory: ${DATA_DIR}"
+        else
+            info "Kept certificates directory: ${DATA_DIR}"
         fi
     fi
 

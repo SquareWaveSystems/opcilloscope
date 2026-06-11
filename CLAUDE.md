@@ -54,6 +54,7 @@ Usage: opcilloscope [options] [file]
 
 Options:
   -f, --config <file>   Load configuration file (.cfg, .opcilloscope, or .json)
+      --insecure        Accept untrusted server certificates (development only)
   -h, --help            Show help message
 
 Examples:

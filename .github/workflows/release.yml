@@ -9,7 +9,29 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # MinVer needs the full commit history (and tags) to compute versions.
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Test
+        run: dotnet test -c Release --verbosity normal
+
   build:
+    needs: test
     strategy:
       matrix:
         include:
@@ -55,7 +77,7 @@ jobs:
 
       - name: Publish
         run: |
-          dotnet publish Opcilloscope.csproj -c Release -r ${{ matrix.rid }} -o ./publish
+          dotnet publish Opcilloscope.csproj -c Release -r ${{ matrix.rid }} -o ./publish -p:DebugType=none
 
       - name: Smoke test published binary (Linux/macOS)
         if: matrix.smoke && runner.os != 'Windows'
@@ -120,12 +142,22 @@ jobs:
       - name: Display structure
         run: ls -R artifacts
 
+      - name: Collect release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release-assets/ \;
+          ls -l release-assets
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           generate_release_notes: true
-          files: |
-            artifacts/**/*.tar.gz
-            artifacts/**/*.zip
+          files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

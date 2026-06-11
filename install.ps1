@@ -58,6 +58,33 @@ function Install-Opcilloscope {
         # Download
         Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing
 
+        # Verify the archive against the SHA256SUMS published with the release.
+        # Degrades gracefully (warning only) when SHA256SUMS is unavailable (older releases).
+        $archiveName = "opcilloscope-$platform.zip"
+        $sumsUrl = "https://github.com/$Repo/releases/download/$version/SHA256SUMS"
+        $sumsPath = Join-Path $tempDir "SHA256SUMS"
+        $haveSums = $true
+        try {
+            Invoke-WebRequest -Uri $sumsUrl -OutFile $sumsPath -UseBasicParsing
+        } catch {
+            $haveSums = $false
+            Write-Warn "SHA256SUMS not found for $version (older release?). Skipping checksum verification."
+        }
+        if ($haveSums) {
+            Write-Info "Verifying checksum..."
+            $entry = Get-Content $sumsPath | Where-Object { $_ -match ("\s" + [regex]::Escape($archiveName) + "$") } | Select-Object -First 1
+            if (-not $entry) {
+                Write-Warn "No checksum entry for $archiveName in SHA256SUMS. Skipping checksum verification."
+            } else {
+                $expected = ($entry -split '\s+')[0].ToLowerInvariant()
+                $actual = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+                if ($actual -ne $expected) {
+                    Write-Err "Checksum mismatch for ${archiveName}. Expected $expected but got $actual. The download may be corrupted or tampered with. Aborting."
+                }
+                Write-Info "Checksum verified (SHA-256)."
+            }
+        }
+
         Write-Info "Extracting..."
         Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
 
