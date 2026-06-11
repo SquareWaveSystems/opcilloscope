@@ -446,25 +446,32 @@ public class OpcUaClientWrapper : IDisposable
             // session; if that session is already disposed this throws, the SDK swallows it
             // and reports failure - after the server-side transfer already succeeded - leaving
             // orphaned subscriptions on the server and forcing a duplicate recreate.
-            if (subscriptionsToTransfer != null && subscriptionsToTransfer.Count > 0)
+            try
             {
-                var transferred = await TransferSubscriptionsAsync(subscriptionsToTransfer);
-                _logger.Info($"Transferred {transferred} of {subscriptionsToTransfer.Count} subscription(s)");
-            }
-
-            // Retire the old session. Dispose without CloseAsync() - sending CloseSession
-            // would delete any server-side subscriptions that were not transferred, and the
-            // transport is typically already dead on this path.
-            if (oldSession != null)
-            {
-                oldSession.KeepAlive -= Session_KeepAlive;
-                try
+                if (subscriptionsToTransfer != null && subscriptionsToTransfer.Count > 0)
                 {
-                    oldSession.Dispose();
+                    var transferred = await TransferSubscriptionsAsync(subscriptionsToTransfer);
+                    _logger.Info($"Transferred {transferred} of {subscriptionsToTransfer.Count} subscription(s)");
                 }
-                catch (Exception ex)
+            }
+            finally
+            {
+                // Retire the old session even if the transfer throws - once _session
+                // points at the new session the old one would otherwise leak. Dispose
+                // without CloseAsync() - sending CloseSession would delete any
+                // server-side subscriptions that were not transferred, and the
+                // transport is typically already dead on this path.
+                if (oldSession != null)
                 {
-                    _logger.Warning($"Session cleanup error during reconnection: {ex.Message}");
+                    oldSession.KeepAlive -= Session_KeepAlive;
+                    try
+                    {
+                        oldSession.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warning($"Session cleanup error during reconnection: {ex.Message}");
+                    }
                 }
             }
 
