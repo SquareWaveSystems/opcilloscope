@@ -76,7 +76,7 @@ public class SubscriptionSettings
     /// <summary>
     /// Publishing interval (in milliseconds) for the OPC UA subscription.
     /// Controls how often the server sends data-change notifications to the client.
-    /// This directly determines the data resolution for Scope, Trend Plot, and CSV recording:
+    /// This directly determines the data resolution for Scope and CSV recording:
     /// a 1000 ms interval means roughly one data point per second per variable.
     /// Valid range: 100-10000 ms (values outside this range will be clamped by SubscriptionManager).
     /// </summary>

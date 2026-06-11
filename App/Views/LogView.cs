@@ -153,6 +153,10 @@ public class LogView : FrameView
     {
         if (disposing)
         {
+            if (_logger != null)
+            {
+                _logger.LogAdded -= OnLogAdded;
+            }
             _copyButton.Accepting -= OnCopyClicked;
             _listView.RowRender -= OnRowRender;
             ThemeManager.ThemeChanged -= OnThemeChanged;

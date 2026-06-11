@@ -27,11 +27,6 @@ public enum KeybindingContext
     Scope,
 
     /// <summary>
-    /// Keybindings active when TrendPlotView is displayed.
-    /// </summary>
-    TrendPlot,
-
-    /// <summary>
     /// Keybindings active in dialogs.
     /// </summary>
     Dialog

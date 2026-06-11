@@ -51,6 +51,9 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
     private View? _focusedPanel;
     private FocusManager? _focusManager;
 
+    // Stored so it can be unsubscribed from the static Application event in Dispose
+    private readonly EventHandler<SizeChangedEventArgs> _sizeChangingHandler;
+
     // Lazygit-inspired keybinding system
     private readonly KeybindingManager _keybindingManager;
 
@@ -223,7 +226,8 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         ApplyTheme();
 
         // Handle window resize to update connection status label position
-        Application.SizeChanging += (s, e) => UiThread.Run(UpdateConnectionStatusLabelPosition);
+        _sizeChangingHandler = (s, e) => UiThread.Run(UpdateConnectionStatusLabelPosition);
+        Application.SizeChanging += _sizeChangingHandler;
 
         // Run status bar startup sequence
         RunStatusBarStartup();
@@ -295,8 +299,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
                     new MenuItem("_Save Config", "", SaveConfig, shortcutKey: Key.S.WithCtrl),
                     new MenuItem("Save Config _As...", "", SaveConfigAs, shortcutKey: Key.S.WithCtrl.WithShift),
                     null!, // Separator
-                    new MenuItem("Start Recording...", "", () => OnRecordRequested(), shortcutKey: Key.R.WithCtrl),
-                    new MenuItem("Stop Recording", "", () => OnStopRecordingRequested()),
+                    new MenuItem("Toggle Recording", "", ToggleRecording, shortcutKey: Key.R.WithCtrl),
                     null!, // Separator
                     new MenuItem("E_xit", "", () => RequestStop(), shortcutKey: Key.Q.WithCtrl)
                 }),
@@ -761,15 +764,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
         _statusBar.SetNeedsLayout();
     }
 
-    /// <summary>
-    /// Shows context-sensitive quick help overlay (lazygit-inspired ? menu).
-    /// </summary>
-    private void ShowQuickHelp()
-    {
-        using var dialog = new QuickHelpDialog(_keybindingManager);
-        Application.Run(dialog);
-    }
-
     #endregion
 
     #region Global Keyboard Shortcuts
@@ -864,14 +858,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
             {
                 _logger.Info($"Connected to {_connectionManager.CurrentEndpoint}");
             }
-        });
-    }
-
-    private void OnClientDisconnected()
-    {
-        UiThread.Run(() =>
-        {
-            UpdateConnectionStatus(isConnected: false);
         });
     }
 
@@ -1111,7 +1097,7 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
 
     private void ShowAbout()
     {
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+        var version = GetDisplayVersion();
         var titleLine = $"opcilloscope v{version}";
         var titlePadded = titleLine.PadLeft((38 + titleLine.Length) / 2).PadRight(38);
 
@@ -1138,6 +1124,28 @@ Built with:
 License: MIT
 ";
         MessageBox.Query("About opcilloscope", about, "OK");
+    }
+
+    /// <summary>
+    /// Gets the application version for display. MinVer writes the full semver to
+    /// <see cref="AssemblyInformationalVersionAttribute"/> (AssemblyVersion is frozen at
+    /// MAJOR.0.0.0), so prefer that and strip any "+commitsha" build metadata.
+    /// </summary>
+    private static string GetDisplayVersion()
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        var informational = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+
+        if (!string.IsNullOrEmpty(informational))
+        {
+            var metadataIndex = informational.IndexOf('+');
+            return metadataIndex >= 0 ? informational[..metadataIndex] : informational;
+        }
+
+        // Fall back to the assembly version if the attribute is missing
+        return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
     }
 
     #region Configuration File Handling
@@ -1403,7 +1411,6 @@ License: MIT
 
     void DefaultKeybindings.IKeybindingActions.SwitchPane() => _focusManager?.FocusNext();
     void DefaultKeybindings.IKeybindingActions.ShowHelp() => ShowHelp();
-    void DefaultKeybindings.IKeybindingActions.ShowQuickHelp() => ShowQuickHelp();
     void DefaultKeybindings.IKeybindingActions.SubscribeSelected() => SubscribeSelected();
     void DefaultKeybindings.IKeybindingActions.RefreshTree() => RefreshTree();
     void DefaultKeybindings.IKeybindingActions.UnsubscribeSelected() => UnsubscribeSelected();
@@ -1446,6 +1453,7 @@ License: MIT
             }
 
             Application.KeyDown -= OnApplicationKeyDown;
+            Application.SizeChanging -= _sizeChangingHandler;
 
             _connectionManager.Dispose();
         }

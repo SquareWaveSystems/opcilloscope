@@ -252,7 +252,6 @@ public sealed class KeybindingManager
             KeybindingContext.AddressSpace => "Address Space",
             KeybindingContext.MonitoredVariables => "Monitored Variables",
             KeybindingContext.Scope => "Scope View",
-            KeybindingContext.TrendPlot => "Trend Plot",
             KeybindingContext.Dialog => "Dialog",
             _ => context.ToString()
         };
@@ -279,8 +278,7 @@ public sealed class KeybindingManager
             KeybindingContext.AddressSpace => 1,
             KeybindingContext.MonitoredVariables => 2,
             KeybindingContext.Scope => 3,
-            KeybindingContext.TrendPlot => 4,
-            KeybindingContext.Dialog => 5,
+            KeybindingContext.Dialog => 4,
             _ => 99
         };
     }
