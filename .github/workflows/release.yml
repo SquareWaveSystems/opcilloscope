@@ -74,6 +74,16 @@ jobs:
           ./publish/opcilloscope.exe --help
           if ($LASTEXITCODE -ne 0) { throw "Published binary exited with code $LASTEXITCODE" }
 
+      - name: Copy license notices (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cp LICENSE THIRD-PARTY-NOTICES.md ./publish/
+
+      - name: Copy license notices (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Copy-Item -Path LICENSE, THIRD-PARTY-NOTICES.md -Destination ./publish/
+
       - name: Create archive (Linux/macOS)
         if: runner.os != 'Windows'
         run: |

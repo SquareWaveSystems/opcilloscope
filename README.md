@@ -196,7 +196,15 @@ Contributions welcome! Please submit an issue or a pull request.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+The opcilloscope **source code** is MIT-licensed — see [LICENSE](LICENSE).
+
+Official **binary releases** are self-contained builds that bundle the
+[OPC Foundation UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard)
+stack and other third-party components. The bundled stack version
+(1.5.378.65) is distributed by the OPC Foundation under its MIT license;
+earlier versions of that stack were dual-licensed GPL-2.0/RCL. See
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the full list of bundled
+components and their licenses.
 
 <p align="center">
   <strong>Built by <a href="https://squarewavesystems.com">Square Wave Systems</a></strong><br>
