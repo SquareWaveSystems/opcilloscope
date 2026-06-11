@@ -59,4 +59,24 @@ public class ConnectDialogTests
         // The credential-hiding logic depends on an absent password staying null.
         Assert.Null(dialog.Password);
     }
+
+    [Fact]
+    public void Username_AuthExposesTypedPassword()
+    {
+        using var dialog = new ConnectDialog(
+            initialEndpoint: "x:1",
+            authType: AuthenticationType.UserName,
+            username: "operator");
+
+        // The password box is the dialog's only Secret TextField; type into it.
+        var passwordField = FindSecretTextField(dialog);
+        Assert.NotNull(passwordField);
+        passwordField!.Text = "hunter2";
+
+        Assert.Equal("hunter2", dialog.Password);
+    }
+
+    private static TextField? FindSecretTextField(View root) =>
+        root.SubViews.OfType<TextField>().FirstOrDefault(f => f.Secret)
+        ?? root.SubViews.Select(FindSecretTextField).FirstOrDefault(f => f is not null);
 }

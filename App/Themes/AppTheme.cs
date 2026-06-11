@@ -197,6 +197,7 @@ public abstract class AppTheme
     /// can no longer be applied to the main window border. Kept for the planned
     /// reintroduction of title highlighting via Scheme VisualRoles (see MainWindow.ApplyTheme).
     /// </summary>
+    [Obsolete("Not applied since the Terminal.Gui 2.4 migration removed per-adornment schemes; pending Scheme VisualRoles.")]
     public virtual Scheme HighlightTitleBorderColorScheme => _highlightTitleBorderColorScheme ??= new()
     {
         Normal = BorderAttr,

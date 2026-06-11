@@ -476,7 +476,8 @@ public class MonitoredVariablesView : FrameView
 
     private void HandleMouseClick(object? sender, Mouse e)
     {
-        // Only react to a discrete click, not move/press/release events
+        // Only react to a discrete click, not move/press/release events.
+        // Mouse.Position is Point? in Terminal.Gui 2.4 - the null pattern is required.
         if (!e.IsSingleClicked || e.Position is not { } pos)
             return;
 

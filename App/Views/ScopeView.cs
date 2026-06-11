@@ -302,7 +302,6 @@ public class ScopeView : View
     /// </summary>
     protected override bool OnDrawingContent(DrawContext? context)
     {
-
         AppTheme theme;
         lock (_themeLock)
         {

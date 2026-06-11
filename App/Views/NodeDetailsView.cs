@@ -38,8 +38,7 @@ public class NodeDetailsView : FrameView
             Height = 1,
             ShadowStyle = ShadowStyles.None,
             Enabled = false
-        };
-        _copyButton.SetScheme(theme.ButtonColorScheme);
+        }.WithScheme(theme.ButtonColorScheme);
         _copyButton.Accepting += OnCopyClicked;
 
         _detailsLabel = new Label
