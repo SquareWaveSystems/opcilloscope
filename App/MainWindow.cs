@@ -300,7 +300,6 @@ public class MainWindow : Toplevel, DefaultKeybindings.IKeybindingActions
                     new MenuItem("Save Config _As...", "", SaveConfigAs, shortcutKey: Key.S.WithCtrl.WithShift),
                     null!, // Separator
                     new MenuItem("Toggle Recording", "", ToggleRecording, shortcutKey: Key.R.WithCtrl),
-                    new MenuItem("Stop Recording", "", () => OnStopRecordingRequested()),
                     null!, // Separator
                     new MenuItem("E_xit", "", () => RequestStop(), shortcutKey: Key.Q.WithCtrl)
                 }),
