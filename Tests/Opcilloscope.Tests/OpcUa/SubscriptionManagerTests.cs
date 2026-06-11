@@ -376,6 +376,23 @@ public class FormatRawValueTests
     }
 
     [Fact]
+    public void FormatRawValue_StringArrayWithSemicolons_EscapesElementSeparators()
+    {
+        // ["a;b", "c"] must not collide with ["a", "b", "c"].
+        Assert.Equal(@"a\;b;c", SubscriptionManager.FormatRawValue(new[] { "a;b", "c" }));
+        Assert.NotEqual(
+            SubscriptionManager.FormatRawValue(new[] { "a", "b", "c" }),
+            SubscriptionManager.FormatRawValue(new[] { "a;b", "c" }));
+    }
+
+    [Fact]
+    public void FormatRawValue_StringArrayWithBackslashes_EscapesBackslashes()
+    {
+        // A literal backslash is doubled so it can't be misread as an escape.
+        Assert.Equal(@"a\\;b\\\;c", SubscriptionManager.FormatRawValue(new[] { @"a\", @"b\;c" }));
+    }
+
+    [Fact]
     public void FormatRawValue_EmptyArray_ReturnsEmptyString()
     {
         Assert.Equal(string.Empty, SubscriptionManager.FormatRawValue(Array.Empty<int>()));

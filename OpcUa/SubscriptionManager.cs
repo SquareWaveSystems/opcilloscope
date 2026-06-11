@@ -421,7 +421,8 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     /// uses ISO 8601 ("O"), other IFormattable types use InvariantCulture, and
     /// arrays are serialized as their actual elements joined with ';'
     /// (e.g. "1;2;3"), so the field never needs CSV comma-escaping for the
-    /// separator itself.
+    /// separator itself. Within array elements, '\' and ';' are escaped as
+    /// "\\" and "\;" so multi-element string arrays remain unambiguous.
     /// </summary>
     internal static string FormatRawValue(object? value)
     {
@@ -436,11 +437,12 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         if (value is Array arr)
         {
             // Serialize the actual elements (semicolon-joined) instead of the
-            // lossy "[N items]" display placeholder.
+            // lossy "[N items]" display placeholder. Escape '\' and ';' inside
+            // elements so ["a;b","c"] is distinguishable from ["a","b","c"].
             var parts = new List<string>(arr.Length);
             foreach (var element in arr)
             {
-                parts.Add(FormatRawValue(element));
+                parts.Add(FormatRawValue(element).Replace("\\", "\\\\").Replace(";", "\\;"));
             }
             return string.Join(";", parts);
         }
