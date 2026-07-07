@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.App.Themes;
 using AppThemeManager = Opcilloscope.App.Themes.ThemeManager;
 
@@ -61,7 +62,7 @@ public class PasswordPromptDialog : Dialog
         okButton.Accepting += (_, _) =>
         {
             _confirmed = true;
-            Application.RequestStop();
+            TerminalUi.RequestStop();
         };
 
         var cancelButton = new Button
@@ -74,7 +75,7 @@ public class PasswordPromptDialog : Dialog
         cancelButton.Accepting += (_, _) =>
         {
             _confirmed = false;
-            Application.RequestStop();
+            TerminalUi.RequestStop();
         };
 
         Add(promptLabel, endpointLabel, _passwordField, okButton, cancelButton);

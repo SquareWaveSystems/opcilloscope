@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.App.Keybindings;
 using Opcilloscope.App.Themes;
 using ThemeManager = Opcilloscope.App.Themes.ThemeManager;
@@ -121,7 +122,7 @@ public class HelpDialog : Dialog
 
     private void OnThemeChanged(AppTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             SetScheme(theme.MainColorScheme);
             BorderStyle = theme.EmphasizedBorderStyle;

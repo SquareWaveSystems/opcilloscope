@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 
 namespace Opcilloscope.App;
 
@@ -36,7 +37,7 @@ public class FocusManager
     /// </summary>
     public void StartTracking()
     {
-        _pollTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(100), PollFocus);
+        _pollTimer = TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(100), PollFocus);
     }
 
     /// <summary>
@@ -46,14 +47,14 @@ public class FocusManager
     {
         if (_pollTimer != null)
         {
-            Application.RemoveTimeout(_pollTimer);
+            TerminalUi.RemoveTimeout(_pollTimer);
             _pollTimer = null;
         }
     }
 
     private bool PollFocus()
     {
-        var focused = Application.TopRunnableView?.MostFocused;
+        var focused = TerminalUi.TopRunnableView?.MostFocused;
         var newPane = FindContainingPane(focused);
 
         if (newPane != _currentPane)

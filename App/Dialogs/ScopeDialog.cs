@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.App.Views;
 using Opcilloscope.App.Themes;
 using Opcilloscope.OpcUa;
@@ -63,7 +64,7 @@ public class ScopeDialog : Dialog
             Y = 0,
             Text = $"{Theme.ButtonPrefix}CLOSE{Theme.ButtonSuffix}",
         }.WithScheme(Theme.ButtonColorScheme);
-        _closeButton.Accepting += (_, _) => Application.RequestStop();
+        _closeButton.Accepting += (_, _) => TerminalUi.RequestStop();
 
         buttonFrame.Add(_pauseButton, _closeButton);
 
@@ -88,7 +89,7 @@ public class ScopeDialog : Dialog
 
     private void OnPauseStateChanged(bool isPaused)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             _pauseButton.Text = isPaused
                 ? $"{Theme.ButtonPrefix}RESUME{Theme.ButtonSuffix}"
@@ -98,7 +99,7 @@ public class ScopeDialog : Dialog
 
     private void OnThemeChanged(AppTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             Title = $"{theme.TitleDecoration}[ SCOPE ]{theme.TitleDecoration}";
             ThemeStyler.ApplyToDialog(this, theme);

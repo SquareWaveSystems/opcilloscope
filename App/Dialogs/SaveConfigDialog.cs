@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.App.Themes;
 using Opcilloscope.Configuration;
 using AppThemeManager = Opcilloscope.App.Themes.ThemeManager;
@@ -161,7 +162,7 @@ public class SaveConfigDialog : Dialog
             // We'll let user navigate to any directory and extract the directory path
         };
 
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (!dialog.Canceled && dialog.Path != null)
         {
@@ -198,13 +199,13 @@ public class SaveConfigDialog : Dialog
             return;
 
         _confirmed = true;
-        Application.RequestStop();
+        TerminalUi.RequestStop();
     }
 
     private void OnCancel(object? sender, CommandEventArgs e)
     {
         _confirmed = false;
-        Application.RequestStop();
+        TerminalUi.RequestStop();
     }
 
     private bool ValidateSave()
@@ -213,7 +214,7 @@ public class SaveConfigDialog : Dialog
         var filename = _currentFilename.Trim();
         if (string.IsNullOrEmpty(filename))
         {
-            MessageBox.ErrorQuery(Application.Instance, "Error", "Please enter a filename", "OK");
+            TerminalUi.ErrorQuery("Error", "Please enter a filename", "OK");
             return false;
         }
 
@@ -221,7 +222,7 @@ public class SaveConfigDialog : Dialog
         var invalidChars = Path.GetInvalidFileNameChars();
         if (filename.IndexOfAny(invalidChars) >= 0)
         {
-            MessageBox.ErrorQuery(Application.Instance, "Error", "Filename contains invalid characters", "OK");
+            TerminalUi.ErrorQuery("Error", "Filename contains invalid characters", "OK");
             return false;
         }
 
@@ -229,7 +230,7 @@ public class SaveConfigDialog : Dialog
         var directory = _currentDirectory.Trim();
         if (string.IsNullOrEmpty(directory))
         {
-            MessageBox.ErrorQuery(Application.Instance, "Error", "Please specify a directory", "OK");
+            TerminalUi.ErrorQuery("Error", "Please specify a directory", "OK");
             return false;
         }
 
@@ -243,7 +244,7 @@ public class SaveConfigDialog : Dialog
         }
         catch (Exception ex)
         {
-            MessageBox.ErrorQuery(Application.Instance, "Error", $"Cannot create directory: {ex.Message}", "OK");
+            TerminalUi.ErrorQuery("Error", $"Cannot create directory: {ex.Message}", "OK");
             return false;
         }
 
@@ -251,7 +252,7 @@ public class SaveConfigDialog : Dialog
         var fullPath = FilePath;
         if (File.Exists(fullPath))
         {
-            var result = MessageBox.Query(Application.Instance, "Confirm Overwrite",
+            var result = TerminalUi.Query("Confirm Overwrite",
                 $"File '{Path.GetFileName(fullPath)}' already exists.\nDo you want to replace it?",
                 "Yes", "No");
             if (result != 0) // "No" selected

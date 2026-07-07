@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.App.Themes;
 using Opcilloscope.Configuration;
 using AppThemeManager = Opcilloscope.App.Themes.ThemeManager;
@@ -90,7 +91,7 @@ public class OpenConfigDialog : Dialog
         cancelButton.Accepting += (_, _) =>
         {
             _confirmed = false;
-            Application.RequestStop();
+            TerminalUi.RequestStop();
         };
 
         Add(_directoryLabel, _fileListView, openButton, browseButton, cancelButton);
@@ -121,7 +122,7 @@ public class OpenConfigDialog : Dialog
         {
             SelectedFilePath = _files[_fileListView.SelectedItem!.Value].FullName;
             _confirmed = true;
-            Application.RequestStop();
+            TerminalUi.RequestStop();
         }
     }
 
@@ -139,13 +140,13 @@ public class OpenConfigDialog : Dialog
             Path = ConfigurationService.GetDefaultConfigDirectory()
         };
 
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (!dialog.Canceled && dialog.Path != null)
         {
             SelectedFilePath = dialog.Path.ToString()!;
             _confirmed = true;
-            Application.RequestStop();
+            TerminalUi.RequestStop();
         }
     }
 }

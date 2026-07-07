@@ -133,7 +133,7 @@ public class ScopeView : View
 
         try
         {
-            Application.Invoke(() =>
+            UiThread.Run(() =>
             {
                 ApplyTheme();
                 SetNeedsLayout();
@@ -278,14 +278,14 @@ public class ScopeView : View
         if (_timerToken != null) return;
 
         // ~10 FPS update rate
-        _timerToken = Application.AddTimeout(TimeSpan.FromMilliseconds(100), OnTimerTick);
+        _timerToken = TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(100), OnTimerTick);
     }
 
     private void StopUpdateTimer()
     {
         if (_timerToken != null)
         {
-            Application.RemoveTimeout(_timerToken);
+            TerminalUi.RemoveTimeout(_timerToken);
             _timerToken = null;
         }
     }

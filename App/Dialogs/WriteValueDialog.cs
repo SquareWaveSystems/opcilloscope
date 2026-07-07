@@ -148,7 +148,7 @@ public class WriteValueDialog : Dialog
             if (ValidateAndParse())
             {
                 // Show confirmation dialog before writing
-                var confirmResult = MessageBox.Query(Application.Instance, 
+                var confirmResult = TerminalUi.Query(
                     "Confirm Write",
                     $"Write '{_valueField.Text}' to {nodeName}?",
                     "Yes", "No");
@@ -156,7 +156,7 @@ public class WriteValueDialog : Dialog
                 if (confirmResult == 0) // Yes was selected
                 {
                     _confirmed = true;
-                    Application.RequestStop();
+                    TerminalUi.RequestStop();
                 }
             }
         };
@@ -164,7 +164,7 @@ public class WriteValueDialog : Dialog
         cancelButton.Accepting += (_, _) =>
         {
             _confirmed = false;
-            Application.RequestStop();
+            TerminalUi.RequestStop();
         };
 
         // Add all controls
@@ -210,7 +210,7 @@ public class WriteValueDialog : Dialog
         // Check if write is supported for this data type
         if (!OpcValueConverter.IsWriteSupported(_dataType))
         {
-            MessageBox.ErrorQuery(Application.Instance, "Write Error", $"Write not supported for data type: {_dataType}", "OK");
+            TerminalUi.ErrorQuery("Write Error", $"Write not supported for data type: {_dataType}", "OK");
             return false;
         }
 

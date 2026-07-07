@@ -89,7 +89,7 @@ public class LogView : FrameView
 
     private void OnThemeChanged(AppTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             BorderStyle = theme.FrameLineStyle;
             _copyButton.SetScheme(theme.ButtonColorScheme);
@@ -146,7 +146,7 @@ public class LogView : FrameView
             return;
 
         var logText = string.Join(Environment.NewLine, _displayedEntries);
-        Clipboard.TrySetClipboardData(logText);
+        TerminalUi.TrySetClipboardData(logText);
     }
 
     protected override void Dispose(bool disposing)
