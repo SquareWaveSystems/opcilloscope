@@ -9,6 +9,12 @@
     <AssemblyName>opcilloscope</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
 
+    <!-- Fail the build on any warning so deprecations (like the Terminal.Gui
+         legacy static Application API, migrated off in 2026-07) cannot
+         accumulate silently again. Suppress a specific warning only with a
+         targeted #pragma at the call site, with a comment explaining why. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
     <!-- Package metadata (Version is driven by MinVer from Git tags) -->
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <Authors>Brett Kinny</Authors>

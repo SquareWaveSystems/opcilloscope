@@ -28,7 +28,12 @@ public class HelpDialog : Dialog
         SetScheme(theme.MainColorScheme);
         BorderStyle = theme.EmphasizedBorderStyle;
 
-        // Create content view with the help text
+        // Create content view with the help text.
+        // TextView is obsolete in Terminal.Gui 2.4.5, superseded by EditorView from
+        // the separate gui-cs/Editor package. A read-only scrolling text pane is all
+        // that's needed here, so keep TextView rather than take on a new dependency;
+        // revisit if/when EditorView ships in the Terminal.Gui package itself.
+#pragma warning disable CS0618 // TextView is obsolete (replacement lives in gui-cs/Editor)
         var contentView = new TextView
         {
             X = 1,
@@ -45,6 +50,7 @@ public class HelpDialog : Dialog
             HotFocus = new Attribute(theme.Foreground, theme.Background),
             Disabled = new Attribute(theme.MutedText, theme.Background)
         });
+#pragma warning restore CS0618
 
         contentView.Text = GenerateHelpFromBindings(keybindingManager);
 
