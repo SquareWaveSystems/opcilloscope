@@ -9,16 +9,43 @@ namespace Opcilloscope.Utilities;
 /// marshalling) so access to the Terminal.Gui application object is confined to
 /// a handful of files rather than spread across the UI code.
 /// </summary>
+/// <remarks>
+/// Backed by the instance-based <see cref="IApplication"/> model
+/// (<c>Application.Create()</c>); <see cref="App"/> is assigned once at startup
+/// by <c>Program.Main</c>. When no application is running (unit tests construct
+/// views headlessly), the fire-and-forget members (<see cref="Invoke"/>, timers,
+/// clipboard) degrade to no-ops, while the interactive members (modal dialogs,
+/// message boxes) throw, since silently skipping them would hide real bugs.
+/// </remarks>
 public static class TerminalUi
 {
     /// <summary>
+    /// The running Terminal.Gui application instance. Set once by Program.Main
+    /// right after <c>Application.Create()</c>; null in headless unit tests.
+    /// </summary>
+    public static IApplication? App { get; set; }
+
+    private static IApplication RequireApp() =>
+        App ?? throw new InvalidOperationException("No Terminal.Gui application is running (TerminalUi.App is not set).");
+
+    /// <summary>
+    /// Executes an action on the UI thread via the application main loop.
+    /// No-op when no application is running.
+    /// </summary>
+    public static void Invoke(Action action)
+    {
+        App?.Invoke(action);
+    }
+
+    /// <summary>
     /// Adds a recurring timeout on the UI main loop. The callback runs on the UI
     /// thread; returning true keeps the timer running, false stops it.
-    /// Returns a token for <see cref="RemoveTimeout"/>.
+    /// Returns a token for <see cref="RemoveTimeout"/>, or null when no
+    /// application is running.
     /// </summary>
     public static object? AddTimeout(TimeSpan interval, Func<bool> callback)
     {
-        return Application.AddTimeout(interval, callback);
+        return App?.AddTimeout(interval, callback);
     }
 
     /// <summary>
@@ -26,7 +53,7 @@ public static class TerminalUi
     /// </summary>
     public static void RemoveTimeout(object token)
     {
-        Application.RemoveTimeout(token);
+        App?.RemoveTimeout(token);
     }
 
     /// <summary>
@@ -34,7 +61,7 @@ public static class TerminalUi
     /// </summary>
     public static void RunModal(IRunnable view)
     {
-        Application.Run(view);
+        RequireApp().Run(view);
     }
 
     /// <summary>
@@ -42,7 +69,7 @@ public static class TerminalUi
     /// </summary>
     public static void RequestStop()
     {
-        Application.RequestStop();
+        RequireApp().RequestStop();
     }
 
     /// <summary>
@@ -51,7 +78,7 @@ public static class TerminalUi
     /// </summary>
     public static int? Query(string title, string message, params string[] buttons)
     {
-        return MessageBox.Query(Application.Instance, title, message, buttons);
+        return MessageBox.Query(RequireApp(), title, message, buttons);
     }
 
     /// <summary>
@@ -60,7 +87,7 @@ public static class TerminalUi
     /// </summary>
     public static int? ErrorQuery(string title, string message, params string[] buttons)
     {
-        return MessageBox.ErrorQuery(Application.Instance, title, message, buttons);
+        return MessageBox.ErrorQuery(RequireApp(), title, message, buttons);
     }
 
     /// <summary>
@@ -68,13 +95,13 @@ public static class TerminalUi
     /// </summary>
     public static bool TrySetClipboardData(string text)
     {
-        return Clipboard.TrySetClipboardData(text);
+        return App?.Clipboard?.TrySetClipboardData(text) ?? false;
     }
 
     /// <summary>
     /// Gets the view of the currently running (top) runnable, or null when none is running.
     /// </summary>
-    public static View? TopRunnableView => Application.TopRunnableView;
+    public static View? TopRunnableView => App?.TopRunnableView;
 
     /// <summary>
     /// Returns true when the given runnable is the currently running (top) one,
@@ -82,6 +109,35 @@ public static class TerminalUi
     /// </summary>
     public static bool IsTopRunnable(IRunnable runnable)
     {
-        return Application.TopRunnable == runnable;
+        return App?.TopRunnable == runnable;
+    }
+
+    /// <summary>
+    /// The driver of the running application, or null when none is running
+    /// (e.g. in headless tests).
+    /// </summary>
+    public static IDriver? Driver => App?.Driver;
+
+    /// <summary>
+    /// Subscribes to application-level key-down events, which fire before any
+    /// view processes the key. No-op when no application is running.
+    /// </summary>
+    public static void AddKeyDownHandler(EventHandler<Key> handler)
+    {
+        if (App?.Keyboard is { } keyboard)
+        {
+            keyboard.KeyDown += handler;
+        }
+    }
+
+    /// <summary>
+    /// Unsubscribes a handler added with <see cref="AddKeyDownHandler"/>.
+    /// </summary>
+    public static void RemoveKeyDownHandler(EventHandler<Key> handler)
+    {
+        if (App?.Keyboard is { } keyboard)
+        {
+            keyboard.KeyDown -= handler;
+        }
     }
 }

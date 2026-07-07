@@ -185,7 +185,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         DefaultKeybindings.Configure(_keybindingManager, this);
 
         // Intercept letter/symbol keys at application level before views consume them
-        Application.KeyDown += OnApplicationKeyDown;
+        TerminalUi.AddKeyDownHandler(OnApplicationKeyDown);
 
         // Focus tracking using polling-based FocusManager (workaround for Terminal.Gui v2 Enter event instability)
         // Only track the two interactive panes (AddressSpace and MonitoredVariables)
@@ -1431,7 +1431,7 @@ License: MIT
                 _focusManager.FocusChanged -= OnPanelFocusChanged;
             }
 
-            Application.KeyDown -= OnApplicationKeyDown;
+            TerminalUi.RemoveKeyDownHandler(OnApplicationKeyDown);
 
             _connectionManager.Dispose();
         }

@@ -1,6 +1,7 @@
 using Terminal.Gui;
 using Opcilloscope.App;
 using Opcilloscope.OpcUa;
+using Opcilloscope.Utilities;
 
 namespace Opcilloscope;
 
@@ -8,7 +9,7 @@ class Program
 {
     static int Main(string[] args)
     {
-        bool initialized = false;
+        IApplication? app = null;
         try
         {
             // Parse command-line arguments before initializing the terminal, so that --help/-h
@@ -66,10 +67,9 @@ class Program
                 return 1;
             }
 
-#pragma warning disable IL2026 // Terminal.Gui Application.Init uses reflection and is not AOT-compatible
-            Application.Init();
-#pragma warning restore IL2026
-            initialized = true;
+            app = Application.Create();
+            TerminalUi.App = app;
+            app.Init();
 
             var mainWindow = new MainWindow();
             try
@@ -87,7 +87,7 @@ class Program
                         "Please use a configuration file with an endpoint URL instead.");
                 }
 
-                Application.Run(mainWindow);
+                app.Run(mainWindow);
             }
             finally
             {
@@ -102,10 +102,10 @@ class Program
         }
         finally
         {
-            if (initialized)
-            {
-                Application.Shutdown();
-            }
+            // Disposing the application shuts down the terminal (the
+            // instance-based replacement for the legacy Application.Shutdown).
+            app?.Dispose();
+            TerminalUi.App = null;
         }
 
         return 0;
