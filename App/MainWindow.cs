@@ -430,7 +430,8 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             if (success)
             {
                 _lastEndpoint = endpoint;
-                _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+                // The connect continuation may resume off the UI thread.
+                UiThread.Run(() => _addressSpaceView.Initialize(_connectionManager.NodeBrowser));
             }
         }
         finally
@@ -480,7 +481,8 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 
             if (success)
             {
-                _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+                // The reconnect continuation may resume off the UI thread.
+                UiThread.Run(() => _addressSpaceView.Initialize(_connectionManager.NodeBrowser));
                 _logger.Info("Reconnected successfully - subscriptions restored");
             }
             else
@@ -1194,18 +1196,24 @@ License: MIT
                 if (authType == AuthenticationType.UserName
                     && !string.IsNullOrEmpty(config.Server.Authentication.Username))
                 {
-                    using var pwDialog = new PasswordPromptDialog(
-                        config.Server.Authentication.Username,
-                        config.Server.EndpointUrl);
-                    Application.Run(pwDialog);
+                    // This continuation may resume off the UI thread, so run the
+                    // modal prompt via the UI loop and await its outcome.
+                    var (confirmed, password) = await UiThread.RunAsync(() =>
+                    {
+                        using var pwDialog = new PasswordPromptDialog(
+                            config.Server.Authentication.Username,
+                            config.Server.EndpointUrl);
+                        Application.Run(pwDialog);
+                        return (pwDialog.Confirmed, pwDialog.Password);
+                    });
 
-                    if (!pwDialog.Confirmed)
+                    if (!confirmed)
                     {
                         // Nothing was torn down, but the load already switched the Ctrl+S
                         // target to this file; revert to untitled so a save cannot write
                         // the still-running session's state over it.
                         _configService.Reset();
-                        UpdateWindowTitle();
+                        UiThread.Run(UpdateWindowTitle);
                         _logger.Info("Password prompt cancelled - skipping connection");
                         return;
                     }
@@ -1213,7 +1221,7 @@ License: MIT
                     credentials = new ConnectionCredentials(
                         AuthenticationType.UserName,
                         config.Server.Authentication.Username,
-                        pwDialog.Password);
+                        password);
                 }
 
                 // Tear down the current session first: stops any active recording and
@@ -1237,7 +1245,7 @@ License: MIT
                     _lastEndpoint = config.Server.EndpointUrl;
                     _currentMetadata = config.Metadata;
 
-                    _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+                    UiThread.Run(() => _addressSpaceView.Initialize(_connectionManager.NodeBrowser));
 
                     // Subscribe to saved nodes
                     foreach (var node in config.MonitoredNodes.Where(n => n.Enabled))
@@ -1254,7 +1262,7 @@ License: MIT
                     }
 
                     _recentFiles.Add(filePath);
-                    UpdateWindowTitle();
+                    UiThread.Run(UpdateWindowTitle);
 
                     var nodeCount = config.MonitoredNodes.Count(n => n.Enabled);
                     _logger.Info($"Configuration loaded: {nodeCount} nodes");
@@ -1265,12 +1273,15 @@ License: MIT
                     // would let a save overwrite it with the now-empty session state.
                     _configService.Reset();
                     _currentMetadata = null;
-                    UpdateWindowTitle();
 
                     _logger.Error($"Failed to connect to {config.Server.EndpointUrl}");
-                    MessageBox.ErrorQuery(Application.Instance, "Connection Failed",
-                        $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection has been closed. Use Connect to reconnect.",
-                        "OK");
+                    UiThread.Run(() =>
+                    {
+                        UpdateWindowTitle();
+                        MessageBox.ErrorQuery(Application.Instance, "Connection Failed",
+                            $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection has been closed. Use Connect to reconnect.",
+                            "OK");
+                    });
                 }
             }
             else
@@ -1281,14 +1292,15 @@ License: MIT
 
                 _currentMetadata = config.Metadata;
                 _recentFiles.Add(filePath);
-                UpdateWindowTitle();
+                UiThread.Run(UpdateWindowTitle);
                 _logger.Info("Configuration loaded (no server connection)");
             }
         }
         catch (Exception ex)
         {
             _logger.Error($"Failed to load configuration: {ex.Message}");
-            MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to load configuration:\n{ex.Message}", "OK");
+            UiThread.Run(() =>
+                MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to load configuration:\n{ex.Message}", "OK"));
         }
         finally
         {
@@ -1326,14 +1338,15 @@ License: MIT
 
             _currentMetadata = config.Metadata;
             _recentFiles.Add(filePath);
-            UpdateWindowTitle();
+            UiThread.Run(UpdateWindowTitle);
 
             _logger.Info($"Configuration saved to {filePath}");
         }
         catch (Exception ex)
         {
             _logger.Error($"Failed to save configuration: {ex.Message}");
-            MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to save:\n{ex.Message}", "OK");
+            UiThread.Run(() =>
+                MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to save:\n{ex.Message}", "OK"));
         }
         finally
         {

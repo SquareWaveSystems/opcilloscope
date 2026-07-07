@@ -7,10 +7,11 @@ namespace Opcilloscope.Utilities;
 /// <summary>
 /// Manages CSV recording of monitored variable value changes.
 /// Writes data to file in real-time as values change using a background queue.
-/// Output is culture-invariant: timestamps are ISO 8601 (Gregorian calendar,
-/// '.' decimal / ':' time separators regardless of locale) and values are the
-/// full-precision raw representation ('.' decimal separator, arrays as
-/// semicolon-joined elements) rather than the truncated UI display string.
+/// Output is culture-invariant: timestamps are ISO 8601 UTC with a 'Z'
+/// designator (Gregorian calendar, '.' decimal / ':' time separators
+/// regardless of locale) and values are the full-precision raw representation
+/// ('.' decimal separator, arrays as semicolon-joined elements) rather than
+/// the truncated UI display string.
 /// </summary>
 public class CsvRecordingManager : IDisposable
 {
@@ -423,8 +424,18 @@ public class CsvRecordingManager : IDisposable
                 // is replaced by the culture's time separator (fi-FI uses '.')
                 // and the culture's default calendar applies (th-TH uses the
                 // Buddhist calendar), which would break the ISO 8601 contract.
-                var timestamp = item.Timestamp?.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture)
-                    ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
+                // All timestamps are normalized to UTC with an explicit 'Z'
+                // designator: OPC UA source timestamps are UTC while the
+                // no-timestamp fallback used to be local time, so a single file
+                // could silently mix timezones with no way to tell them apart.
+                var ts = item.Timestamp ?? DateTime.UtcNow;
+                if (ts.Kind == DateTimeKind.Local)
+                {
+                    ts = ts.ToUniversalTime();
+                }
+                // Kind=Unspecified is treated as UTC (the OPC UA convention)
+                // rather than local, so the recorded instant never shifts.
+                var timestamp = ts.ToString("yyyy-MM-ddTHH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
                 // Escape values for CSV (RFC 4180 quoting plus formula
                 // injection neutralization for server-supplied fields).

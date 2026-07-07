@@ -11,6 +11,13 @@ neutralization, secure-by-default certificates) clearly shows. The findings
 below are ordered by severity; items 1–4 are the ones worth fixing before
 tagging the release.
 
+> **Update (same day):** findings 1–4 are now **fixed on this branch**
+> (see the follow-up commit). CSV timestamps are UTC with a `Z` designator,
+> the scope samples `RawValue` (and plots booleans as 0/1), the config-load
+> path marshals all UI work via `UiThread.Run`/`UiThread.RunAsync`, and the
+> `--connect` warning prints before terminal init. 710/710 tests pass,
+> including 14 new tests covering the fixes.
+
 ---
 
 ## Correctness findings
