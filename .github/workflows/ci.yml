@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # MinVer needs the full commit history (and tags) to compute versions.
           fetch-depth: 0
@@ -20,27 +20,47 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.x'
+          # Keep the SDK/runtime pack aligned with the reviewed RID locks and notices.
+          dotnet-version: '10.0.109'
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: |
+          dotnet restore Opcilloscope.csproj --locked-mode
+          dotnet restore Tests/Opcilloscope.Tests/Opcilloscope.Tests.csproj
+          dotnet restore Tests/Opcilloscope.E2ETests/Opcilloscope.E2ETests.csproj
 
-      - name: Build
-        run: dotnet build --no-restore --configuration Release
+      - name: Validate third-party inventory
+        run: ./scripts/verify-third-party-inventory.sh
 
-      - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: Verify formatting
+        run: |
+          dotnet format Opcilloscope.sln --verify-no-changes --no-restore
+          dotnet format Tests/Opcilloscope.E2ETests/Opcilloscope.E2ETests.csproj --verify-no-changes --no-restore
 
-      - name: Publish (smoke)
-        run: dotnet publish Opcilloscope.csproj -c Release -r linux-x64 -o ./publish
+      - name: Build main solution
+        run: dotnet build Opcilloscope.sln --no-restore --configuration Release
 
-      - name: Smoke test published binary
+      - name: Test unit, integration, and TUI components
+        run: dotnet test Tests/Opcilloscope.Tests/Opcilloscope.Tests.csproj --no-build --configuration Release --verbosity normal
+
+      - name: Build Linux E2E harness
+        run: dotnet build Tests/Opcilloscope.E2ETests/Opcilloscope.E2ETests.csproj --no-restore --configuration Release
+
+      - name: Publish exact Linux artifact under test
+        run: dotnet publish Opcilloscope.csproj --no-restore -c Release -r linux-x64 -o ./publish -p:DebugType=none
+
+      - name: Verify single-file publish layout
         run: |
           chmod +x ./publish/opcilloscope
-          # Run --help under a pseudo-tty: this exercises Terminal.Gui's Application.Init
-          # (catching trim/startup regressions in the self-contained binary) and then exits
-          # via the --help path. `script -e` propagates the binary's exit code.
-          TERM=xterm script -qec "./publish/opcilloscope --help" /dev/null
-          code=$?
-          echo "Published binary exited with code $code"
-          test "$code" -eq 0
+          test -f ./publish/opcilloscope
+          test ! -e ./publish/libonigwrap.so
+          test ! -e ./publish/opcilloscope.dll
+          test ! -e ./publish/opcilloscope.pdb
+          file_count="$(find ./publish -maxdepth 1 -type f | wc -l)"
+          test "$file_count" -eq 1
+          ./publish/opcilloscope --help
+
+      - name: Test published TUI over a real PTY
+        env:
+          OPCILLOSCOPE_BIN: ${{ github.workspace }}/publish/opcilloscope
+        run: dotnet test Tests/Opcilloscope.E2ETests/Opcilloscope.E2ETests.csproj --no-build --configuration Release --verbosity normal

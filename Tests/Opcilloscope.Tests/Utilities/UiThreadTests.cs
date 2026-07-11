@@ -36,11 +36,72 @@ public class UiThreadTests : IDisposable
     public void Run_WithApp_MarshalsThroughApplicationInvoke()
     {
         var app = new Mock<IApplication>();
+        app.Setup(a => a.Invoke(It.IsAny<Action>()))
+            .Callback<Action>(callback => callback());
         TerminalUi.App = app.Object;
-        Action action = () => { };
+        var ran = false;
+        Action action = () => ran = true;
 
         UiThread.Run(action);
 
-        app.Verify(a => a.Invoke(action), Times.Once);
+        Assert.True(ran);
+        app.Verify(a => a.Invoke(It.IsAny<Action>()), Times.Once);
+    }
+
+    [Fact]
+    public void RunAsync_WithNoApp_ThrowsInsteadOfReturningANeverCompletingTask()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            _ = UiThread.RunAsync(() => 42);
+        });
+    }
+
+    [Fact]
+    public async Task RunAsync_WithApp_CompletesWithCallbackResult()
+    {
+        var app = new Mock<IApplication>();
+        app.Setup(a => a.Invoke(It.IsAny<Action>()))
+            .Callback<Action>(action => action());
+        TerminalUi.App = app.Object;
+
+        var result = await UiThread.RunAsync(() => 42);
+
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenCallbackThrows_PropagatesException()
+    {
+        var app = new Mock<IApplication>();
+        app.Setup(a => a.Invoke(It.IsAny<Action>()))
+            .Callback<Action>(action => action());
+        TerminalUi.App = app.Object;
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => UiThread.RunAsync<int>(() => throw new InvalidOperationException("boom")));
+
+        Assert.Equal("boom", error.Message);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenMainLoopStopsBeforeDeferredInvoke_FailsInsteadOfHanging()
+    {
+        Action? queued = null;
+        var ran = false;
+        var app = new Mock<IApplication>();
+        app.Setup(a => a.Invoke(It.IsAny<Action>()))
+            .Callback<Action>(action => queued = action);
+        TerminalUi.App = app.Object;
+
+        var task = UiThread.RunAsync(() => ran = true);
+        Assert.NotNull(queued);
+
+        TerminalUi.BeginShutdown();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => task);
+        queued!();
+        Assert.Contains("main loop stopped", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(ran);
     }
 }

@@ -909,13 +909,11 @@ public class ScopeView : View
                 TogglePause();
                 return true;
 
-            case KeyCode.D0 when key.IsShift: // + key
             case (KeyCode)'=':
             case (KeyCode)'+':
                 IncreaseScale();
                 return true;
 
-            case KeyCode.D9 when key.IsShift: // ( key
             case (KeyCode)'-':
                 DecreaseScale();
                 return true;

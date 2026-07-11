@@ -137,12 +137,16 @@ public class TerminalUiTests : IDisposable
     public void Invoke_WithApp_DelegatesToApplication()
     {
         var app = new Mock<IApplication>();
+        app.Setup(a => a.Invoke(It.IsAny<Action>()))
+            .Callback<Action>(callback => callback());
         TerminalUi.App = app.Object;
-        Action action = () => { };
+        var ran = false;
+        Action action = () => ran = true;
 
         TerminalUi.Invoke(action);
 
-        app.Verify(a => a.Invoke(action), Times.Once);
+        Assert.True(ran);
+        app.Verify(a => a.Invoke(It.IsAny<Action>()), Times.Once);
     }
 
     [Fact]

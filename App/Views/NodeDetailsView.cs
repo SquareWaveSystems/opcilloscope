@@ -17,6 +17,7 @@ public class NodeDetailsView : FrameView
     private readonly Button _copyButton;
     private Opcilloscope.OpcUa.NodeBrowser? _nodeBrowser;
     private NodeId? _currentNodeId;
+    private long _currentConnectionGeneration;
     private Logger? _logger;
     private CancellationTokenSource? _copyOperationCts;
 
@@ -96,11 +97,14 @@ public class NodeDetailsView : FrameView
         _logger = logger;
     }
 
-    public async Task ShowNodeByIdAsync(NodeId? nodeId)
+    public async Task ShowNodeByIdAsync(
+        NodeId? nodeId,
+        long? expectedGeneration = null)
     {
         if (nodeId == null || _nodeBrowser == null)
         {
             _currentNodeId = null;
+            _currentConnectionGeneration = 0;
             UiThread.Run(() =>
             {
                 _detailsLabel.Text = "Select a node to view details";
@@ -111,13 +115,17 @@ public class NodeDetailsView : FrameView
         }
 
         _currentNodeId = nodeId;
-        var attrs = await _nodeBrowser.GetNodeAttributesAsync(nodeId);
+        var generation = expectedGeneration ?? _nodeBrowser.ConnectionGeneration;
+        _currentConnectionGeneration = generation;
+        var attrs = await _nodeBrowser.GetNodeAttributesAsync(nodeId, generation);
 
         UiThread.Run(() =>
         {
             // Guard against stale responses: rapid selection changes can complete
             // out of order, so only apply this result if it is still the current node.
-            if (!Equals(_currentNodeId, nodeId))
+            if (!Equals(_currentNodeId, nodeId)
+                || _currentConnectionGeneration != generation
+                || _nodeBrowser?.IsConnectionGenerationActive(generation) != true)
                 return;
 
             if (attrs == null)
@@ -156,6 +164,7 @@ public class NodeDetailsView : FrameView
         if (node == null || _nodeBrowser == null)
         {
             _currentNodeId = null;
+            _currentConnectionGeneration = 0;
             UiThread.Run(() =>
             {
                 _detailsLabel.Text = "";
@@ -166,14 +175,18 @@ public class NodeDetailsView : FrameView
         }
 
         var nodeId = node.NodeId;
+        var generation = node.ConnectionGeneration;
         _currentNodeId = nodeId;
-        var attrs = await _nodeBrowser.GetNodeAttributesAsync(nodeId);
+        _currentConnectionGeneration = generation;
+        var attrs = await _nodeBrowser.GetNodeAttributesAsync(nodeId, generation);
 
         UiThread.Run(() =>
         {
             // Guard against stale responses: rapid selection changes can complete
             // out of order, so only apply this result if it is still the current node.
-            if (!Equals(_currentNodeId, nodeId))
+            if (!Equals(_currentNodeId, nodeId)
+                || _currentConnectionGeneration != generation
+                || _nodeBrowser?.IsConnectionGenerationActive(generation) != true)
                 return;
 
             if (attrs == null)
@@ -212,6 +225,7 @@ public class NodeDetailsView : FrameView
     public void Clear()
     {
         _currentNodeId = null;
+        _currentConnectionGeneration = 0;
         _detailsLabel.Text = "Not connected";
         _copyButton.Enabled = false;
         SetMutedColor();
@@ -275,10 +289,15 @@ public class NodeDetailsView : FrameView
             _copyButton.Text = "...";
             _copyButton.Enabled = false;
 
-            var attributes = await _nodeBrowser.ReadAllNodeAttributesAsync(_currentNodeId);
+            var nodeId = _currentNodeId;
+            var generation = _currentConnectionGeneration;
+            var attributes = await _nodeBrowser.ReadAllNodeAttributesAsync(nodeId, generation);
 
             // Check if operation was cancelled
-            if (cancellationToken.IsCancellationRequested)
+            if (cancellationToken.IsCancellationRequested
+                || !Equals(_currentNodeId, nodeId)
+                || _currentConnectionGeneration != generation
+                || !_nodeBrowser.IsConnectionGenerationActive(generation))
                 return;
 
             UiThread.Run(() =>

@@ -152,7 +152,7 @@ public class WriteValueDialog : Dialog
                     "Confirm Write",
                     $"Write '{_valueField.Text}' to {nodeName}?",
                     "Yes", "No");
-                
+
                 if (confirmResult == 0) // Yes was selected
                 {
                     _confirmed = true;
@@ -185,9 +185,10 @@ public class WriteValueDialog : Dialog
 
     private void ValidateInput()
     {
-        var text = _valueField.Text?.Trim() ?? "";
+        var text = NormalizeInput(_valueField.Text, _dataType);
 
-        if (string.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(text)
+            && _dataType is not BuiltInType.String and not BuiltInType.Variant)
         {
             _errorLabel.Text = "";
             return;
@@ -199,9 +200,10 @@ public class WriteValueDialog : Dialog
 
     private bool ValidateAndParse()
     {
-        var text = _valueField.Text?.Trim() ?? "";
+        var text = NormalizeInput(_valueField.Text, _dataType);
 
-        if (string.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(text)
+            && _dataType is not BuiltInType.String and not BuiltInType.Variant)
         {
             _errorLabel.Text = "Value cannot be empty";
             return false;
@@ -225,4 +227,9 @@ public class WriteValueDialog : Dialog
         _parsedValue = value;
         return true;
     }
+
+    internal static string NormalizeInput(string? input, BuiltInType dataType) =>
+        dataType is BuiltInType.String or BuiltInType.Variant
+            ? input ?? string.Empty
+            : input?.Trim() ?? string.Empty;
 }

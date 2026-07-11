@@ -3,12 +3,58 @@
 
 $ErrorActionPreference = "Stop"
 
-$InstallDir = if ($env:OPCILLOSCOPE_INSTALL_DIR) { $env:OPCILLOSCOPE_INSTALL_DIR } else { "$env:LOCALAPPDATA\Opcilloscope" }
-$ConfigDir = "$env:APPDATA\opcilloscope"
-$CertDir = "$env:LOCALAPPDATA\opcilloscope"
+$UsingCustomInstallDir = -not [string]::IsNullOrWhiteSpace($env:OPCILLOSCOPE_INSTALL_DIR)
+$InstallDir = if ($UsingCustomInstallDir) {
+    $env:OPCILLOSCOPE_INSTALL_DIR
+} else {
+    Join-Path $env:LOCALAPPDATA "Programs\opcilloscope"
+}
+$LicenseDir = Join-Path $InstallDir "opcilloscope-licenses"
+$LegacyInstallDir = Join-Path $env:LOCALAPPDATA "Opcilloscope"
+$ConfigDir = Join-Path $env:APPDATA "opcilloscope"
+$CertificateDir = Join-Path $env:LOCALAPPDATA "opcilloscope\pki"
 
 function Write-Info { param($Message) Write-Host "[INFO] $Message" -ForegroundColor Green }
 function Write-Warn { param($Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
+
+function Normalize-PathEntry {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return "" }
+    $expanded = [Environment]::ExpandEnvironmentVariables($Path.Trim().Trim('"'))
+    return $expanded.TrimEnd('\').TrimEnd('/')
+}
+
+function Remove-UserPathEntry {
+    param([string]$Entry)
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ([string]::IsNullOrEmpty($userPath)) { return $false }
+
+    $target = Normalize-PathEntry $Entry
+    $originalEntries = @($userPath -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $newEntries = @($originalEntries | Where-Object { (Normalize-PathEntry $_) -ine $target })
+    if ($newEntries.Count -eq $originalEntries.Count) { return $false }
+
+    [Environment]::SetEnvironmentVariable("Path", ($newEntries -join ";"), "User")
+    return $true
+}
+
+function Confirm-Removal {
+    param([string]$Prompt, [bool]$Interactive)
+    if (-not $Interactive) {
+        Write-Info "$Prompt skipped (run interactively to remove retained user data)"
+        return $false
+    }
+
+    $answer = Read-Host "$Prompt [y/N]"
+    return $answer -eq "y" -or $answer -eq "Y"
+}
+
+function Remove-DirectoryIfEmpty {
+    param([string]$Path)
+    if ((Test-Path $Path) -and -not (Get-ChildItem -Path $Path -Force | Select-Object -First 1)) {
+        Remove-Item $Path -Force
+    }
+}
 
 function Uninstall-Opcilloscope {
     Write-Host ""
@@ -19,65 +65,68 @@ function Uninstall-Opcilloscope {
     Write-Host ""
 
     $removedSomething = $false
+    $interactive = [Environment]::UserInteractive -and -not ([Console]::IsInputRedirected)
     $exePath = Join-Path $InstallDir "opcilloscope.exe"
 
-    # Remove binary / install directory
+    # InstallDir may be a shared custom directory. Remove only known app files.
     if (Test-Path $exePath) {
-        Remove-Item $InstallDir -Recurse -Force
-        Write-Info "Removed install directory: $InstallDir"
-        $removedSomething = $true
-    } elseif (Test-Path $InstallDir) {
-        Remove-Item $InstallDir -Recurse -Force
-        Write-Info "Removed install directory: $InstallDir"
+        Remove-Item $exePath -Force
+        Write-Info "Removed executable: $exePath"
         $removedSomething = $true
     } else {
-        Write-Warn "Install directory not found at $InstallDir"
+        Write-Warn "Executable not found at $exePath"
     }
 
-    # Remove from PATH
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ($userPath -and $userPath -like "*$InstallDir*") {
-        $newPath = ($userPath -split ";" | Where-Object { $_ -ne $InstallDir }) -join ";"
-        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-        Write-Info "Removed $InstallDir from user PATH"
+    if (Test-Path $LicenseDir) {
+        Remove-Item $LicenseDir -Recurse -Force
+        Write-Info "Removed license notices: $LicenseDir"
+        $removedSomething = $true
     }
 
-    # Prompt to remove config directory
+    if (-not $UsingCustomInstallDir) {
+        if (Remove-UserPathEntry $InstallDir) {
+            Write-Info "Removed $InstallDir from user PATH"
+        }
+
+        # Legacy releases put the executable in the same case-insensitive parent
+        # used for certificates. Remove only the known executable and PATH entry.
+        $legacyExe = Join-Path $LegacyInstallDir "opcilloscope.exe"
+        if (Test-Path $legacyExe) {
+            Remove-Item $legacyExe -Force
+            Write-Info "Removed legacy executable: $legacyExe"
+            $removedSomething = $true
+        }
+        if (Remove-UserPathEntry $LegacyInstallDir) {
+            Write-Info "Removed legacy path entry: $LegacyInstallDir"
+        }
+        Remove-DirectoryIfEmpty $InstallDir
+    }
+
     if (Test-Path $ConfigDir) {
-        $interactive = [Environment]::UserInteractive -and -not ([Console]::IsInputRedirected)
-        if ($interactive) {
-            $answer = Read-Host "Remove configuration directory $ConfigDir? [y/N]"
-            if ($answer -eq "y" -or $answer -eq "Y") {
-                Remove-Item $ConfigDir -Recurse -Force
-                Write-Info "Removed config directory: $ConfigDir"
-            } else {
-                Write-Info "Kept config directory: $ConfigDir"
-            }
+        if (Confirm-Removal "Remove configuration directory $ConfigDir?" $interactive) {
+            Remove-Item $ConfigDir -Recurse -Force
+            Write-Info "Removed configuration directory: $ConfigDir"
+            $removedSomething = $true
         } else {
-            Write-Info "Kept config directory: $ConfigDir (run interactively to remove)"
+            Write-Info "Kept configuration directory: $ConfigDir"
         }
     }
 
-    # Prompt to remove certificate directory
-    if (Test-Path $CertDir) {
-        $interactive = [Environment]::UserInteractive -and -not ([Console]::IsInputRedirected)
-        if ($interactive) {
-            $answer = Read-Host "Remove OPC UA certificates directory $CertDir? [y/N]"
-            if ($answer -eq "y" -or $answer -eq "Y") {
-                Remove-Item $CertDir -Recurse -Force
-                Write-Info "Removed certificates directory: $CertDir"
-            } else {
-                Write-Info "Kept certificates directory: $CertDir"
-            }
+    if (Test-Path $CertificateDir) {
+        if (Confirm-Removal "Remove OPC UA certificate store $CertificateDir?" $interactive) {
+            Remove-Item $CertificateDir -Recurse -Force
+            Write-Info "Removed certificate store: $CertificateDir"
+            $removedSomething = $true
+            Remove-DirectoryIfEmpty $LegacyInstallDir
         } else {
-            Write-Info "Kept certificates directory: $CertDir (run interactively to remove)"
+            Write-Info "Kept certificate store: $CertificateDir"
         }
     }
 
     Write-Host ""
     if ($removedSomething) {
         Write-Info "Opcilloscope has been uninstalled."
-        Write-Host "(You may need to restart your terminal for PATH changes to take effect)" -ForegroundColor Gray
+        Write-Host "(Restart open terminals to pick up PATH changes.)" -ForegroundColor Gray
     } else {
         Write-Warn "Opcilloscope does not appear to be installed at $InstallDir."
         Write-Host ""

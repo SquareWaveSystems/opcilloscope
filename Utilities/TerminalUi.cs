@@ -19,11 +19,90 @@ namespace Opcilloscope.Utilities;
 /// </remarks>
 public static class TerminalUi
 {
+    private static readonly object AppLock = new();
+    private static IApplication? _app;
+    private static CancellationTokenSource _shutdown = CreateShutdownSource(isShutdown: true);
+
     /// <summary>
     /// The running Terminal.Gui application instance. Set once by Program.Main
     /// right after <c>Application.Create()</c>; null in headless unit tests.
     /// </summary>
-    public static IApplication? App { get; set; }
+    public static IApplication? App
+    {
+        get
+        {
+            lock (AppLock)
+            {
+                return _app;
+            }
+        }
+        set
+        {
+            CancellationTokenSource previousShutdown;
+            lock (AppLock)
+            {
+                if (ReferenceEquals(_app, value))
+                {
+                    return;
+                }
+
+                previousShutdown = _shutdown;
+                _app = value;
+                _shutdown = CreateShutdownSource(isShutdown: value is null);
+            }
+
+            // Cancellation callbacks may themselves touch TerminalUi. Never
+            // invoke them while holding AppLock.
+            previousShutdown.Cancel();
+            previousShutdown.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Signals that the application's final main-loop session has ended. Any
+    /// queued/awaited UI dispatches are failed instead of being left pending.
+    /// </summary>
+    public static void BeginShutdown()
+    {
+        CancellationTokenSource shutdown;
+        lock (AppLock)
+        {
+            shutdown = _shutdown;
+        }
+
+        try
+        {
+            shutdown.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // App was replaced concurrently; its previous token was already
+            // cancelled by the property setter.
+        }
+    }
+
+    internal static bool TryGetDispatchContext(
+        out IApplication? app,
+        out CancellationToken shutdownToken)
+    {
+        lock (AppLock)
+        {
+            app = _app;
+            shutdownToken = _shutdown.Token;
+            return app is not null && !shutdownToken.IsCancellationRequested;
+        }
+    }
+
+    private static CancellationTokenSource CreateShutdownSource(bool isShutdown)
+    {
+        var source = new CancellationTokenSource();
+        if (isShutdown)
+        {
+            source.Cancel();
+        }
+
+        return source;
+    }
 
     private static IApplication RequireApp() =>
         App ?? throw new InvalidOperationException("No Terminal.Gui application is running (TerminalUi.App is not set).");
@@ -34,7 +113,18 @@ public static class TerminalUi
     /// </summary>
     public static void Invoke(Action action)
     {
-        App?.Invoke(action);
+        if (!TryGetDispatchContext(out var app, out var shutdownToken))
+        {
+            return;
+        }
+
+        app!.Invoke(() =>
+        {
+            if (!shutdownToken.IsCancellationRequested)
+            {
+                action();
+            }
+        });
     }
 
     /// <summary>

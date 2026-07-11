@@ -24,16 +24,18 @@ public class ServerConfig
 
     /// <summary>
     /// Requested message security mode (for example: None, Sign, SignAndEncrypt).
-    /// Used during endpoint selection when connecting; when None, an unsecured
-    /// endpoint is selected.
+    /// Null/omitted means require the strongest SignAndEncrypt endpoint.
+    /// Sign explicitly opts into signed-but-unencrypted traffic; None explicitly
+    /// opts into an unsecured connection and is valid only with anonymous auth.
     /// </summary>
-    public string SecurityMode { get; set; } = "None";
+    public string? SecurityMode { get; set; }
 
     /// <summary>
     /// Requested security policy URI or shorthand (for example:
     /// Basic256Sha256 or the full policy URI).
     /// Used during endpoint selection when connecting; honored when a
-    /// matching endpoint exists on the server.
+    /// matching endpoint exists on the server. SecurityPolicy=None alone does
+    /// not opt into plaintext; SecurityMode must explicitly be None as well.
     /// </summary>
     public string? SecurityPolicy { get; set; }
 
@@ -51,7 +53,7 @@ public class ServerConfig
 public class AuthenticationConfig
 {
     /// <summary>
-    /// Authentication type: Anonymous, UserName, or Certificate.
+    /// Authentication type: Anonymous or UserName.
     /// </summary>
     public string Type { get; set; } = "Anonymous";
 
@@ -79,7 +81,7 @@ public class SubscriptionSettings
     /// Sampling interval (in milliseconds) applied to monitored variables.
     /// Controls how often the server samples the underlying value; 0 means
     /// "as fast as the server allows".
-    /// Valid range: 0-10000 ms (values outside this range will be clamped by SubscriptionManager).
+    /// Valid range: 0-60000 ms (values outside this range will be clamped by SubscriptionManager).
     /// </summary>
     public int SamplingIntervalMs { get; set; } = 250;
 

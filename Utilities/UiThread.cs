@@ -23,20 +23,57 @@ public static class UiThread
     /// </summary>
     public static Task<T> RunAsync<T>(Func<T> func)
     {
-        var app = TerminalUi.App
-            ?? throw new InvalidOperationException("No Terminal.Gui application is running (TerminalUi.App is not set).");
-        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        app.Invoke(() =>
+        if (!TerminalUi.TryGetDispatchContext(out var app, out var shutdownToken))
         {
-            try
+            throw new InvalidOperationException("No active Terminal.Gui main loop is available for UI dispatch.");
+        }
+
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancellationRegistration = shutdownToken.Register(() =>
+            tcs.TrySetException(new InvalidOperationException(
+                "The Terminal.Gui main loop stopped before the UI callback could run.")));
+        _ = tcs.Task.ContinueWith(
+            _ => cancellationRegistration.Dispose(),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        try
+        {
+            app!.Invoke(() =>
             {
-                tcs.SetResult(func());
-            }
-            catch (Exception ex)
-            {
-                tcs.SetException(ex);
-            }
-        });
+                if (shutdownToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                try
+                {
+                    tcs.TrySetResult(func());
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            });
+        }
+        catch
+        {
+            cancellationRegistration.Dispose();
+            throw;
+        }
+
         return tcs.Task;
     }
+
+    /// <summary>
+    /// Executes an action on the UI thread and completes once it has run.
+    /// Unlike <see cref="Run"/>, this throws when no application is running so
+    /// callers cannot await a callback that will never be scheduled.
+    /// </summary>
+    public static Task RunAsync(Action action) => RunAsync(() =>
+    {
+        action();
+        return true;
+    });
 }

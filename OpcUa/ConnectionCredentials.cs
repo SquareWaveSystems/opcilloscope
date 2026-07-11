@@ -21,10 +21,41 @@ public record ConnectionCredentials(
     public static readonly ConnectionCredentials Anonymous = new(AuthenticationType.Anonymous);
 
     /// <summary>
-    /// Parses a string (from config) into an AuthenticationType, defaulting to Anonymous.
+    /// Verifies that the credential shape is valid before endpoint discovery or
+    /// session creation. Unknown enum values and blank usernames fail closed.
     /// </summary>
-    public static AuthenticationType ParseAuthType(string? value) =>
-        string.Equals(value, nameof(AuthenticationType.UserName), StringComparison.OrdinalIgnoreCase)
-            ? AuthenticationType.UserName
-            : AuthenticationType.Anonymous;
+    public void Validate()
+    {
+        if (!Enum.IsDefined(Type))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(Type),
+                Type,
+                "Unsupported OPC UA authentication type.");
+        }
+
+        if (Type == AuthenticationType.UserName && string.IsNullOrWhiteSpace(Username))
+        {
+            throw new ArgumentException(
+                "A non-empty username is required for UserName authentication.",
+                nameof(Username));
+        }
+    }
+
+    /// <summary>
+    /// Parses a string from configuration into an AuthenticationType. Unknown or
+    /// missing values are rejected instead of silently downgrading to Anonymous.
+    /// </summary>
+    public static AuthenticationType ParseAuthType(string? value)
+    {
+        if (string.Equals(value, nameof(AuthenticationType.Anonymous), StringComparison.OrdinalIgnoreCase))
+            return AuthenticationType.Anonymous;
+
+        if (string.Equals(value, nameof(AuthenticationType.UserName), StringComparison.OrdinalIgnoreCase))
+            return AuthenticationType.UserName;
+
+        throw new FormatException(
+            $"Unsupported authentication type '{value ?? "<null>"}'. " +
+            $"Expected '{nameof(AuthenticationType.Anonymous)}' or '{nameof(AuthenticationType.UserName)}'.");
+    }
 }

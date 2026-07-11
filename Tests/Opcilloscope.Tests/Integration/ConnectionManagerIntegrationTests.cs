@@ -1,6 +1,7 @@
 using Opcilloscope.OpcUa;
 using Opcilloscope.Tests.Infrastructure;
 using Opcilloscope.Utilities;
+using Opc.Ua;
 
 namespace Opcilloscope.Tests.Integration;
 
@@ -175,6 +176,238 @@ public class ConnectionManagerIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ReconnectAsync_AfterExplicitDisconnect_PerformsFreshConnectWithStoredProfile()
+    {
+        var credentials = new ConnectionCredentials(
+            AuthenticationType.UserName,
+            "testuser",
+            "testpass");
+
+        var connected = await _connectionManager!.ConnectAsync(
+            _fixture.EndpointUrl,
+            publishingInterval: 500,
+            credentials: credentials,
+            securityMode: nameof(MessageSecurityMode.SignAndEncrypt),
+            securityPolicy: SecurityPolicies.Basic256Sha256,
+            samplingInterval: 750,
+            queueSize: 25);
+        Assert.True(connected);
+
+        await _connectionManager.DisconnectAsync();
+        Assert.False(_connectionManager.IsConnected);
+
+        var reconnected = await _connectionManager.ReconnectAsync();
+
+        Assert.True(reconnected);
+        Assert.True(_connectionManager.IsConnected);
+        Assert.Equal(MessageSecurityMode.SignAndEncrypt, _connectionManager.CurrentSecurityMode);
+        Assert.Equal(SecurityPolicies.Basic256Sha256, _connectionManager.CurrentSecurityPolicy);
+        Assert.Equal(500, _connectionManager.SubscriptionManager?.PublishingInterval);
+        Assert.Equal(750, _connectionManager.SubscriptionManager?.SamplingInterval);
+        Assert.Equal(25u, _connectionManager.SubscriptionManager?.QueueSize);
+    }
+
+    [Fact]
+    public async Task DisconnectAsync_QueuedBehindConnect_CannotBeOvertakenByLateSessionCreation()
+    {
+        using var manager = new ConnectionManager(_logger, allowInsecure: true);
+
+        var connectTask = manager.ConnectAsync(_fixture.EndpointUrl);
+        var disconnectTask = manager.DisconnectAsync();
+
+        var connected = await connectTask;
+        await disconnectTask;
+
+        Assert.False(connected);
+        Assert.False(manager.IsConnected);
+        Assert.Null(manager.SubscriptionManager);
+    }
+
+    [Fact]
+    public async Task StaleDisconnectIntent_CannotTearDownNewerConnection()
+    {
+        var staleDisconnect = _connectionManager!.RegisterExplicitLifecycleIntent();
+        var newerConnect = _connectionManager.RegisterExplicitLifecycleIntent();
+
+        var connected = await _connectionManager.ConnectWithIntentAsync(
+            _fixture.EndpointUrl,
+            publishingInterval: 250,
+            credentials: null,
+            securityMode: null,
+            securityPolicy: null,
+            samplingInterval: 250,
+            queueSize: 10,
+            operationGeneration: newerConnect);
+        var disconnected = await _connectionManager.DisconnectWithIntentAsync(staleDisconnect);
+
+        Assert.True(connected);
+        Assert.False(disconnected);
+        Assert.True(_connectionManager.IsConnected);
+    }
+
+    [Fact]
+    public async Task AbandonedIntent_RestoresExistingSessionAndMonitoredGeneration()
+    {
+        Assert.True(await _connectionManager!.ConnectAsync(_fixture.EndpointUrl));
+        var node = await _connectionManager.SubscribeAsync(
+            new NodeId("Counter", (ushort)GetNamespaceIndex()),
+            "Counter");
+        Assert.NotNull(node);
+
+        var abandonedGeneration = _connectionManager.RegisterExplicitLifecycleIntent();
+        Assert.False(_connectionManager.IsConnected);
+
+        _connectionManager.RestoreSessionAfterAbandonedIntent(abandonedGeneration);
+
+        Assert.True(_connectionManager.IsConnected);
+        Assert.Equal(abandonedGeneration, node.ConnectionGeneration);
+    }
+
+    [Fact]
+    public void TryRegisterExplicitIntent_FailsWhenNewerIntentAlreadyExists()
+    {
+        var expectedVersion = _connectionManager!.ConnectionIntentVersion;
+        _connectionManager.RegisterExplicitLifecycleIntent();
+
+        var registered = _connectionManager.TryRegisterExplicitLifecycleIntent(
+            expectedVersion,
+            out _);
+
+        Assert.False(registered);
+    }
+
+    [Fact]
+    public async Task AutomaticReconnect_QueuedBeforeExplicitDisconnect_CannotResurrectSession()
+    {
+        var connected = await _connectionManager!.ConnectAsync(_fixture.EndpointUrl);
+        Assert.True(connected);
+
+        long? reconnectIntent = null;
+        _connectionManager.AutoReconnectTriggered += intent => reconnectIntent = intent;
+        _connectionManager.OnReconnectRequired();
+        Assert.NotNull(reconnectIntent);
+
+        await _connectionManager.DisconnectAsync();
+        var reconnected = await _connectionManager.ReconnectAutomaticallyAsync(reconnectIntent.Value);
+
+        Assert.False(reconnected);
+        Assert.False(_connectionManager.IsConnected);
+        Assert.Null(_connectionManager.SubscriptionManager);
+    }
+
+    [Fact]
+    public async Task KeepAliveAfterExplicitIntent_CannotSupersedeQueuedDisconnect()
+    {
+        var connected = await _connectionManager!.ConnectAsync(_fixture.EndpointUrl);
+        Assert.True(connected);
+
+        var disconnectGeneration = _connectionManager.RegisterExplicitLifecycleIntent();
+        var autoReconnectRaised = false;
+        _connectionManager.AutoReconnectTriggered += _ => autoReconnectRaised = true;
+
+        _connectionManager.OnReconnectRequired();
+        var disconnected = await _connectionManager.DisconnectWithIntentAsync(disconnectGeneration);
+
+        Assert.False(autoReconnectRaised);
+        Assert.True(disconnected);
+        Assert.False(_connectionManager.IsConnected);
+    }
+
+    [Fact]
+    public async Task Disconnect_CancelsManualReconnectBeforeWrapperGateIsAcquired()
+    {
+        Assert.True(await _connectionManager!.ConnectAsync(_fixture.EndpointUrl));
+        var gateEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holdGate = _connectionManager.Client.ExecuteLifecycleAsync(async () =>
+        {
+            gateEntered.TrySetResult(true);
+            await releaseGate.Task;
+        });
+        await gateEntered.Task;
+
+        var reconnectGeneration = _connectionManager.RegisterExplicitLifecycleIntent();
+        var reconnectTask = _connectionManager.ReconnectWithIntentAsync(reconnectGeneration);
+        var disconnectGeneration = _connectionManager.RegisterExplicitLifecycleIntent();
+        var disconnectTask = _connectionManager.DisconnectWithIntentAsync(disconnectGeneration);
+        releaseGate.TrySetResult(true);
+
+        await holdGate;
+        Assert.False(await reconnectTask);
+        Assert.True(await disconnectTask);
+        Assert.False(_connectionManager.IsConnected);
+    }
+
+    [Fact]
+    public async Task OperationsAfterKeepAliveLoss_AreRejectedUntilReconnectIsPublished()
+    {
+        var connected = await _connectionManager!.ConnectAsync(_fixture.EndpointUrl);
+        Assert.True(connected);
+
+        _connectionManager.OnReconnectRequired();
+        var reconnectGeneration = _connectionManager.ConnectionGeneration;
+        var namespaceIndex = (ushort)GetNamespaceIndex();
+        var nodeId = new NodeId("WritableNumber", namespaceIndex);
+        var root = _connectionManager.NodeBrowser.GetRootNode();
+
+        var writeStatus = await _connectionManager.WriteValueAsync(
+            nodeId,
+            123456789,
+            reconnectGeneration);
+        var subscription = await _connectionManager.SubscribeAsync(
+            nodeId,
+            "during reconnect",
+            reconnectGeneration);
+        var snapshot = await _connectionManager.ReadWriteSnapshotAsync(
+            nodeId,
+            reconnectGeneration,
+            Attributes.Value);
+        var children = await _connectionManager.NodeBrowser.GetChildrenAsync(root);
+
+        Assert.False(_connectionManager.IsConnectionGenerationActive(reconnectGeneration));
+        Assert.Equal(StatusCodes.BadNotConnected, writeStatus.Code);
+        Assert.Null(subscription);
+        Assert.Null(snapshot);
+        Assert.Empty(children);
+        Assert.False(root.ChildrenLoaded);
+    }
+
+    [Fact]
+    public async Task OperationsFromPriorGeneration_AreRejectedAfterReconnect()
+    {
+        var connected = await _connectionManager!.ConnectAsync(_fixture.EndpointUrl);
+        Assert.True(connected);
+
+        var oldGeneration = _connectionManager.ConnectionGeneration;
+        var oldRoot = _connectionManager.NodeBrowser.GetRootNode();
+        var namespaceIndex = (ushort)GetNamespaceIndex();
+        var writableNode = new NodeId("WritableNumber", namespaceIndex);
+        var valueBefore = await _connectionManager.Client.ReadValueAsync(writableNode);
+
+        await _connectionManager.DisconnectAsync();
+        connected = await _connectionManager.ConnectAsync(_fixture.EndpointUrl);
+        Assert.True(connected);
+        Assert.NotEqual(oldGeneration, _connectionManager.ConnectionGeneration);
+
+        var writeStatus = await _connectionManager.WriteValueAsync(
+            writableNode,
+            123456789,
+            oldGeneration);
+        var staleSubscription = await _connectionManager.SubscribeAsync(
+            writableNode,
+            "stale",
+            oldGeneration);
+        var staleChildren = await _connectionManager.NodeBrowser.GetChildrenAsync(oldRoot);
+        var valueAfter = await _connectionManager.Client.ReadValueAsync(writableNode);
+
+        Assert.Equal(StatusCodes.BadNotConnected, writeStatus.Code);
+        Assert.Null(staleSubscription);
+        Assert.Empty(staleChildren);
+        Assert.False(oldRoot.ChildrenLoaded);
+        Assert.Equal(valueBefore?.Value, valueAfter?.Value);
+    }
+
+    [Fact]
     public async Task LastEndpoint_RemembersEndpoint()
     {
         // Act
@@ -228,11 +461,7 @@ public class ConnectionManagerIntegrationTests : IAsyncLifetime
         var nodeId = new Opc.Ua.NodeId("Counter", (ushort)nsIndex);
         var node = await _connectionManager.SubscribeAsync(nodeId, "Counter");
 
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
+        Assert.NotNull(node);
 
         // Act
         var result = await _connectionManager.UnsubscribeAsync(node.ClientHandle);
@@ -255,10 +484,7 @@ public class ConnectionManagerIntegrationTests : IAsyncLifetime
 
         // Act
         var node = await _connectionManager.SubscribeAsync(nodeId, "Counter");
-        if (node == null)
-        {
-            return; // Skip if subscription failed
-        }
+        Assert.NotNull(node);
 
         await Task.Delay(1500); // Wait for subscription updates
 
@@ -282,10 +508,8 @@ public class ConnectionManagerIntegrationTests : IAsyncLifetime
         var node = await _connectionManager.SubscribeAsync(nodeId, "Counter");
 
         // Assert
-        if (node != null)
-        {
-            Assert.NotNull(addedNode);
-        }
+        Assert.NotNull(node);
+        Assert.NotNull(addedNode);
     }
 
     [Fact]
@@ -298,14 +522,10 @@ public class ConnectionManagerIntegrationTests : IAsyncLifetime
         var nsIndex = GetNamespaceIndex();
         var nodeId = new Opc.Ua.NodeId("Counter", (ushort)nsIndex);
         var node = await _connectionManager.SubscribeAsync(nodeId, "Counter");
-
-        if (node == null)
-        {
-            return; // Skip if subscription failed
-        }
+        Assert.NotNull(node);
 
         uint? removedHandle = null;
-        _connectionManager.VariableRemoved += handle => removedHandle = handle;
+        _connectionManager.VariableRemoved += (handle, _) => removedHandle = handle;
 
         // Act
         await _connectionManager.UnsubscribeAsync(node.ClientHandle);
@@ -342,12 +562,13 @@ public class ConnectionManagerIntegrationTests : IAsyncLifetime
 
     private int GetNamespaceIndex()
     {
-        if (_connectionManager?.Client?.Session == null)
-        {
-            return -1;
-        }
+        var session = _connectionManager?.Client.Session
+            ?? throw new InvalidOperationException("The test connection has no active OPC UA session.");
 
-        return _connectionManager.Client.Session.NamespaceUris.GetIndex(
+        var index = session.NamespaceUris.GetIndex(
             Opcilloscope.TestServer.TestNodeManager.NamespaceUri);
+        return index >= 0
+            ? index
+            : throw new InvalidOperationException("The test server namespace was not registered in the session.");
     }
 }

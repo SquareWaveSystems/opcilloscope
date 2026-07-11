@@ -189,6 +189,35 @@ public class NodeBrowserIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task GetChildrenAsync_LeafVariable_ClearsOptimisticHasChildrenFlag()
+    {
+        var root = _nodeBrowser.GetRootNode();
+        var objects = (await _nodeBrowser.GetChildrenAsync(root)).First(c => c.DisplayName == "Objects");
+        var simulation = (await _nodeBrowser.GetChildrenAsync(objects)).First(c => c.DisplayName == "Simulation");
+        var counter = (await _nodeBrowser.GetChildrenAsync(simulation)).First(c => c.DisplayName == "Counter");
+
+        var children = await _nodeBrowser.GetChildrenAsync(counter);
+
+        Assert.Empty(children);
+        Assert.True(counter.ChildrenLoaded);
+        Assert.False(counter.HasChildren);
+    }
+
+    [Fact]
+    public async Task GetChildrenAsync_TypesFolder_ReturnsTypeNodes()
+    {
+        var root = _nodeBrowser.GetRootNode();
+        var types = (await _nodeBrowser.GetChildrenAsync(root)).First(c => c.DisplayName == "Types");
+
+        var categories = await _nodeBrowser.GetChildrenAsync(types);
+        var objectTypes = categories.First(c => c.DisplayName == "ObjectTypes");
+        var children = await _nodeBrowser.GetChildrenAsync(objectTypes);
+
+        Assert.NotEmpty(children);
+        Assert.Contains(children, child => child.NodeClass == NodeClass.ObjectType);
+    }
+
+    [Fact]
     public async Task GetNodeAttributesAsync_ReturnsAttributes()
     {
         // Arrange

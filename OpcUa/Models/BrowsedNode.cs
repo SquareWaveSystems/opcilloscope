@@ -12,6 +12,11 @@ public class BrowsedNode
     public string DisplayName { get; init; } = string.Empty;
     public NodeClass NodeClass { get; init; } = NodeClass.Unspecified;
     public NodeId? DataType { get; init; }
+    /// <summary>
+    /// Connection generation that produced this node. NodeIds are only meaningful
+    /// within that server/session context and must not be reused after it changes.
+    /// </summary>
+    public long ConnectionGeneration { get; init; }
     public string? DataTypeName { get; set; }
     public bool HasChildren { get; set; } = true; // Assume true until proven otherwise
     public bool ChildrenLoaded { get; set; } = false;

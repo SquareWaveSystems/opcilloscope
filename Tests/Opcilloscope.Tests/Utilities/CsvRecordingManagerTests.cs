@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Opc.Ua;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.Utilities;
@@ -857,5 +858,150 @@ public class CsvRecordingManagerTests : IDisposable
         Assert.DoesNotContain("StaleNode", content);
         Assert.DoesNotContain("stale", content);
         Assert.Equal(0, _manager.RecordCount);
+    }
+
+    [Fact]
+    public void RecordValue_WhenBoundedQueueIsFull_DropsNewRecordAndCountsIt()
+    {
+        var writer = new BlockingTextWriter();
+        using var manager = new CsvRecordingManager(_logger, queueCapacity: 1, _ => writer);
+        Assert.True(manager.StartRecording("unused.csv"));
+
+        manager.RecordValue(CreateNode("first"));
+        Assert.True(writer.WaitUntilRecordWriteStarts(TimeSpan.FromSeconds(5)));
+
+        // The writer has consumed the first record and is deliberately stalled.
+        // One record fits in the channel; the next is dropped without blocking
+        // the OPC notification thread.
+        manager.RecordValue(CreateNode("second"));
+        manager.RecordValue(CreateNode("third"));
+
+        Assert.Equal(1, manager.DroppedRecordCount);
+
+        writer.Release();
+        manager.StopRecording();
+
+        Assert.Equal(2, manager.RecordCount);
+        Assert.Contains("first", writer.ToString());
+        Assert.Contains("second", writer.ToString());
+        Assert.DoesNotContain("third", writer.ToString());
+    }
+
+    [Fact]
+    public async Task StopRecordingAsync_WhenWriterDoesNotFinish_ReportsTimeoutAndKeepsSessionTracked()
+    {
+        var writer = new BlockingTextWriter();
+        using var manager = new CsvRecordingManager(_logger, queueCapacity: 1, _ => writer);
+        Assert.True(manager.StartRecording("unused.csv"));
+        manager.RecordValue(CreateNode("first"));
+        Assert.True(writer.WaitUntilRecordWriteStarts(TimeSpan.FromSeconds(5)));
+
+        var timedOut = await manager.StopRecordingAsync(TimeSpan.FromMilliseconds(50));
+
+        Assert.False(timedOut.Completed);
+        Assert.True(manager.IsStopping);
+        Assert.False(manager.StartRecording("second.csv"));
+
+        writer.Release();
+        var completed = await manager.StopRecordingAsync(System.Threading.Timeout.InfiniteTimeSpan);
+
+        Assert.True(completed.Completed);
+        Assert.False(manager.IsStopping);
+        Assert.Equal(1, completed.RecordCount);
+    }
+
+    [Fact]
+    public void StopRecording_WhenRecordWriteFails_ReportsFailedRecordAndError()
+    {
+        var writer = new ThrowingRecordWriter();
+        using var manager = new CsvRecordingManager(_logger, queueCapacity: 10, _ => writer);
+        Assert.True(manager.StartRecording("unused.csv"));
+
+        manager.RecordValue(CreateNode("will-fail"));
+        manager.StopRecording();
+
+        Assert.Equal(0, manager.RecordCount);
+        Assert.Equal(1, manager.FailedRecordCount);
+        Assert.Contains("failed", manager.LastError, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Dispose_WhenRecordWriteFails_LogsDataLoss()
+    {
+        var writer = new ThrowingRecordWriter();
+        var manager = new CsvRecordingManager(_logger, queueCapacity: 10, _ => writer);
+        Assert.True(manager.StartRecording("unused.csv"));
+        manager.RecordValue(CreateNode("will-fail"));
+
+        manager.Dispose();
+
+        Assert.Contains(
+            _logger.GetEntries(),
+            entry => entry.Level == LogLevel.Error
+                && entry.Message.Contains("data loss", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static MonitoredNode CreateNode(string value) => new()
+    {
+        DisplayName = value,
+        NodeId = new NodeId(value, namespaceIndex: 1),
+        Value = value,
+        RawValue = value
+    };
+
+    private sealed class BlockingTextWriter : StringWriter
+    {
+        private readonly ManualResetEventSlim _recordWriteStarted = new();
+        private readonly ManualResetEventSlim _release = new();
+        private int _lineCount;
+        private int _disposed;
+
+        public override Encoding Encoding => Encoding.UTF8;
+
+        public override void WriteLine(string? value)
+        {
+            if (Interlocked.Increment(ref _lineCount) > 1)
+            {
+                _recordWriteStarted.Set();
+                if (!_release.Wait(TimeSpan.FromSeconds(10)))
+                {
+                    throw new TimeoutException("Test writer was not released");
+                }
+            }
+
+            base.WriteLine(value);
+        }
+
+        public bool WaitUntilRecordWriteStarts(TimeSpan timeout) => _recordWriteStarted.Wait(timeout);
+
+        public void Release() => _release.Set();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            _release.Set();
+            _recordWriteStarted.Dispose();
+            _release.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class ThrowingRecordWriter : StringWriter
+    {
+        private int _lineCount;
+
+        public override void WriteLine(string? value)
+        {
+            if (Interlocked.Increment(ref _lineCount) > 1)
+            {
+                throw new IOException("simulated storage failure");
+            }
+
+            base.WriteLine(value);
+        }
     }
 }

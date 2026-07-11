@@ -16,5 +16,24 @@ internal static class TestModuleInitializer
     internal static void Init()
     {
         OpcUaClientWrapper.AllowInsecureByDefault = true;
+        var pkiRoot = Path.Combine(
+            Path.GetTempPath(),
+            "opcilloscope-tests",
+            "client-pki",
+            $"testhost-{Environment.ProcessId}-{Guid.NewGuid():N}");
+        OpcUaClientWrapper.PkiRootPathOverrideForTests = pkiRoot;
+
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try
+            {
+                if (Directory.Exists(pkiRoot))
+                    Directory.Delete(pkiRoot, recursive: true);
+            }
+            catch
+            {
+                // Best-effort cleanup must not hide the test process's real result.
+            }
+        };
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Opc.Ua;
+using Opc.Ua.Client;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.Utilities;
 
@@ -12,16 +13,30 @@ public class NodeBrowser
 {
     private readonly OpcUaClientWrapper _client;
     private readonly Logger _logger;
+    private readonly Func<long> _getConnectionGeneration;
+    private readonly Func<long, bool> _isConnectionGenerationActive;
     // Keyed by the data type's NodeId (not the variable's) so variables sharing a type
     // reuse the same lookup. ConcurrentDictionary because GetChildrenAsync resolves
     // data type names for multiple variables in parallel.
     private readonly ConcurrentDictionary<string, string> _dataTypeCache = new();
 
-    public NodeBrowser(OpcUaClientWrapper client, Logger logger)
+    public NodeBrowser(
+        OpcUaClientWrapper client,
+        Logger logger,
+        Func<long>? getConnectionGeneration = null,
+        Func<long, bool>? isConnectionGenerationActive = null)
     {
         _client = client;
         _logger = logger;
+        _getConnectionGeneration = getConnectionGeneration ?? (() => 0);
+        _isConnectionGenerationActive = isConnectionGenerationActive
+            ?? (generation => generation == _getConnectionGeneration());
     }
+
+    public long ConnectionGeneration => _getConnectionGeneration();
+
+    public bool IsConnectionGenerationActive(long generation)
+        => _isConnectionGenerationActive(generation);
 
     public BrowsedNode GetRootNode()
     {
@@ -31,72 +46,25 @@ public class NodeBrowser
             BrowseName = "Root",
             DisplayName = "Root",
             NodeClass = NodeClass.Object,
+            ConnectionGeneration = ConnectionGeneration,
             HasChildren = true
         };
     }
 
     public async Task<List<BrowsedNode>> GetChildrenAsync(BrowsedNode parent)
     {
+        var generation = ConnectionGeneration;
+        if (parent.ConnectionGeneration != generation
+            || !IsConnectionGenerationActive(generation))
+            return new List<BrowsedNode>();
+
         if (!_client.IsConnected)
             return new List<BrowsedNode>();
 
         try
         {
-            var refs = await _client.BrowseAsync(parent.NodeId);
-            var children = new List<BrowsedNode>();
-
-            // First pass: create all child nodes without async operations
-            foreach (var r in refs)
-            {
-                // Convert ExpandedNodeId to NodeId
-                var targetNodeId = ExpandedNodeId.ToNodeId(r.NodeId, _client.Session?.NamespaceUris);
-                if (targetNodeId == null)
-                    continue;
-
-                // Get TypeDefinition NodeId
-                NodeId? typeDefNodeId = null;
-                if (r.TypeDefinition != null && !r.TypeDefinition.IsNull)
-                {
-                    typeDefNodeId = ExpandedNodeId.ToNodeId(r.TypeDefinition, _client.Session?.NamespaceUris);
-                }
-
-                var child = new BrowsedNode
-                {
-                    NodeId = targetNodeId,
-                    BrowseName = r.BrowseName?.Name ?? string.Empty,
-                    DisplayName = r.DisplayName?.Text ?? r.BrowseName?.Name ?? "Unknown",
-                    NodeClass = r.NodeClass,
-                    DataType = typeDefNodeId,
-                    Parent = parent,
-                    // Optimistically assume Objects and Variables may have children to avoid N browse calls.
-                    // This creates false positives (expand arrows on leaf nodes) but eliminates the
-                    // performance cost of checking every node during initial tree expansion.
-                    // The actual child check happens lazily on first expansion.
-                    // Trade-off: Other node classes (Methods, ObjectTypes, etc.) won't show expand arrows
-                    // even if they have children, but this is rare in typical OPC UA address spaces.
-                    HasChildren = r.NodeClass == NodeClass.Object || r.NodeClass == NodeClass.Variable
-                };
-
-                children.Add(child);
-            }
-
-            // Second pass: fetch data type names for variables in parallel
-            // This is the only async operation we still need - HasChildren is now lazy
-            var variableNodes = children.Where(c => c.NodeClass == NodeClass.Variable).ToList();
-            if (variableNodes.Count > 0)
-            {
-                var dataTypeTasks = variableNodes.Select(async child =>
-                {
-                    child.DataTypeName = await GetDataTypeNameAsync(child.NodeId);
-                });
-                await Task.WhenAll(dataTypeTasks);
-            }
-
-            parent.ChildrenLoaded = true;
-            parent.Children.Clear();
-            parent.Children.AddRange(children);
-
-            return children;
+            return await _client.ExecuteSessionOperationAsync(
+                session => GetChildrenCoreAsync(parent, session, generation));
         }
         catch (Exception ex)
         {
@@ -105,23 +73,117 @@ public class NodeBrowser
         }
     }
 
-    private async Task<string?> GetDataTypeNameAsync(NodeId nodeId)
+    private async Task<List<BrowsedNode>> GetChildrenCoreAsync(
+        BrowsedNode parent,
+        ISession session,
+        long generation)
+    {
+        if (!IsConnectionGenerationActive(generation))
+            return new List<BrowsedNode>();
+
+        var refs = await OpcUaClientWrapper.BrowseCoreAsync(session, parent.NodeId)
+            .ConfigureAwait(false);
+        var children = new List<BrowsedNode>();
+
+        // First pass: create all child nodes without async operations
+        foreach (var r in refs)
+        {
+            // Convert ExpandedNodeId to NodeId
+            var targetNodeId = ExpandedNodeId.ToNodeId(r.NodeId, session.NamespaceUris);
+            if (targetNodeId == null)
+                continue;
+
+            // Get TypeDefinition NodeId
+            NodeId? typeDefNodeId = null;
+            if (r.TypeDefinition != null && !r.TypeDefinition.IsNull)
+            {
+                typeDefNodeId = ExpandedNodeId.ToNodeId(r.TypeDefinition, session.NamespaceUris);
+            }
+
+            var child = new BrowsedNode
+            {
+                NodeId = targetNodeId,
+                BrowseName = r.BrowseName?.Name ?? string.Empty,
+                DisplayName = r.DisplayName?.Text ?? r.BrowseName?.Name ?? "Unknown",
+                NodeClass = r.NodeClass,
+                DataType = typeDefNodeId,
+                ConnectionGeneration = generation,
+                Parent = parent,
+                // Optimistically assume hierarchical node classes may have children to avoid N browse calls.
+                // This creates false positives (expand arrows on leaf nodes) but eliminates the
+                // performance cost of checking every node during initial tree expansion.
+                // The actual child check happens lazily on first expansion.
+                // The first expansion corrects this optimistic value when a browse is empty.
+                HasChildren = r.NodeClass != NodeClass.Method
+            };
+
+            children.Add(child);
+        }
+
+        // Second pass: fetch data type names for variables in parallel
+        // This is the only async operation we still need - HasChildren is now lazy
+        var variableNodes = children.Where(c => c.NodeClass == NodeClass.Variable).ToList();
+        if (variableNodes.Count > 0)
+        {
+            using var concurrency = new SemaphoreSlim(8);
+            var dataTypeTasks = variableNodes.Select(async child =>
+            {
+                await concurrency.WaitAsync();
+                try
+                {
+                    child.DataTypeName = await GetDataTypeNameAsync(
+                        session,
+                        child.NodeId,
+                        generation).ConfigureAwait(false);
+                }
+                finally
+                {
+                    concurrency.Release();
+                }
+            });
+            await Task.WhenAll(dataTypeTasks).ConfigureAwait(false);
+        }
+
+        if (!IsConnectionGenerationActive(generation))
+            return new List<BrowsedNode>();
+
+        parent.ChildrenLoaded = true;
+        parent.HasChildren = children.Count > 0;
+        parent.Children.Clear();
+        parent.Children.AddRange(children);
+
+        return children;
+    }
+
+    private async Task<string?> GetDataTypeNameAsync(
+        ISession session,
+        NodeId nodeId,
+        long generation)
     {
         try
         {
-            var attrs = await _client.ReadAttributesAsync(nodeId, Attributes.DataType);
+            var attrs = await OpcUaClientWrapper.ReadAttributesCoreAsync(
+                session,
+                nodeId,
+                Attributes.DataType).ConfigureAwait(false);
             if (attrs.Count > 0 && attrs[0].Value is NodeId dataTypeId)
             {
                 // Check built-in types first - resolved without a network call, no caching needed
                 if (DataTypeResolver.TryGetBuiltInName(dataTypeId, out var builtIn))
                     return builtIn;
 
-                var key = dataTypeId.ToString();
+                // Namespace indexes are session-specific. Scope custom-type
+                // names to the endpoint so connecting this browser to another
+                // server cannot reuse a same-looking NodeId from the old one.
+                var key = $"{generation}|{_client.CurrentEndpoint}|{dataTypeId}";
                 if (_dataTypeCache.TryGetValue(key, out var cached))
                     return cached;
 
                 // If not built-in, browse for the type name
-                var typeAttrs = await _client.ReadAttributesAsync(dataTypeId, Attributes.DisplayName);
+                var typeAttrs = await OpcUaClientWrapper.ReadAttributesCoreAsync(
+                    session,
+                    dataTypeId,
+                    Attributes.DisplayName).ConfigureAwait(false);
                 if (typeAttrs.Count > 0 && typeAttrs[0].Value is LocalizedText lt && lt.Text is string name)
                 {
                     _dataTypeCache[key] = name;
@@ -138,14 +200,39 @@ public class NodeBrowser
         return null;
     }
 
-    public async Task<NodeAttributes?> GetNodeAttributesAsync(NodeId nodeId)
+    public async Task<NodeAttributes?> GetNodeAttributesAsync(
+        NodeId nodeId,
+        long? expectedGeneration = null)
     {
+        var generation = expectedGeneration ?? ConnectionGeneration;
+        if (!IsConnectionGenerationActive(generation))
+            return null;
+
         if (!_client.IsConnected)
             return null;
 
         try
         {
-            var attrs = await _client.ReadAttributesAsync(
+            return await _client.ExecuteSessionOperationAsync(
+                session => GetNodeAttributesCoreAsync(session, nodeId, generation));
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to read attributes: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task<NodeAttributes?> GetNodeAttributesCoreAsync(
+        ISession session,
+        NodeId nodeId,
+        long generation)
+    {
+        if (!IsConnectionGenerationActive(generation))
+            return null;
+
+        var attrs = await OpcUaClientWrapper.ReadAttributesCoreAsync(
+                session,
                 nodeId,
                 Attributes.NodeId,
                 Attributes.NodeClass,
@@ -156,160 +243,178 @@ public class NodeBrowser
                 Attributes.ValueRank,
                 Attributes.AccessLevel,
                 Attributes.UserAccessLevel,
-                Attributes.Value
-            );
+                Attributes.Value).ConfigureAwait(false);
 
-            // Check if the node exists by verifying the NodeId attribute read was successful
-            if (attrs.Count == 0 || StatusCode.IsBad(attrs[0].StatusCode))
-            {
-                return null;
-            }
-
-            return new NodeAttributes
-            {
-                NodeId = nodeId,
-                NodeClass = attrs.Count > 1 && attrs[1].Value is int nc ? (NodeClass)nc : NodeClass.Unspecified,
-                BrowseName = attrs.Count > 2 && attrs[2].Value is QualifiedName qn ? qn.Name : null,
-                DisplayName = attrs.Count > 3 && attrs[3].Value is LocalizedText lt ? lt.Text : null,
-                Description = attrs.Count > 4 && attrs[4].Value is LocalizedText desc ? desc.Text : null,
-                DataType = attrs.Count > 5 && attrs[5].Value is NodeId dt ? await GetDataTypeNameByIdAsync(dt) : null,
-                ValueRank = attrs.Count > 6 && attrs[6].Value is int vr ? vr : null,
-                AccessLevel = attrs.Count > 7 && attrs[7].Value is byte al ? al : null,
-                UserAccessLevel = attrs.Count > 8 && attrs[8].Value is byte ual ? ual : null,
-                Value = attrs.Count > 9 && StatusCode.IsGood(attrs[9].StatusCode) ? FormatValue(attrs[9].Value) : null
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"Failed to read attributes: {ex.Message}");
+        // Check if the node exists by verifying the NodeId attribute read was successful
+        if (attrs.Count == 0 || StatusCode.IsBad(attrs[0].StatusCode))
             return null;
-        }
+
+        var dataType = attrs.Count > 5 && attrs[5].Value is NodeId dt
+            ? await GetDataTypeNameByIdAsync(session, dt).ConfigureAwait(false)
+            : null;
+        if (!IsConnectionGenerationActive(generation))
+            return null;
+
+        return new NodeAttributes
+        {
+            NodeId = nodeId,
+            NodeClass = attrs.Count > 1 && attrs[1].Value is int nc ? (NodeClass)nc : NodeClass.Unspecified,
+            BrowseName = attrs.Count > 2 && attrs[2].Value is QualifiedName qn ? qn.Name : null,
+            DisplayName = attrs.Count > 3 && attrs[3].Value is LocalizedText lt ? lt.Text : null,
+            Description = attrs.Count > 4 && attrs[4].Value is LocalizedText desc ? desc.Text : null,
+            DataType = dataType,
+            ValueRank = attrs.Count > 6 && attrs[6].Value is int vr ? vr : null,
+            AccessLevel = attrs.Count > 7 && attrs[7].Value is byte al ? al : null,
+            UserAccessLevel = attrs.Count > 8 && attrs[8].Value is byte ual ? ual : null,
+            Value = attrs.Count > 9 && StatusCode.IsGood(attrs[9].StatusCode) ? FormatValue(attrs[9].Value) : null
+        };
     }
 
     /// <summary>
     /// Reads all OPC UA node attributes based on the node's class.
     /// Returns a dictionary of attribute name to value for formatting.
     /// </summary>
-    public async Task<Dictionary<string, object?>?> ReadAllNodeAttributesAsync(NodeId nodeId)
+    public async Task<Dictionary<string, object?>?> ReadAllNodeAttributesAsync(
+        NodeId nodeId,
+        long? expectedGeneration = null)
     {
+        var generation = expectedGeneration ?? ConnectionGeneration;
+        if (!IsConnectionGenerationActive(generation))
+            return null;
+
         if (!_client.IsConnected)
             return null;
 
         try
         {
-            // First, read NodeClass to determine which attributes to fetch
-            var nodeClassResult = await _client.ReadAttributesAsync(nodeId, Attributes.NodeClass);
-            if (nodeClassResult.Count == 0 || StatusCode.IsBad(nodeClassResult[0].StatusCode))
-            {
-                return null;
-            }
-
-            var nodeClass = nodeClassResult[0].Value is int nc ? (NodeClass)nc : NodeClass.Unspecified;
-
-            // Base attributes for all nodes
-            var baseAttributes = new uint[]
-            {
-                Attributes.NodeId,
-                Attributes.NodeClass,
-                Attributes.BrowseName,
-                Attributes.DisplayName,
-                Attributes.Description,
-                Attributes.WriteMask,
-                Attributes.UserWriteMask,
-            };
-
-            // Class-specific attributes
-            var classAttributes = nodeClass switch
-            {
-                NodeClass.Variable => new uint[]
-                {
-                    Attributes.Value,
-                    Attributes.DataType,
-                    Attributes.ValueRank,
-                    Attributes.ArrayDimensions,
-                    Attributes.AccessLevel,
-                    Attributes.UserAccessLevel,
-                    Attributes.MinimumSamplingInterval,
-                    Attributes.Historizing,
-                    Attributes.AccessLevelEx,
-                },
-                NodeClass.Object => new uint[] { Attributes.EventNotifier },
-                NodeClass.Method => new uint[] { Attributes.Executable, Attributes.UserExecutable },
-                NodeClass.ObjectType or NodeClass.VariableType => new uint[] { Attributes.IsAbstract },
-                NodeClass.DataType => new uint[] { Attributes.IsAbstract, Attributes.DataTypeDefinition },
-                NodeClass.ReferenceType => new uint[]
-                {
-                    Attributes.IsAbstract,
-                    Attributes.Symmetric,
-                    Attributes.InverseName
-                },
-                NodeClass.View => new uint[] { Attributes.ContainsNoLoops, Attributes.EventNotifier },
-                _ => Array.Empty<uint>()
-            };
-
-            // Optional attributes (may not exist on older servers)
-            var optionalAttributes = new uint[]
-            {
-                Attributes.RolePermissions,
-                Attributes.UserRolePermissions,
-                Attributes.AccessRestrictions,
-            };
-
-            // Combine all attributes
-            var allAttributes = baseAttributes
-                .Concat(classAttributes)
-                .Concat(optionalAttributes)
-                .Distinct()
-                .ToArray();
-
-            // Read all attributes in a single call
-            var results = await _client.ReadAttributesAsync(nodeId, allAttributes);
-
-            // Build the result dictionary
-            var result = new Dictionary<string, object?>();
-            var attributeNames = GetAttributeNames();
-
-            for (int i = 0; i < allAttributes.Length && i < results.Count; i++)
-            {
-                var attrId = allAttributes[i];
-                var dataValue = results[i];
-
-                // Skip attributes that don't exist or had errors (except BadAttributeIdInvalid which is expected)
-                if (StatusCode.IsBad(dataValue.StatusCode))
-                {
-                    continue;
-                }
-
-                if (attributeNames.TryGetValue(attrId, out var name))
-                {
-                    var value = dataValue.Value;
-
-                    // Special handling for DataType - resolve to display name
-                    if (attrId == Attributes.DataType && value is NodeId dtNodeId)
-                    {
-                        try
-                        {
-                            var dtName = await GetDataTypeNameByIdAsync(dtNodeId);
-                            value = $"{dtNodeId} ({dtName ?? "Unknown"})";
-                        }
-                        catch
-                        {
-                            // If resolution fails, just use the NodeId string
-                            value = dtNodeId.ToString();
-                        }
-                    }
-
-                    result[name] = value;
-                }
-            }
-
-            return result;
+            return await _client.ExecuteSessionOperationAsync(
+                session => ReadAllNodeAttributesCoreAsync(session, nodeId, generation));
         }
         catch (Exception ex)
         {
             _logger.Error($"Failed to read all node attributes: {ex.Message}");
             return null;
         }
+    }
+
+    private async Task<Dictionary<string, object?>?> ReadAllNodeAttributesCoreAsync(
+        ISession session,
+        NodeId nodeId,
+        long generation)
+    {
+        if (!IsConnectionGenerationActive(generation))
+            return null;
+
+        // First, read NodeClass to determine which attributes to fetch
+        var nodeClassResult = await OpcUaClientWrapper.ReadAttributesCoreAsync(
+            session,
+            nodeId,
+            Attributes.NodeClass).ConfigureAwait(false);
+        if (nodeClassResult.Count == 0 || StatusCode.IsBad(nodeClassResult[0].StatusCode))
+            return null;
+
+        var nodeClass = nodeClassResult[0].Value is int nc ? (NodeClass)nc : NodeClass.Unspecified;
+
+        // Base attributes for all nodes
+        var baseAttributes = new uint[]
+        {
+            Attributes.NodeId,
+            Attributes.NodeClass,
+            Attributes.BrowseName,
+            Attributes.DisplayName,
+            Attributes.Description,
+            Attributes.WriteMask,
+            Attributes.UserWriteMask,
+        };
+
+        // Class-specific attributes
+        var classAttributes = nodeClass switch
+        {
+            NodeClass.Variable => new uint[]
+            {
+                Attributes.Value,
+                Attributes.DataType,
+                Attributes.ValueRank,
+                Attributes.ArrayDimensions,
+                Attributes.AccessLevel,
+                Attributes.UserAccessLevel,
+                Attributes.MinimumSamplingInterval,
+                Attributes.Historizing,
+                Attributes.AccessLevelEx,
+            },
+            NodeClass.Object => new uint[] { Attributes.EventNotifier },
+            NodeClass.Method => new uint[] { Attributes.Executable, Attributes.UserExecutable },
+            NodeClass.ObjectType or NodeClass.VariableType => new uint[] { Attributes.IsAbstract },
+            NodeClass.DataType => new uint[] { Attributes.IsAbstract, Attributes.DataTypeDefinition },
+            NodeClass.ReferenceType => new uint[]
+            {
+                Attributes.IsAbstract,
+                Attributes.Symmetric,
+                Attributes.InverseName
+            },
+            NodeClass.View => new uint[] { Attributes.ContainsNoLoops, Attributes.EventNotifier },
+            _ => Array.Empty<uint>()
+        };
+
+        // Optional attributes (may not exist on older servers)
+        var optionalAttributes = new uint[]
+        {
+            Attributes.RolePermissions,
+            Attributes.UserRolePermissions,
+            Attributes.AccessRestrictions,
+        };
+
+        // Combine all attributes
+        var allAttributes = baseAttributes
+            .Concat(classAttributes)
+            .Concat(optionalAttributes)
+            .Distinct()
+            .ToArray();
+
+        // Read all attributes in a single call
+        var results = await OpcUaClientWrapper.ReadAttributesCoreAsync(
+            session,
+            nodeId,
+            allAttributes).ConfigureAwait(false);
+
+        // Build the result dictionary
+        var result = new Dictionary<string, object?>();
+        var attributeNames = GetAttributeNames();
+
+        for (int i = 0; i < allAttributes.Length && i < results.Count; i++)
+        {
+            var attrId = allAttributes[i];
+            var dataValue = results[i];
+
+            // Skip attributes that don't exist or had errors.
+            if (StatusCode.IsBad(dataValue.StatusCode))
+                continue;
+
+            if (attributeNames.TryGetValue(attrId, out var name))
+            {
+                var value = dataValue.Value;
+
+                // Special handling for DataType - resolve to display name
+                if (attrId == Attributes.DataType && value is NodeId dtNodeId)
+                {
+                    try
+                    {
+                        var dtName = await GetDataTypeNameByIdAsync(session, dtNodeId)
+                            .ConfigureAwait(false);
+                        value = $"{dtNodeId} ({dtName ?? "Unknown"})";
+                    }
+                    catch
+                    {
+                        // If resolution fails, just use the NodeId string
+                        value = dtNodeId.ToString();
+                    }
+                }
+
+                result[name] = value;
+            }
+        }
+
+        return IsConnectionGenerationActive(generation) ? result : null;
     }
 
     /// <summary>
@@ -357,14 +462,19 @@ public class NodeBrowser
         return value.ToString() ?? "null";
     }
 
-    private async Task<string?> GetDataTypeNameByIdAsync(NodeId dataTypeId)
+    private async Task<string?> GetDataTypeNameByIdAsync(
+        ISession session,
+        NodeId dataTypeId)
     {
         if (DataTypeResolver.TryGetBuiltInName(dataTypeId, out var builtInName))
             return builtInName;
 
         try
         {
-            var attrs = await _client.ReadAttributesAsync(dataTypeId, Attributes.DisplayName);
+            var attrs = await OpcUaClientWrapper.ReadAttributesCoreAsync(
+                session,
+                dataTypeId,
+                Attributes.DisplayName).ConfigureAwait(false);
             if (attrs.Count > 0 && attrs[0].Value is LocalizedText lt)
                 return lt.Text;
         }

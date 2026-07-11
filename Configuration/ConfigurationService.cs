@@ -182,6 +182,20 @@ public class ConfigurationService
             throw new InvalidDataException("Configuration is missing the 'metadata' section.");
         }
 
+        var authentication = config.Server.Authentication
+            ?? throw new InvalidDataException("Configuration is missing the server authentication section.");
+        if (!Enum.TryParse<AuthenticationType>(authentication.Type, ignoreCase: true, out var authType)
+            || authType is not AuthenticationType.Anonymous and not AuthenticationType.UserName)
+        {
+            throw new InvalidDataException(
+                $"Unsupported authentication type '{authentication.Type}'. Expected Anonymous or UserName.");
+        }
+
+        if (authType == AuthenticationType.UserName && string.IsNullOrWhiteSpace(authentication.Username))
+        {
+            throw new InvalidDataException("UserName authentication requires a non-empty username.");
+        }
+
         // Validate publishing interval
         if (config.Settings.PublishingIntervalMs < 0)
         {
@@ -377,7 +391,7 @@ public class ConfigurationService
     /// Gets the default directory for configuration files.
     /// Uses cross-platform appropriate locations:
     /// - Windows: %APPDATA%/opcilloscope/configs/
-    /// - macOS: ~/.config/opcilloscope/configs/
+    /// - macOS: ~/Library/Application Support/opcilloscope/configs/
     /// - Linux: ~/.config/opcilloscope/configs/
     /// </summary>
     /// <returns>Path to the default configuration directory.</returns>
@@ -394,8 +408,8 @@ public class ConfigurationService
         }
         else if (OperatingSystem.IsMacOS())
         {
-            // macOS: ~/.config/opcilloscope/configs/
-            // (.NET maps SpecialFolder.ApplicationData to ~/.config on macOS)
+            // macOS: ~/Library/Application Support/opcilloscope/configs/
+            // (.NET maps SpecialFolder.ApplicationData to Application Support.)
             baseDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             appFolder = "opcilloscope";
         }

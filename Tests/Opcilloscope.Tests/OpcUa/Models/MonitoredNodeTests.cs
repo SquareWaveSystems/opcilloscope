@@ -123,11 +123,20 @@ public class MonitoredNodeTests
     public void MonitoredNode_TimestampString_ReturnsFormattedTime()
     {
         // Arrange
-        var testTime = new DateTime(2024, 1, 15, 14, 30, 45);
+        var testTime = new DateTime(2024, 1, 15, 14, 30, 45, DateTimeKind.Local);
         var node = new MonitoredNode { Timestamp = testTime };
 
         // Assert
         Assert.Equal("14:30:45", node.TimestampString);
+    }
+
+    [Fact]
+    public void MonitoredNode_TimestampString_ConvertsUtcToLocalTime()
+    {
+        var utc = new DateTime(2024, 1, 15, 14, 30, 45, DateTimeKind.Utc);
+        var node = new MonitoredNode { Timestamp = utc };
+
+        Assert.Equal(utc.ToLocalTime().ToString("HH:mm:ss"), node.TimestampString);
     }
 
     [Fact]
@@ -138,6 +147,50 @@ public class MonitoredNodeTests
 
         // Assert
         Assert.Equal("-", node.TimestampString);
+    }
+
+    [Fact]
+    public void MonitoredNode_IsWritable_UsesCurrentUsersAccessLevel()
+    {
+        var node = new MonitoredNode
+        {
+            AccessLevel = AccessLevels.CurrentReadOrWrite,
+            UserAccessLevel = AccessLevels.CurrentRead
+        };
+
+        Assert.False(node.IsWritable);
+        Assert.Equal("R", node.AccessString);
+    }
+
+    [Fact]
+    public void MonitoredNode_CanWrite_IsFalseForArrayValue()
+    {
+        var node = new MonitoredNode
+        {
+            UserAccessLevel = AccessLevels.CurrentReadOrWrite,
+            ValueRank = ValueRanks.OneDimension
+        };
+
+        Assert.True(node.IsWritable);
+        Assert.False(node.CanWrite);
+    }
+
+    [Fact]
+    public void MonitoredNode_CanWrite_IsFalseUntilValueRankIsKnownToBeScalar()
+    {
+        var node = new MonitoredNode
+        {
+            UserAccessLevel = AccessLevels.CurrentReadOrWrite
+        };
+
+        Assert.Equal(ValueRanks.Any, node.ValueRank);
+        Assert.False(node.CanWrite);
+    }
+
+    [Fact]
+    public void MonitoredNode_SyntheticValue_DefaultsToFalse()
+    {
+        Assert.False(new MonitoredNode().IsSyntheticValue);
     }
 
     [Fact]

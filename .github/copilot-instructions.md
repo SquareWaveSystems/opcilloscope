@@ -15,14 +15,21 @@ The project name is **opcilloscope** (lowercase "o") in all contexts except wher
 | User-facing text, CLI, URLs | `opcilloscope` | `opcilloscope --help` |
 | C# namespaces, classes, projects | `Opcilloscope` | `namespace Opcilloscope.App` |
 | File/folder names (code) | `Opcilloscope` | `Opcilloscope.csproj` |
-| Config directories (all platforms) | `opcilloscope` | `~/.config/opcilloscope/` |
+| Config/data directories | `opcilloscope` | Use the platform locations below |
 | Release artifacts | `opcilloscope` | `opcilloscope-linux-x64.tar.gz` |
+
+Platform directories:
+- Linux configuration: `${XDG_CONFIG_HOME:-$HOME/.config}/opcilloscope/`
+- Linux application data: `${XDG_DATA_HOME:-$HOME/.local/share}/opcilloscope/`
+- macOS configuration and application data: `~/Library/Application Support/opcilloscope/`
+- Windows configuration: `%APPDATA%\opcilloscope\`; certificates: `%LOCALAPPDATA%\opcilloscope\pki\`
 
 ## Build Commands
 ```bash
-dotnet build      # Build project
-dotnet run        # Run application
-dotnet test       # Run tests
+dotnet build Opcilloscope.sln                 # Build app and tests
+dotnet run --project Opcilloscope.csproj      # Run application
+dotnet test Opcilloscope.sln                  # Run unit/integration suite
+dotnet test Tests/Opcilloscope.E2ETests/Opcilloscope.E2ETests.csproj  # Linux real-PTY E2E
 ```
 
 ## Project Architecture
@@ -31,13 +38,14 @@ dotnet test       # Run tests
 - `App/` - UI components (MainWindow, Views, Dialogs)
 - `OpcUa/` - OPC UA client logic (Session wrapper, Browser, SubscriptionManager)
 - `Utilities/` - Helper classes (Logger, UiThread)
-- `tests/` - xUnit tests with in-process OPC UA test server
+- `Tests/Opcilloscope.Tests/` - Cross-platform xUnit tests with the in-process OPC UA test server
+- `Tests/Opcilloscope.E2ETests/` - Linux-only published-binary PTY tests; intentionally outside `Opcilloscope.sln`
 
 ### Key Classes
 - **MainWindow.cs** - Main UI layout with panels
 - **OpcUaClientWrapper.cs** - OPC Foundation Session wrapper
 - **NodeBrowser.cs** - Address space navigation
-- **SubscriptionManager.cs** - OPC UA Subscription management with Publish/Subscribe
+- **SubscriptionManager.cs** - OPC UA subscriptions and monitored-item notifications (not the OPC UA PubSub transport model)
 - **TestServer.cs** - In-process OPC UA server for testing
 
 ## Coding Guidelines
@@ -61,8 +69,8 @@ SetNeedsLayout()  // OR Update(), NOT SetNeedsDisplay()
 // ListView
 ObservableCollection<T>  // Required for ListView.SetSource()
 
-// Thread marshalling
-Application.Invoke(() => {
+// Thread marshalling through the repository helper
+UiThread.Run(() => {
     // UI updates here
 });
 ```
@@ -70,10 +78,17 @@ Application.Invoke(() => {
 ### OPC Foundation SDK Patterns
 
 #### Endpoint Discovery
+`DiscoveryClient.Create` and `Session.Create` are obsolete in the current SDK.
+Existing wrapper call sites use narrowly scoped `CS0618` pragmas because the
+replacement factories need additional telemetry setup. Prefer the repository
+wrapper; do not introduce an unsuppressed call or a project-wide suppression.
+
 ```csharp
 // DiscoveryClient.Create requires EndpointConfiguration, not ApplicationConfiguration
 var endpointConfig = EndpointConfiguration.Create(config);
+#pragma warning disable CS0618 // Existing wrapper exception: async factory needs telemetry setup
 using var client = DiscoveryClient.Create(uri, endpointConfig);
+#pragma warning restore CS0618
 var endpoints = await client.GetEndpointsAsync(null);
 
 // Valid DiscoveryClient.Create overloads:
@@ -94,6 +109,7 @@ await _server.StopAsync();
 
 #### Session Creation
 ```csharp
+#pragma warning disable CS0618 // Existing wrapper exception: async factory needs telemetry setup
 var session = await Session.Create(
     config,
     endpoint,
@@ -103,6 +119,7 @@ var session = await Session.Create(
     new UserIdentity(new AnonymousIdentityToken()),
     null
 );
+#pragma warning restore CS0618
 ```
 
 #### Subscription with MonitoredItems
@@ -113,7 +130,7 @@ var subscription = new Subscription(session.DefaultSubscription) {
     PublishingEnabled = true
 };
 session.AddSubscription(subscription);
-subscription.Create();
+await subscription.CreateAsync();
 
 // Add monitored item
 var monitoredItem = new MonitoredItem(subscription.DefaultItem) {
@@ -123,7 +140,7 @@ var monitoredItem = new MonitoredItem(subscription.DefaultItem) {
 };
 monitoredItem.Notification += OnNotification;
 subscription.AddItem(monitoredItem);
-subscription.ApplyChanges();
+await subscription.ApplyChangesAsync();
 ```
 
 #### NodeId Usage
@@ -199,11 +216,11 @@ public class OtherTests
 
 ## Thread Safety
 
-⚠️ **Critical:** OPC Foundation callbacks arrive on background threads. Always use `Application.Invoke()` for UI updates:
+⚠️ **Critical:** OPC Foundation callbacks arrive on background threads. Always use the repository's `UiThread.Run` helper for UI updates; the legacy static `Application` API is obsolete:
 
 ```csharp
 monitoredItem.Notification += (item, e) => {
-    Application.Invoke(() => {
+    UiThread.Run(() => {
         // Safe to update UI here
         label.Text = newValue;
     });
@@ -221,17 +238,23 @@ Required packages:
 
 ## Common Pitfalls
 
-1. **Tests fail with Xunit errors in main project** - Ensure `tests/**` is excluded in Opcilloscope.csproj
-2. **UI thread exceptions** - Always use `Application.Invoke()` for UI updates from background threads
+1. **Tests fail with Xunit errors in main project** - Ensure `Tests/**` is excluded in Opcilloscope.csproj
+2. **UI thread exceptions** - Always use `UiThread.Run()` for UI updates from background threads
 3. **Ambiguous NodeBrowser reference** - OPC Foundation has its own `Browser` class; use fully qualified names
-4. **Certificate validation errors** - Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
+4. **Certificate validation errors** - Fix or trust the server certificate using the path reported by the connection log, or bypass validation with `--insecure` for development only
 
 ## Security Notes
 
-For development environments:
-```csharp
-config.SecurityConfiguration.AutoAcceptUntrustedCertificates = true;
-```
+An automatic/omitted or partial security profile requires a `SignAndEncrypt`
+endpoint and selects the strongest matching candidate. Explicit
+`SecurityMode=Sign` opts into signed-but-unencrypted traffic. Explicit
+anonymous `SecurityMode=None` opts into unsecured plaintext; username
+credentials never permit `None`.
+
+Certificates that fail validation are rejected by default.
+`opcilloscope --insecure` may be used for a development run only; it bypasses
+certificate validation and never enables plaintext transport. Do not weaken
+`SecurityConfiguration` in production code.
 
 ## Naming Conventions
 

@@ -16,6 +16,7 @@ public class TestServerFixture : IAsyncLifetime
     private static int _nextPort = 48400; // Use higher port range to avoid conflicts with existing OPC UA servers
 
     private Opcilloscope.TestServer.TestServer? _server;
+    private string? _pkiRootPath;
     private int _port;
 
     /// <summary>
@@ -45,18 +46,47 @@ public class TestServerFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _port = AllocatePort();
+        _pkiRootPath = Path.Combine(
+            Path.GetTempPath(),
+            "opcilloscope-tests",
+            "server-pki",
+            Guid.NewGuid().ToString("N"));
 
-        _server = new Opcilloscope.TestServer.TestServer();
+        _server = new Opcilloscope.TestServer.TestServer(_pkiRootPath);
         await _server.StartAsync(_port);
     }
 
     public async Task DisposeAsync()
     {
-        if (_server != null)
+        var server = _server;
+        _server = null;
+        try
         {
-            await _server.StopAsync();
-            _server.Dispose();
-            _server = null;
+            if (server != null)
+            {
+                try
+                {
+                    await server.StopAsync();
+                }
+                finally
+                {
+                    server.Dispose();
+                }
+            }
+        }
+        finally
+        {
+            try
+            {
+                if (_pkiRootPath != null && Directory.Exists(_pkiRootPath))
+                    Directory.Delete(_pkiRootPath, recursive: true);
+            }
+            catch
+            {
+                // Cleanup failure must not replace a server shutdown exception.
+            }
+
+            _pkiRootPath = null;
         }
     }
 

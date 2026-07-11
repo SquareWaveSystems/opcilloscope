@@ -1,0 +1,4 @@
+# These package-supplied legal texts are verified byte-for-byte (apart from the
+# documented OPC CRLF normalization) and intentionally retain trailing spaces.
+licenses/ONIGWRAP-THIRD-PARTY-NOTICES.txt -whitespace
+licenses/OPC-FOUNDATION-LICENSE.txt -whitespace

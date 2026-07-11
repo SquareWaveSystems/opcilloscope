@@ -21,8 +21,10 @@ public class SaveConfigDialog : Dialog
     /// <summary>
     /// Gets the full path to save the file (directory + filename with .cfg extension).
     /// </summary>
-    public string FilePath => Path.Combine(_currentDirectory,
-        ConfigurationService.EnsureConfigExtension(_currentFilename));
+    public string FilePath => GetNormalizedFilePath(_currentDirectory, _currentFilename);
+
+    internal static string GetNormalizedFilePath(string directory, string filename) =>
+        Path.Combine(directory.Trim(), ConfigurationService.EnsureConfigExtension(filename.Trim()));
 
     /// <summary>
     /// Gets whether the user confirmed the save operation.
@@ -249,7 +251,10 @@ public class SaveConfigDialog : Dialog
         }
 
         // Check if file exists and prompt for overwrite
-        var fullPath = FilePath;
+        // Check the exact normalized path that FilePath will return. Previously
+        // this used the untrimmed backing fields and could miss an existing
+        // target such as "production.cfg " before returning "production.cfg".
+        var fullPath = GetNormalizedFilePath(directory, filename);
         if (File.Exists(fullPath))
         {
             var result = TerminalUi.Query("Confirm Overwrite",

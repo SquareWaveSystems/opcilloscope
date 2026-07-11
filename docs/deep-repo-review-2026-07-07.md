@@ -1,5 +1,18 @@
 # Deep repository review — pre-release (2026-07-07)
 
+> [!IMPORTANT]
+> **Historical snapshot — superseded by the 2026-07-11 release sweep.**
+> The findings, source line numbers, workflow descriptions, warning counts, and
+> test totals below describe the repository when this review was performed;
+> they are not the current release status. The later sweep resolved the
+> remaining timestamp/scope-key issues, lifecycle and reconnect races, static
+> Terminal.Gui deprecations, SignAndEncrypt-by-default endpoint selection,
+> packaging and installer gaps, and added locked six-RID publishing plus
+> real-PTY E2E tests.
+> Use the current [README](../README.md), [testing guide](TESTING.md), and
+> [CI/release workflows](../.github/workflows/) as operational guidance. The
+> original review body is retained unchanged as an audit record.
+
 Scope: full read-through of all production source (`OpcUa/`, `App/`, `Configuration/`,
 `Utilities/`, `Program.cs`), project files, and CI/CD workflows, plus a clean
 Release build and full test run.
