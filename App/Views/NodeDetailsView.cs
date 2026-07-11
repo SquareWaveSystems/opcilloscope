@@ -60,7 +60,7 @@ public class NodeDetailsView : FrameView
 
     private void OnThemeChanged(AppTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             // Update copy button styling
             _copyButton.SetScheme(theme.ButtonColorScheme);
@@ -101,7 +101,7 @@ public class NodeDetailsView : FrameView
         if (nodeId == null || _nodeBrowser == null)
         {
             _currentNodeId = null;
-            Application.Invoke(() =>
+            UiThread.Run(() =>
             {
                 _detailsLabel.Text = "Select a node to view details";
                 _copyButton.Enabled = false;
@@ -113,7 +113,7 @@ public class NodeDetailsView : FrameView
         _currentNodeId = nodeId;
         var attrs = await _nodeBrowser.GetNodeAttributesAsync(nodeId);
 
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             // Guard against stale responses: rapid selection changes can complete
             // out of order, so only apply this result if it is still the current node.
@@ -156,7 +156,7 @@ public class NodeDetailsView : FrameView
         if (node == null || _nodeBrowser == null)
         {
             _currentNodeId = null;
-            Application.Invoke(() =>
+            UiThread.Run(() =>
             {
                 _detailsLabel.Text = "";
                 _copyButton.Enabled = false;
@@ -169,7 +169,7 @@ public class NodeDetailsView : FrameView
         _currentNodeId = nodeId;
         var attrs = await _nodeBrowser.GetNodeAttributesAsync(nodeId);
 
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             // Guard against stale responses: rapid selection changes can complete
             // out of order, so only apply this result if it is still the current node.
@@ -281,7 +281,7 @@ public class NodeDetailsView : FrameView
             if (cancellationToken.IsCancellationRequested)
                 return;
 
-            Application.Invoke(() =>
+            UiThread.Run(() =>
             {
                 if (attributes == null || attributes.Count == 0)
                 {
@@ -291,7 +291,7 @@ public class NodeDetailsView : FrameView
                 }
 
                 var formatted = NodeAttributeFormatter.Format(attributes);
-                var success = Clipboard.TrySetClipboardData(formatted);
+                var success = TerminalUi.TrySetClipboardData(formatted);
 
                 if (success)
                 {
@@ -307,7 +307,7 @@ public class NodeDetailsView : FrameView
         catch (Exception ex)
         {
             _logger?.Error($"Error copying node attributes: {ex.Message}");
-            Application.Invoke(() => ShowCopyResult("Err", originalText));
+            UiThread.Run(() => ShowCopyResult("Err", originalText));
         }
     }
 
@@ -317,7 +317,7 @@ public class NodeDetailsView : FrameView
     private void ShowCopyResult(string result, string originalText)
     {
         _copyButton.Text = result;
-        Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+        TerminalUi.AddTimeout(TimeSpan.FromSeconds(1), () =>
         {
             _copyButton.Text = originalText;
             _copyButton.Enabled = _currentNodeId != null;

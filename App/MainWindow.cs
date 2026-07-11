@@ -185,7 +185,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         DefaultKeybindings.Configure(_keybindingManager, this);
 
         // Intercept letter/symbol keys at application level before views consume them
-        Application.KeyDown += OnApplicationKeyDown;
+        TerminalUi.AddKeyDownHandler(OnApplicationKeyDown);
 
         // Focus tracking using polling-based FocusManager (workaround for Terminal.Gui v2 Enter event instability)
         // Only track the two interactive panes (AddressSpace and MonitoredVariables)
@@ -245,7 +245,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         });
         UpdateConnectionStatusLabelPosition();
 
-        _startupStatusTimer = Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+        _startupStatusTimer = TerminalUi.AddTimeout(TimeSpan.FromSeconds(1), () =>
         {
             step++;
             if (step == 1)
@@ -404,7 +404,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             currentInterval,
             currentCredentials.Type,
             currentCredentials.Username);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (dialog.Confirmed)
         {
@@ -554,14 +554,14 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         if (!variable.IsWritable)
         {
             _logger.Warning($"Node '{variable.DisplayName}' is not writable");
-            MessageBox.ErrorQuery(Application.Instance, "Write", $"Node '{variable.DisplayName}' is not writable.", "OK");
+            TerminalUi.ErrorQuery("Write", $"Node '{variable.DisplayName}' is not writable.", "OK");
             return;
         }
 
         if (!OpcValueConverter.IsWriteSupported(variable.DataType))
         {
             _logger.Warning($"Write not supported for data type {variable.DataType}");
-            MessageBox.ErrorQuery(Application.Instance, "Write", $"Write not supported for data type: {variable.DataType}", "OK");
+            TerminalUi.ErrorQuery("Write", $"Write not supported for data type: {variable.DataType}", "OK");
             return;
         }
 
@@ -610,14 +610,14 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         if ((accessLevel & Opc.Ua.AccessLevels.CurrentWrite) == 0)
         {
             _logger.Warning($"Node '{node.DisplayName}' is not writable");
-            UiThread.Run(() => MessageBox.ErrorQuery(Application.Instance, "Write", $"Node '{node.DisplayName}' is not writable.", "OK"));
+            UiThread.Run(() => TerminalUi.ErrorQuery("Write", $"Node '{node.DisplayName}' is not writable.", "OK"));
             return;
         }
 
         if (!OpcValueConverter.IsWriteSupported(builtInType))
         {
             _logger.Warning($"Write not supported for data type {builtInType}");
-            UiThread.Run(() => MessageBox.ErrorQuery(Application.Instance, "Write", $"Write not supported for data type: {builtInType}", "OK"));
+            UiThread.Run(() => TerminalUi.ErrorQuery("Write", $"Write not supported for data type: {builtInType}", "OK"));
             return;
         }
 
@@ -627,7 +627,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     private void OpenWriteDialogAndWrite(Opc.Ua.NodeId nodeId, string displayName, Opc.Ua.BuiltInType dataType, string dataTypeName, string? currentValue)
     {
         using var dialog = new WriteValueDialog(nodeId, displayName, dataType, dataTypeName, currentValue);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (!dialog.Confirmed || dialog.ParsedValue == null) return;
 
@@ -747,7 +747,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     private void OnApplicationKeyDown(object? sender, Key e)
     {
         if (e.Handled) return;
-        if (Application.TopRunnable != this) return; // Don't fire during dialogs
+        if (!TerminalUi.IsTopRunnable(this)) return; // Don't fire during dialogs
 
         if (IsViewNavigationKey(e)) return; // Let Enter/Space/etc reach local handlers
 
@@ -835,7 +835,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     {
         UiThread.Run(() =>
         {
-            MessageBox.ErrorQuery(Application.Instance, "Connection Error", message, "OK");
+            TerminalUi.ErrorQuery("Connection Error", message, "OK");
         });
     }
 
@@ -906,7 +906,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     {
         _isConnecting = true;
         _connectingDotCount = 1;
-        _connectingAnimationTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(400), () =>
+        _connectingAnimationTimer = TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(400), () =>
         {
             if (!_isConnecting)
                 return false; // Stop animation
@@ -925,7 +925,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         _isConnecting = false;
         if (_connectingAnimationTimer != null)
         {
-            Application.RemoveTimeout(_connectingAnimationTimer);
+            TerminalUi.RemoveTimeout(_connectingAnimationTimer);
             _connectingAnimationTimer = null;
         }
     }
@@ -957,7 +957,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     {
         if (_connectionManager.SubscriptionManager == null)
         {
-            MessageBox.Query(Application.Instance, "Scope", "Connect to a server first.", "OK");
+            TerminalUi.Query("Scope", "Connect to a server first.", "OK");
             return;
         }
 
@@ -965,12 +965,12 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 
         if (selectedNodes.Count == 0)
         {
-            MessageBox.Query(Application.Instance, "Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored variables.", "OK");
+            TerminalUi.Query("Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored variables.", "OK");
             return;
         }
 
         using var dialog = new ScopeDialog(selectedNodes, _connectionManager.SubscriptionManager);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
     }
 
     private void OnRecordRequested()
@@ -984,7 +984,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         var subscriptionManager = _connectionManager.SubscriptionManager;
         if (subscriptionManager == null || !subscriptionManager.MonitoredVariables.Any())
         {
-            MessageBox.Query(Application.Instance, "Record", "No variables to record. Subscribe to variables first.", "OK");
+            TerminalUi.Query("Record", "No variables to record. Subscribe to variables first.", "OK");
             return;
         }
 
@@ -992,7 +992,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         var selectedCount = _monitoredVariablesView.ScopeSelectionCount;
         if (selectedCount == 0)
         {
-            MessageBox.Query(Application.Instance, "Record",
+            TerminalUi.Query("Record",
                 "No variables selected for recording.\n\n" +
                 "Use Space to select variables in the Sel column (◉).\n" +
                 "Selected variables will be recorded and shown in Scope.", "OK");
@@ -1006,7 +1006,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             selectedCount);
 
         using var dialog = new SaveRecordingDialog(defaultDir, defaultFilename);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (dialog.Confirmed && dialog.FilePath != null)
         {
@@ -1017,7 +1017,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             }
             else
             {
-                MessageBox.ErrorQuery(Application.Instance, "Recording Error", "Failed to start recording", "OK");
+                TerminalUi.ErrorQuery("Recording Error", "Failed to start recording", "OK");
             }
         }
     }
@@ -1032,13 +1032,13 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         StopRecordingStatusUpdates();
         _csvRecordingManager.StopRecording();
         _monitoredVariablesView.UpdateRecordingStatus("", false);
-        MessageBox.Query(Application.Instance, "Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
+        TerminalUi.Query("Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
     }
 
     private void StartRecordingStatusUpdates()
     {
-        // Use Terminal.Gui's Application.AddTimeout for periodic updates
-        _recordingStatusTimer = Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+        // Use the UI main-loop timer for periodic updates
+        _recordingStatusTimer = TerminalUi.AddTimeout(TimeSpan.FromSeconds(1), () =>
         {
             if (_csvRecordingManager.IsRecording)
             {
@@ -1054,7 +1054,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     {
         if (_recordingStatusTimer != null)
         {
-            Application.RemoveTimeout(_recordingStatusTimer);
+            TerminalUi.RemoveTimeout(_recordingStatusTimer);
             _recordingStatusTimer = null;
         }
     }
@@ -1062,7 +1062,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     private void ShowHelp()
     {
         using var dialog = new HelpDialog(_keybindingManager);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
     }
 
     private void ShowAbout()
@@ -1093,7 +1093,7 @@ Built with:
 © 2026 Square Wave Systems
 License: MIT
 ";
-        MessageBox.Query(Application.Instance, "About opcilloscope", about, "OK");
+        TerminalUi.Query("About opcilloscope", about, "OK");
     }
 
     /// <summary>
@@ -1130,7 +1130,7 @@ License: MIT
 
         using var dialog = new Dialogs.OpenConfigDialog();
 
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (dialog.Confirmed && dialog.SelectedFilePath != null)
         {
@@ -1165,7 +1165,7 @@ License: MIT
 
         using var dialog = new Dialogs.SaveConfigDialog(defaultDir, defaultFilename);
 
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (dialog.Confirmed)
         {
@@ -1197,7 +1197,7 @@ License: MIT
                     using var pwDialog = new PasswordPromptDialog(
                         config.Server.Authentication.Username,
                         config.Server.EndpointUrl);
-                    Application.Run(pwDialog);
+                    TerminalUi.RunModal(pwDialog);
 
                     if (!pwDialog.Confirmed)
                     {
@@ -1268,7 +1268,7 @@ License: MIT
                     UpdateWindowTitle();
 
                     _logger.Error($"Failed to connect to {config.Server.EndpointUrl}");
-                    MessageBox.ErrorQuery(Application.Instance, "Connection Failed",
+                    TerminalUi.ErrorQuery("Connection Failed",
                         $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection has been closed. Use Connect to reconnect.",
                         "OK");
                 }
@@ -1288,7 +1288,7 @@ License: MIT
         catch (Exception ex)
         {
             _logger.Error($"Failed to load configuration: {ex.Message}");
-            MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to load configuration:\n{ex.Message}", "OK");
+            TerminalUi.ErrorQuery("Error", $"Failed to load configuration:\n{ex.Message}", "OK");
         }
         finally
         {
@@ -1333,7 +1333,7 @@ License: MIT
         catch (Exception ex)
         {
             _logger.Error($"Failed to save configuration: {ex.Message}");
-            MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to save:\n{ex.Message}", "OK");
+            TerminalUi.ErrorQuery("Error", $"Failed to save:\n{ex.Message}", "OK");
         }
         finally
         {
@@ -1362,7 +1362,7 @@ License: MIT
     /// <returns>True if the user confirms, false to cancel the operation.</returns>
     private bool ConfirmDiscardChanges()
     {
-        var result = MessageBox.Query(Application.Instance, 
+        var result = TerminalUi.Query(
             "Unsaved Changes",
             "You have unsaved changes. Do you want to discard them?",
             "Discard",
@@ -1377,7 +1377,7 @@ License: MIT
     /// <param name="configPath">Path to the configuration file.</param>
     public void LoadConfigFromCommandLine(string configPath)
     {
-        Application.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
+        TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
         {
             LoadConfigurationAsync(configPath).FireAndForget(_logger);
             return false;
@@ -1416,7 +1416,7 @@ License: MIT
             // Remove the startup status timer if it hasn't yet self-removed.
             if (_startupStatusTimer != null)
             {
-                Application.RemoveTimeout(_startupStatusTimer);
+                TerminalUi.RemoveTimeout(_startupStatusTimer);
                 _startupStatusTimer = null;
             }
 
@@ -1431,7 +1431,7 @@ License: MIT
                 _focusManager.FocusChanged -= OnPanelFocusChanged;
             }
 
-            Application.KeyDown -= OnApplicationKeyDown;
+            TerminalUi.RemoveKeyDownHandler(OnApplicationKeyDown);
 
             _connectionManager.Dispose();
         }

@@ -1,5 +1,3 @@
-using Terminal.Gui;
-
 namespace Opcilloscope.Utilities;
 
 /// <summary>
@@ -8,10 +6,11 @@ namespace Opcilloscope.Utilities;
 public static class UiThread
 {
     /// <summary>
-    /// Executes an action on the UI thread.
+    /// Executes an action on the UI thread. No-op when no Terminal.Gui
+    /// application is running (e.g. in headless tests).
     /// </summary>
     public static void Run(Action action)
     {
-        Application.Invoke(action);
+        TerminalUi.Invoke(action);
     }
 }

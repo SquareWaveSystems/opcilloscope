@@ -1,5 +1,6 @@
 using System.Text;
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.OpcUa;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.App.Themes;
@@ -80,7 +81,7 @@ public class AddressSpaceView : FrameView
 
     private void OnThemeChanged(AppTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             _emptyStateLabel.SetScheme(new Scheme
             {
@@ -120,7 +121,7 @@ public class AddressSpaceView : FrameView
         }
 
         // Update UI on main thread
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             _treeView.ClearObjects();
             _treeView.AddObject(_rootNode);
@@ -162,7 +163,7 @@ public class AddressSpaceView : FrameView
             await _nodeBrowser.GetChildrenAsync(node);
 
             // Refresh the tree on UI thread after children are loaded
-            Application.Invoke(() =>
+            UiThread.Run(() =>
             {
                 _treeView.RefreshObject(node);
                 if (node.ChildrenLoaded && node.Children.Count > 0)

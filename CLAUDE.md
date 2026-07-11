@@ -124,7 +124,8 @@ Opcilloscope/
 │
 ├── Utilities/
 │   ├── Logger.cs                   # In-app logging service
-│   ├── UiThread.cs                 # Thread marshalling for UI updates
+│   ├── UiThread.cs                 # Thread marshalling for UI updates (via TerminalUi)
+│   ├── TerminalUi.cs               # Instance-based IApplication access (timers, dialogs, message boxes, clipboard)
 │   ├── CsvRecordingManager.cs      # Background CSV recording of monitored values
 │   ├── OpcValueConverter.cs        # OPC UA value type conversion utilities
 │   ├── TaskExtensions.cs           # Async task helper extensions (FireAndForget)
@@ -251,8 +252,28 @@ Record monitored variable values to CSV files:
 - Use `Height = n` instead of `Dim.Sized(n)`
 - Use `SetNeedsLayout()` or `Update()` instead of `SetNeedsDisplay()`
 - `ListView.SetSource()` requires `ObservableCollection<T>`
-- Use `Application.Invoke()` for thread marshalling (no MainLoop)
-- Use `Application.AddTimeout()` for periodic updates
+
+#### Instance-based application model (do NOT use the static `Application`)
+Terminal.Gui 2.4 deprecated the legacy static `Application` object (`Application.Invoke`,
+`AddTimeout`, `Run`, `RequestStop`, `Instance`, `Driver`, `KeyDown`, `Init`/`Shutdown`, the
+static `Clipboard`, etc.). The whole static surface is `[Obsolete]` and will be removed in a
+future release, and `TreatWarningsAsErrors` is on — so a static-`Application` call is a build
+error, not a warning. The app uses the instance-based model (`Application.Create()` →
+`IApplication`) instead:
+- `Program.Main` owns the lifecycle: `Application.Create()` → `app.Init()` →
+  `app.Run(mainWindow)` → `app.Dispose()` (Dispose replaces the obsolete `Shutdown`). It stores
+  the instance in `TerminalUi.App`.
+- **All UI code routes through the helpers in `Utilities/`, never the static `Application`:**
+  - `UiThread.Run(...)` — marshal an action onto the UI thread (thread marshalling; no MainLoop)
+  - `TerminalUi.AddTimeout(...)` / `RemoveTimeout(...)` — periodic/one-shot main-loop timers
+  - `TerminalUi.RunModal(dialog)` / `RequestStop()` — open/close a modal dialog
+  - `TerminalUi.Query(...)` / `ErrorQuery(...)` — message boxes (no need to pass the app instance)
+  - `TerminalUi.TrySetClipboardData(...)` — OS clipboard
+  - `TerminalUi.Driver`, `TopRunnableView`, `IsTopRunnable(...)`, `Add`/`RemoveKeyDownHandler(...)`
+- The direct `IApplication` uses (`Create`/`Init`/`Run`/`Dispose`, keyboard, driver) are confined
+  to `Program.cs`, `TerminalUi`, and `ThemeManager`. Add new helpers to `TerminalUi` rather than
+  reaching for the static API. In headless unit tests `TerminalUi.App` is null: fire-and-forget
+  helpers (Invoke, timers, clipboard) no-op and interactive ones (modal dialogs, message boxes) throw.
 
 ### OPC Foundation SDK API
 - Uses `Opc.Ua.Client.Session` for connection management
@@ -414,12 +435,13 @@ Available test nodes:
 OPC Foundation callbacks arrive on background threads. All UI updates are marshalled to the UI thread:
 
 ```csharp
-// Using UiThread helper
+// Marshal onto the UI thread with the UiThread helper
 UiThread.Run(() => _monitoredVariablesView.UpdateVariable(variable));
-
-// Using Application.Invoke directly
-Application.Invoke(() => SetNeedsLayout());
+UiThread.Run(() => SetNeedsLayout());
 ```
+
+Do not call the deprecated static `Application.Invoke()` directly — `UiThread.Run` wraps the
+instance-based `IApplication.Invoke` (see the "Instance-based application model" note above).
 
 ### Async Pattern with FireAndForget
 For async operations from synchronous event handlers:
@@ -454,7 +476,7 @@ Automates release builds and publishing.
 
 1. **`dotnet` command not found**: Install .NET SDK using the install script (see Environment Setup above)
 2. **Tests fail with Xunit errors in main project**: Ensure `tests/**` is excluded in Opcilloscope.csproj
-3. **UI thread exceptions**: Always use `Application.Invoke()` or `UiThread.Run()` for UI updates from background threads
+3. **UI thread exceptions**: Always use `UiThread.Run()` for UI updates from background threads (it marshals via the instance-based `IApplication.Invoke`; do not call the deprecated static `Application.Invoke()`)
 4. **Ambiguous NodeBrowser reference**: OPC Foundation has its own `Browser` class - use fully qualified names if needed
 5. **Certificate validation errors**: Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
 6. **Integration tests fail with "Unexpected error starting application"**: The OPC UA test server requires specific environment permissions - unit tests will still pass

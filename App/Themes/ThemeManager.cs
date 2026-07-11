@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 
 namespace Opcilloscope.App.Themes;
 
@@ -84,7 +85,7 @@ public static class ThemeManager
     {
         // Terminal.Gui 2.4 removed the static Application.Force16Colors;
         // the flag now lives on the driver itself.
-        if (Application.Driver is { } driver)
+        if (TerminalUi.Driver is { } driver)
         {
             driver.Force16Colors = theme.UseTerminalColors;
         }

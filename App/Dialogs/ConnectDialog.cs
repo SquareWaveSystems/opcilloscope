@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.App.Themes;
 using Opcilloscope.OpcUa;
 using AppThemeManager = Opcilloscope.App.Themes.ThemeManager;
@@ -174,7 +175,7 @@ public class ConnectDialog : Dialog
             if (ValidateInput())
             {
                 _confirmed = true;
-                Application.RequestStop();
+                TerminalUi.RequestStop();
             }
         };
 
@@ -188,7 +189,7 @@ public class ConnectDialog : Dialog
         cancelButton.Accepting += (_, _) =>
         {
             _confirmed = false;
-            Application.RequestStop();
+            TerminalUi.RequestStop();
         };
 
         Add(endpointLabel, protocolLabel, _endpointField,
@@ -206,7 +207,7 @@ public class ConnectDialog : Dialog
 
         if (string.IsNullOrEmpty(serverAddress))
         {
-            MessageBox.ErrorQuery(Application.Instance, "Error", "Please enter a server address", "OK");
+            TerminalUi.ErrorQuery("Error", "Please enter a server address", "OK");
             return false;
         }
 
@@ -215,20 +216,20 @@ public class ConnectDialog : Dialog
             var uri = new Uri(EndpointUrl);
             if (string.IsNullOrEmpty(uri.Host))
             {
-                MessageBox.ErrorQuery(Application.Instance, "Error", "Invalid host in server address", "OK");
+                TerminalUi.ErrorQuery("Error", "Invalid host in server address", "OK");
                 return false;
             }
         }
         catch
         {
-            MessageBox.ErrorQuery(Application.Instance, "Error", "Invalid server address format", "OK");
+            TerminalUi.ErrorQuery("Error", "Invalid server address format", "OK");
             return false;
         }
 
         var interval = _publishIntervalField.Value;
         if (interval < 100 || interval > 10000)
         {
-            MessageBox.ErrorQuery(Application.Instance, "Error", "Publishing interval must be between 100 and 10000 ms", "OK");
+            TerminalUi.ErrorQuery("Error", "Publishing interval must be between 100 and 10000 ms", "OK");
             return false;
         }
 
@@ -237,7 +238,7 @@ public class ConnectDialog : Dialog
             var username = _usernameField.Text?.Trim() ?? string.Empty;
             if (string.IsNullOrEmpty(username))
             {
-                MessageBox.ErrorQuery(Application.Instance, "Error", "Please enter a username", "OK");
+                TerminalUi.ErrorQuery("Error", "Please enter a username", "OK");
                 _usernameField.SetFocus();
                 return false;
             }
@@ -245,7 +246,7 @@ public class ConnectDialog : Dialog
             var password = _passwordField.Text ?? string.Empty;
             if (string.IsNullOrEmpty(password))
             {
-                MessageBox.ErrorQuery(Application.Instance, "Error", "Please enter a password", "OK");
+                TerminalUi.ErrorQuery("Error", "Please enter a password", "OK");
                 _passwordField.SetFocus();
                 return false;
             }

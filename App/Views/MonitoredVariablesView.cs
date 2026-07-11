@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.App.Themes;
 using System.Collections.Concurrent;
@@ -221,7 +222,7 @@ public class MonitoredVariablesView : FrameView
 
     private void OnThemeChanged(AppTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             BorderStyle = theme.EmphasizedBorderStyle;
 
@@ -300,7 +301,7 @@ public class MonitoredVariablesView : FrameView
                 return;
 
             _updateTimerRunning = true;
-            _updateTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(UpdateBatchIntervalMs), ProcessPendingUpdates);
+            _updateTimer = TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(UpdateBatchIntervalMs), ProcessPendingUpdates);
         }
     }
 
@@ -532,7 +533,7 @@ public class MonitoredVariablesView : FrameView
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(2000);
-                    Application.Invoke(() => _selectionFeedback.Visible = false);
+                    UiThread.Run(() => _selectionFeedback.Visible = false);
                 });
                 return;
             }
@@ -589,7 +590,7 @@ public class MonitoredVariablesView : FrameView
             {
                 if (_updateTimer != null)
                 {
-                    Application.RemoveTimeout(_updateTimer);
+                    TerminalUi.RemoveTimeout(_updateTimer);
                     _updateTimer = null;
                 }
                 _updateTimerRunning = false;
