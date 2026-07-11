@@ -26,7 +26,12 @@ public class ReconnectIntegrationTests
     public async Task Reconnect_AfterSessionLoss_RestoresConnectionAndResumesValueUpdates()
     {
         var logger = new Logger();
-        var server = new Opcilloscope.TestServer.TestServer();
+        var serverPkiRoot = Path.Combine(
+            Path.GetTempPath(),
+            "opcilloscope-tests",
+            "server-pki",
+            Guid.NewGuid().ToString("N"));
+        var server = new Opcilloscope.TestServer.TestServer(serverPkiRoot);
         await server.StartAsync(DedicatedPort);
 
         var connectionManager = new ConnectionManager(logger);
@@ -39,8 +44,8 @@ public class ReconnectIntegrationTests
             var dropOccurred = false;
 
             // When keep-alive reports the drop, drive the documented reconnect/backoff loop.
-            connectionManager.AutoReconnectTriggered += () =>
-                connectionManager.ReconnectAsync().FireAndForget(logger);
+            connectionManager.AutoReconnectTriggered += intentVersion =>
+                connectionManager.ReconnectAutomaticallyAsync(intentVersion).FireAndForget(logger);
 
             connectionManager.StateChanged += state =>
             {
@@ -67,7 +72,9 @@ public class ReconnectIntegrationTests
             };
 
             // Confirm we are receiving values before forcing the drop.
-            await WaitForAsync(() => node!.Timestamp != null, TimeSpan.FromSeconds(15));
+            Assert.True(
+                await WaitForAsync(() => node!.Timestamp != null, TimeSpan.FromSeconds(15)),
+                "a ValueChanged tick should arrive before forcing session loss");
 
             // Force session loss by stopping the server, then bring it back so reconnection
             // (with exponential backoff) can succeed.
@@ -87,18 +94,35 @@ public class ReconnectIntegrationTests
         finally
         {
             connectionManager.Dispose();
-            await server.StopAsync();
-            server.Dispose();
+            try
+            {
+                await server.StopAsync();
+            }
+            finally
+            {
+                server.Dispose();
+                try
+                {
+                    if (Directory.Exists(serverPkiRoot))
+                        Directory.Delete(serverPkiRoot, recursive: true);
+                }
+                catch
+                {
+                    // Preserve the server/test failure over best-effort temp cleanup.
+                }
+            }
         }
     }
 
-    private static async Task WaitForAsync(Func<bool> condition, TimeSpan timeout)
+    private static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (condition()) return;
+            if (condition()) return true;
             await Task.Delay(100);
         }
+
+        return condition();
     }
 }

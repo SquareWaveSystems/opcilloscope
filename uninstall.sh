@@ -5,20 +5,44 @@ set -e
 # Usage: curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/uninstall.sh | bash
 
 INSTALL_DIR="${OPCILLOSCOPE_INSTALL_DIR:-$HOME/.local/bin}"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opcilloscope"
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/opcilloscope"
 
-# Colors
+if [ "$(uname -s)" = "Darwin" ]; then
+    # .NET 8+ maps ApplicationData and LocalApplicationData to this directory.
+    CONFIG_DIR="$HOME/Library/Application Support/opcilloscope"
+    DATA_DIR="$CONFIG_DIR"
+    MACOS=true
+else
+    CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opcilloscope"
+    DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/opcilloscope"
+    MACOS=false
+fi
+
+CERT_DIR="${DATA_DIR}/pki"
+LICENSE_DIR="${DATA_DIR}/licenses"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
-uninstall() {
+confirm_removal() {
+    local prompt="$1" answer
+
+    echo -n "$prompt [y/N] "
+    if [ -t 0 ]; then
+        read -r answer
+    else
+        answer="n"
+        echo "(skipped — run interactively to remove retained user data)"
+    fi
+
+    [ "$answer" = "y" ] || [ "$answer" = "Y" ]
+}
+
+uninstall_opcilloscope() {
     echo ""
     echo "  ╔═══════════════════════════════════╗"
     echo "  ║    Opcilloscope Uninstaller       ║"
@@ -28,8 +52,9 @@ uninstall() {
 
     local binary="${INSTALL_DIR}/opcilloscope"
     local removed_something=false
+    local has_config=false
 
-    # Remove binary
+    # INSTALL_DIR may be a shared custom bin directory. Remove only our file.
     if [ -f "$binary" ]; then
         rm "$binary"
         info "Removed binary: ${binary}"
@@ -38,44 +63,56 @@ uninstall() {
         warn "Binary not found at ${binary}"
     fi
 
-    # Remove config directory
-    if [ -d "$CONFIG_DIR" ]; then
-        echo ""
-        echo -n "Remove configuration directory ${CONFIG_DIR}? [y/N] "
-        # When piped from curl, stdin is the script itself, so default to no
-        if [ -t 0 ]; then
-            read -r answer
-        else
-            answer="n"
-            echo "(skipped — run interactively to remove config files)"
-        fi
+    # License material is installer-owned and safe to remove automatically.
+    if [ -d "$LICENSE_DIR" ]; then
+        rm -rf "$LICENSE_DIR"
+        info "Removed license notices: ${LICENSE_DIR}"
+        removed_something=true
+    fi
 
-        if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
-            rm -rf "$CONFIG_DIR"
-            info "Removed config directory: ${CONFIG_DIR}"
+    if [ "$MACOS" = true ]; then
+        # Config and certificates share one macOS Application Support parent.
+        # Treat only the known config entries as configuration data so a user
+        # can retain the PKI store independently.
+        if [ -d "${CONFIG_DIR}/configs" ] || [ -f "${CONFIG_DIR}/recent-files.json" ]; then
+            has_config=true
+        fi
+    elif [ -d "$CONFIG_DIR" ]; then
+        has_config=true
+    fi
+
+    if [ "$has_config" = true ]; then
+        echo ""
+        if confirm_removal "Remove opcilloscope configuration data at ${CONFIG_DIR}?"; then
+            if [ "$MACOS" = true ]; then
+                rm -rf "${CONFIG_DIR}/configs"
+                rm -f "${CONFIG_DIR}/recent-files.json"
+            else
+                rm -rf "$CONFIG_DIR"
+            fi
+            info "Removed configuration data: ${CONFIG_DIR}"
+            removed_something=true
         else
-            info "Kept config directory: ${CONFIG_DIR}"
+            info "Kept configuration data: ${CONFIG_DIR}"
         fi
     fi
 
-    # Remove data directory (OPC UA certificate stores)
-    if [ -d "$DATA_DIR" ]; then
+    if [ -d "$CERT_DIR" ]; then
         echo ""
-        echo -n "Remove OPC UA certificates directory ${DATA_DIR}? [y/N] "
-        # When piped from curl, stdin is the script itself, so default to no
-        if [ -t 0 ]; then
-            read -r answer
+        if confirm_removal "Remove OPC UA certificate store ${CERT_DIR}?"; then
+            rm -rf "$CERT_DIR"
+            info "Removed certificate store: ${CERT_DIR}"
+            removed_something=true
         else
-            answer="n"
-            echo "(skipped — run interactively to remove certificate files)"
+            info "Kept certificate store: ${CERT_DIR}"
         fi
+    fi
 
-        if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
-            rm -rf "$DATA_DIR"
-            info "Removed certificates directory: ${DATA_DIR}"
-        else
-            info "Kept certificates directory: ${DATA_DIR}"
-        fi
+    # Remove app-owned parents only when they are empty. Never remove a shared
+    # custom install directory.
+    rmdir "$DATA_DIR" 2>/dev/null || true
+    if [ "$CONFIG_DIR" != "$DATA_DIR" ]; then
+        rmdir "$CONFIG_DIR" 2>/dev/null || true
     fi
 
     echo ""
@@ -89,4 +126,4 @@ uninstall() {
     fi
 }
 
-uninstall
+uninstall_opcilloscope

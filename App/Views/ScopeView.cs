@@ -1,3 +1,4 @@
+using System.Globalization;
 using Terminal.Gui;
 using Opcilloscope.OpcUa;
 using Opcilloscope.OpcUa.Models;
@@ -133,7 +134,7 @@ public class ScopeView : View
 
         try
         {
-            Application.Invoke(() =>
+            UiThread.Run(() =>
             {
                 ApplyTheme();
                 SetNeedsLayout();
@@ -169,7 +170,7 @@ public class ScopeView : View
                 };
 
                 // Try to parse current value as initial sample
-                if (TryParseValue(node.Value, out var value))
+                if (TryGetSample(node, out var value))
                 {
                     series.Samples.Add(new TimestampedSample(DateTime.Now, value));
                     series.CurrentValue = value;
@@ -201,7 +202,7 @@ public class ScopeView : View
         lock (_lock)
         {
             var series = _series.FirstOrDefault(s => s.Node.ClientHandle == node.ClientHandle);
-            if (series != null && TryParseValue(node.Value, out var value))
+            if (series != null && TryGetSample(node, out var value))
             {
                 var sample = new TimestampedSample(DateTime.Now, value);
                 series.Samples.Add(sample);
@@ -278,14 +279,14 @@ public class ScopeView : View
         if (_timerToken != null) return;
 
         // ~10 FPS update rate
-        _timerToken = Application.AddTimeout(TimeSpan.FromMilliseconds(100), OnTimerTick);
+        _timerToken = TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(100), OnTimerTick);
     }
 
     private void StopUpdateTimer()
     {
         if (_timerToken != null)
         {
-            Application.RemoveTimeout(_timerToken);
+            TerminalUi.RemoveTimeout(_timerToken);
             _timerToken = null;
         }
     }
@@ -908,13 +909,11 @@ public class ScopeView : View
                 TogglePause();
                 return true;
 
-            case KeyCode.D0 when key.IsShift: // + key
             case (KeyCode)'=':
             case (KeyCode)'+':
                 IncreaseScale();
                 return true;
 
-            case KeyCode.D9 when key.IsShift: // ( key
             case (KeyCode)'-':
                 DecreaseScale();
                 return true;
@@ -965,7 +964,20 @@ public class ScopeView : View
         return value.ToString("F2");
     }
 
-    private static bool TryParseValue(string? valueStr, out float value)
+    /// <summary>
+    /// Extracts a plottable sample from a node. Prefers the full-precision,
+    /// culture-invariant <see cref="MonitoredNode.RawValue"/> over the display
+    /// <see cref="MonitoredNode.Value"/>, which is truncated to two decimals
+    /// ("F2") and would quantize the plot to 0.01 resolution — flattening any
+    /// signal with a smaller amplitude entirely.
+    /// </summary>
+    internal static bool TryGetSample(MonitoredNode node, out float value)
+    {
+        var source = string.IsNullOrEmpty(node.RawValue) ? node.Value : node.RawValue;
+        return TryParseValue(source, out value);
+    }
+
+    internal static bool TryParseValue(string? valueStr, out float value)
     {
         value = 0;
         if (string.IsNullOrWhiteSpace(valueStr))
@@ -975,7 +987,15 @@ public class ScopeView : View
         if (str.StartsWith("(") && str.EndsWith(")"))
             return false;
 
-        return float.TryParse(str, out value);
+        // Booleans plot as 0/1 so digital signals are visible on the scope.
+        if (bool.TryParse(str, out var boolean))
+        {
+            value = boolean ? 1f : 0f;
+            return true;
+        }
+
+        // RawValue is culture-invariant, so parse with the matching culture.
+        return float.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 
     protected override void Dispose(bool disposing)

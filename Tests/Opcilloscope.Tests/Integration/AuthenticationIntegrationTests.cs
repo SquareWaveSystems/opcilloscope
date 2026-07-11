@@ -2,6 +2,7 @@ using Opcilloscope.Configuration;
 using Opcilloscope.Configuration.Models;
 using Opcilloscope.OpcUa;
 using Opcilloscope.Tests.Infrastructure;
+using Opc.Ua;
 
 namespace Opcilloscope.Tests.Integration;
 
@@ -24,10 +25,84 @@ public class AuthenticationIntegrationTests : IClassFixture<TestServerFixture>
     [Fact]
     public async Task ConnectAnonymous_Succeeds()
     {
-        using var client = new OpcUaClientWrapper();
+        using var client = new OpcUaClientWrapper(allowInsecure: true);
         var result = await client.ConnectAsync(_fixture.EndpointUrl);
+
         Assert.True(result);
         Assert.True(client.IsConnected);
+        Assert.Equal(MessageSecurityMode.SignAndEncrypt, client.CurrentSecurityMode);
+        Assert.Equal(SecurityPolicies.Basic256Sha256, client.CurrentSecurityPolicy);
+    }
+
+    [Fact]
+    public async Task ConnectAnonymous_ExplicitNone_UsesUnsecuredEndpoint()
+    {
+        using var client = new OpcUaClientWrapper(allowInsecure: false);
+
+        var result = await client.ConnectAsync(
+            _fixture.EndpointUrl,
+            securityMode: nameof(MessageSecurityMode.None),
+            securityPolicy: SecurityPolicies.None);
+
+        Assert.True(result);
+        Assert.Equal(MessageSecurityMode.None, client.CurrentSecurityMode);
+        Assert.Equal(SecurityPolicies.None, client.CurrentSecurityPolicy);
+    }
+
+    [Fact]
+    public async Task ConnectAnonymous_UntrustedSignAndEncryptCertificate_IsRejectedWithAllowInsecureFalse()
+    {
+        var pkiRoot = CreateTemporaryPkiRoot();
+        try
+        {
+            using var client = new OpcUaClientWrapper(
+                logger: null,
+                allowInsecure: false,
+                pkiRootPath: pkiRoot);
+            string? error = null;
+            client.ConnectionError += message => error = message;
+
+            var result = await client.ConnectAsync(
+                _fixture.EndpointUrl,
+                securityMode: nameof(MessageSecurityMode.SignAndEncrypt),
+                securityPolicy: SecurityPolicies.Basic256Sha256);
+
+            Assert.False(result);
+            Assert.False(client.IsConnected);
+            Assert.NotNull(error);
+            Assert.Contains("certificate", error, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteTemporaryPkiRoot(pkiRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ConnectAnonymous_UntrustedSignAndEncryptCertificate_IsAcceptedWithAllowInsecureTrue()
+    {
+        var pkiRoot = CreateTemporaryPkiRoot();
+        try
+        {
+            using var client = new OpcUaClientWrapper(
+                logger: null,
+                allowInsecure: true,
+                pkiRootPath: pkiRoot);
+
+            var result = await client.ConnectAsync(
+                _fixture.EndpointUrl,
+                securityMode: nameof(MessageSecurityMode.SignAndEncrypt),
+                securityPolicy: SecurityPolicies.Basic256Sha256);
+
+            Assert.True(result);
+            Assert.True(client.IsConnected);
+            Assert.Equal(MessageSecurityMode.SignAndEncrypt, client.CurrentSecurityMode);
+            Assert.Equal(SecurityPolicies.Basic256Sha256, client.CurrentSecurityPolicy);
+        }
+        finally
+        {
+            DeleteTemporaryPkiRoot(pkiRoot);
+        }
     }
 
     [Fact]
@@ -42,6 +117,68 @@ public class AuthenticationIntegrationTests : IClassFixture<TestServerFixture>
         var result = await client.ConnectAsync(_fixture.EndpointUrl, credentials);
         Assert.True(result);
         Assert.True(client.IsConnected);
+    }
+
+    [Fact]
+    public async Task ConnectWithCredentials_SelectsEncryptedEndpointAndExposesSelection()
+    {
+        var credentials = new ConnectionCredentials(
+            AuthenticationType.UserName,
+            TestUsername,
+            TestPassword);
+
+        using var client = new OpcUaClientWrapper(allowInsecure: true);
+        var result = await client.ConnectAsync(_fixture.EndpointUrl, credentials);
+
+        Assert.True(result);
+        Assert.Equal(MessageSecurityMode.SignAndEncrypt, client.CurrentSecurityMode);
+        Assert.Equal(SecurityPolicies.Basic256Sha256, client.CurrentSecurityPolicy);
+    }
+
+    [Fact]
+    public async Task ConnectWithCredentials_ExplicitNoneSecurity_FailsClosed()
+    {
+        var credentials = new ConnectionCredentials(
+            AuthenticationType.UserName,
+            TestUsername,
+            TestPassword);
+
+        using var client = new OpcUaClientWrapper(allowInsecure: true);
+        string? error = null;
+        client.ConnectionError += message => error = message;
+
+        var result = await client.ConnectAsync(
+            _fixture.EndpointUrl,
+            credentials,
+            nameof(MessageSecurityMode.None),
+            SecurityPolicies.None);
+
+        Assert.False(result);
+        Assert.False(client.IsConnected);
+        Assert.NotNull(error);
+        Assert.Contains("encrypted", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("Sign", null)]
+    [InlineData("SignAndEncrypt", "Basic128Rsa15")]
+    public async Task ConnectWithExplicitUnavailableSecurityProfile_FailsClosed(
+        string securityMode,
+        string? securityPolicy)
+    {
+        using var client = new OpcUaClientWrapper(allowInsecure: true);
+        string? error = null;
+        client.ConnectionError += message => error = message;
+
+        var result = await client.ConnectAsync(
+            _fixture.EndpointUrl,
+            securityMode: securityMode,
+            securityPolicy: securityPolicy);
+
+        Assert.False(result);
+        Assert.False(client.IsConnected);
+        Assert.NotNull(error);
+        Assert.Contains("No endpoint matched", error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -205,5 +342,14 @@ public class AuthenticationIntegrationTests : IClassFixture<TestServerFixture>
         {
             File.Delete(tempFile);
         }
+    }
+
+    private static string CreateTemporaryPkiRoot()
+        => Path.Combine(Path.GetTempPath(), "opcilloscope-tests", "client-pki", Guid.NewGuid().ToString("N"));
+
+    private static void DeleteTemporaryPkiRoot(string path)
+    {
+        if (Directory.Exists(path))
+            Directory.Delete(path, recursive: true);
     }
 }

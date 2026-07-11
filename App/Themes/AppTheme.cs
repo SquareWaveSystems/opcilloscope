@@ -15,7 +15,7 @@ public abstract class AppTheme
 
     /// <summary>
     /// When true, the application restricts output to the 16 ANSI colors
-    /// (via <see cref="Application.Force16Colors"/>) so the terminal renders
+    /// (via the active driver's <c>Force16Colors</c> property) so the terminal renders
     /// the theme using its own configured ANSI palette. Themes setting this
     /// should define all colors using <see cref="ColorName16"/> values.
     /// </summary>

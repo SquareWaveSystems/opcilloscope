@@ -1,5 +1,6 @@
 using System.Text;
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.OpcUa;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.App.Themes;
@@ -17,6 +18,7 @@ public class AddressSpaceView : FrameView
     private readonly Label _emptyStateLabel;
     private NodeBrowser? _nodeBrowser;
     private BrowsedNode? _rootNode;
+    private long _viewGeneration;
 
     public event Action<BrowsedNode>? NodeSelected;
     public event Action<BrowsedNode>? NodeSubscribeRequested;
@@ -80,7 +82,7 @@ public class AddressSpaceView : FrameView
 
     private void OnThemeChanged(AppTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             _emptyStateLabel.SetScheme(new Scheme
             {
@@ -93,26 +95,30 @@ public class AddressSpaceView : FrameView
     public void Initialize(NodeBrowser nodeBrowser)
     {
         _nodeBrowser = nodeBrowser;
+        var viewGeneration = Interlocked.Increment(ref _viewGeneration);
         _emptyStateLabel.Visible = false;
         _treeView.Visible = true;
-        _ = RefreshAsync();
+        _ = RefreshAsync(viewGeneration);
     }
 
     public void Refresh()
     {
-        _ = RefreshAsync();
+        var viewGeneration = Interlocked.Increment(ref _viewGeneration);
+        _ = RefreshAsync(viewGeneration);
     }
 
-    private async Task RefreshAsync()
+    private async Task RefreshAsync(long viewGeneration)
     {
-        if (_nodeBrowser == null) return;
+        var nodeBrowser = _nodeBrowser;
+        if (nodeBrowser == null) return;
 
-        _rootNode = _nodeBrowser.GetRootNode();
+        var connectionGeneration = nodeBrowser.ConnectionGeneration;
+        var rootNode = nodeBrowser.GetRootNode();
 
         // Pre-load root children in background before updating UI
         try
         {
-            await _nodeBrowser.GetChildrenAsync(_rootNode);
+            await nodeBrowser.GetChildrenAsync(rootNode);
         }
         catch
         {
@@ -120,19 +126,25 @@ public class AddressSpaceView : FrameView
         }
 
         // Update UI on main thread
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
+            if (!IsCurrentView(nodeBrowser, viewGeneration, connectionGeneration))
+                return;
+
+            _rootNode = rootNode;
             _treeView.ClearObjects();
-            _treeView.AddObject(_rootNode);
-            if (_rootNode.ChildrenLoaded)
+            _treeView.AddObject(rootNode);
+            if (rootNode.ChildrenLoaded)
             {
-                _treeView.Expand(_rootNode);
+                _treeView.Expand(rootNode);
             }
         });
     }
 
     public void Clear()
     {
+        Interlocked.Increment(ref _viewGeneration);
+        _nodeBrowser = null;
         _treeView.ClearObjects();
         _rootNode = null;
         _treeView.Visible = false;
@@ -141,7 +153,9 @@ public class AddressSpaceView : FrameView
 
     private IEnumerable<BrowsedNode> GetChildrenForNode(BrowsedNode node)
     {
-        if (_nodeBrowser == null)
+        var nodeBrowser = _nodeBrowser;
+        if (nodeBrowser == null
+            || !nodeBrowser.IsConnectionGenerationActive(node.ConnectionGeneration))
             return Enumerable.Empty<BrowsedNode>();
 
         if (node.ChildrenLoaded)
@@ -149,21 +163,30 @@ public class AddressSpaceView : FrameView
 
         // Load children asynchronously to avoid blocking UI
         // Return empty now, then refresh when loaded
-        _ = LoadChildrenAsync(node);
+        _ = LoadChildrenAsync(
+            nodeBrowser,
+            node,
+            Volatile.Read(ref _viewGeneration),
+            node.ConnectionGeneration);
         return Enumerable.Empty<BrowsedNode>();
     }
 
-    private async Task LoadChildrenAsync(BrowsedNode node)
+    private async Task LoadChildrenAsync(
+        NodeBrowser nodeBrowser,
+        BrowsedNode node,
+        long viewGeneration,
+        long connectionGeneration)
     {
-        if (_nodeBrowser == null) return;
-
         try
         {
-            await _nodeBrowser.GetChildrenAsync(node);
+            await nodeBrowser.GetChildrenAsync(node);
 
             // Refresh the tree on UI thread after children are loaded
-            Application.Invoke(() =>
+            UiThread.Run(() =>
             {
+                if (!IsCurrentView(nodeBrowser, viewGeneration, connectionGeneration))
+                    return;
+
                 _treeView.RefreshObject(node);
                 if (node.ChildrenLoaded && node.Children.Count > 0)
                 {
@@ -177,6 +200,14 @@ public class AddressSpaceView : FrameView
             // Ignore load errors
         }
     }
+
+    private bool IsCurrentView(
+        NodeBrowser nodeBrowser,
+        long viewGeneration,
+        long connectionGeneration)
+        => ReferenceEquals(_nodeBrowser, nodeBrowser)
+           && Volatile.Read(ref _viewGeneration) == viewGeneration
+           && nodeBrowser.IsConnectionGenerationActive(connectionGeneration);
 
     private bool HasChildrenForNode(BrowsedNode node)
     {

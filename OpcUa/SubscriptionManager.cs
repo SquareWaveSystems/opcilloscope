@@ -14,6 +14,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
 {
     private readonly OpcUaClientWrapper _clientWrapper;
     private readonly Logger _logger;
+    private long _connectionGeneration;
     private Subscription? _subscription;
     private readonly Dictionary<uint, MonitoredNode> _monitoredVariables = new();
     private readonly Dictionary<uint, MonitoredItem> _opcMonitoredItems = new();
@@ -25,6 +26,11 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     private uint _queueSize = 10;
     private bool _isInitialized;
     private readonly object _lock = new();
+    // OPC Foundation Subscription mutations are not safe to overlap. This gate
+    // covers the complete local/server transaction (including ApplyChangesAsync)
+    // and is also acquired by reconnect cleanup and disposal.
+    private readonly SemaphoreSlim _mutationGate = new(1, 1);
+    private int _disposeStarted;
 
     /// <summary>
     /// Raised when a monitored variable value changes.
@@ -39,7 +45,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     /// <summary>
     /// Raised when a monitored variable is removed.
     /// </summary>
-    public event Action<uint>? VariableRemoved;
+    public event Action<uint, long>? VariableRemoved;
 
     public int PublishingInterval
     {
@@ -77,13 +83,49 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         }
     }
 
-    public SubscriptionManager(OpcUaClientWrapper clientWrapper, Logger logger)
+    public SubscriptionManager(
+        OpcUaClientWrapper clientWrapper,
+        Logger logger,
+        long connectionGeneration = 0)
     {
         _clientWrapper = clientWrapper;
         _logger = logger;
+        _connectionGeneration = connectionGeneration;
+    }
+
+    /// <summary>
+    /// Advances the provenance of nodes retained across a successful reconnect.
+    /// New SubscriptionManager instances receive their generation in the
+    /// constructor; transferred/recreated subscriptions keep their models and
+    /// therefore need those models advanced in place before values resume.
+    /// </summary>
+    internal void AdvanceConnectionGeneration(long connectionGeneration)
+    {
+        lock (_lock)
+        {
+            _connectionGeneration = connectionGeneration;
+            foreach (var variable in _monitoredVariables.Values)
+            {
+                variable.ConnectionGeneration = connectionGeneration;
+            }
+        }
     }
 
     public async Task<bool> InitializeAsync()
+    {
+        await _mutationGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return Volatile.Read(ref _disposeStarted) == 0
+                && await InitializeCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
+    private async Task<bool> InitializeCoreAsync()
     {
         if (_clientWrapper.Session == null || !_clientWrapper.IsConnected)
         {
@@ -122,6 +164,22 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
 
     public async Task<MonitoredNode?> AddNodeAsync(NodeId nodeId, string displayName)
     {
+        await _mutationGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (Volatile.Read(ref _disposeStarted) != 0)
+                return null;
+
+            return await AddNodeCoreAsync(nodeId, displayName).ConfigureAwait(false);
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
+    private async Task<MonitoredNode?> AddNodeCoreAsync(NodeId nodeId, string displayName)
+    {
         if (!_isInitialized || _subscription == null || _clientWrapper.Session == null)
         {
             _logger.Error("Subscription not initialized");
@@ -143,11 +201,13 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             clientHandle = _nextClientHandle++;
         }
 
+        var subscription = _subscription;
+        MonitoredItem? monitoredItem = null;
+        var publishedLocally = false;
         try
         {
-
             // Create OPC UA monitored item
-            var monitoredItem = new MonitoredItem(_subscription.DefaultItem)
+            monitoredItem = new MonitoredItem(subscription.DefaultItem)
             {
                 DisplayName = displayName,
                 StartNodeId = nodeId,
@@ -160,14 +220,29 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             monitoredItem.Notification += MonitoredItem_Notification;
 
             // Add to subscription and create the monitored item on the server
-            _subscription.AddItem(monitoredItem);
-            await _subscription.ApplyChangesAsync();
+            subscription.AddItem(monitoredItem);
+            await subscription.ApplyChangesAsync().ConfigureAwait(false);
 
-            if (ServiceResult.IsBad(monitoredItem.Status.Error))
+            if (!monitoredItem.Status.Created || ServiceResult.IsBad(monitoredItem.Status.Error))
             {
-                _logger.Error($"Failed to create monitored item for {displayName}: {monitoredItem.Status.Error}");
-                monitoredItem.Notification -= MonitoredItem_Notification;
-                _subscription.RemoveItem(monitoredItem);
+                var status = monitoredItem.Status.Error?.ToString()
+                    ?? "the server did not create the monitored item";
+                _logger.Error($"Failed to create monitored item for {displayName}: {status}");
+                await RollbackMonitoredItemsCoreAsync(
+                    subscription,
+                    [monitoredItem],
+                    $"failed add for {displayName}").ConfigureAwait(false);
+                return null;
+            }
+
+            // DisposeAsync marks disposal before waiting for this gate. Do not
+            // publish a successful item after teardown has already been requested.
+            if (Volatile.Read(ref _disposeStarted) != 0)
+            {
+                await RollbackMonitoredItemsCoreAsync(
+                    subscription,
+                    [monitoredItem],
+                    $"cancelled add for {displayName}").ConfigureAwait(false);
                 return null;
             }
 
@@ -182,44 +257,97 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 StatusCode = 0 // Good
             };
 
-            // Re-check membership after the await to close the TOCTOU window: a concurrent
-            // AddNodeAsync may have added the same node while we awaited ApplyChangesAsync.
-            bool duplicate;
             lock (_lock)
             {
-                duplicate = _monitoredVariables.Values.Any(m => m.NodeId.EqualsNodeId(nodeId));
-                if (!duplicate)
-                {
-                    _monitoredVariables[clientHandle] = variable;
-                    _opcMonitoredItems[clientHandle] = monitoredItem;
-                    _opcHandleToClientHandle[monitoredItem.ClientHandle] = clientHandle;
-                }
-            }
-
-            if (duplicate)
-            {
-                _logger.Warning($"Node {displayName} is already being monitored");
-                monitoredItem.Notification -= MonitoredItem_Notification;
-                _subscription.RemoveItem(monitoredItem);
-                await _subscription.ApplyChangesAsync();
-                return null;
+                // Read the generation at publication time while sharing the
+                // same lock as AdvanceConnectionGeneration. An add that overlaps
+                // a reconnect can therefore never publish the prior generation.
+                variable.ConnectionGeneration = _connectionGeneration;
+                _monitoredVariables[clientHandle] = variable;
+                _opcMonitoredItems[clientHandle] = monitoredItem;
+                _opcHandleToClientHandle[monitoredItem.ClientHandle] = clientHandle;
+                publishedLocally = true;
             }
 
             _logger.Info($"Subscribed to {displayName}");
-            VariableAdded?.Invoke(variable);
+            try
+            {
+                VariableAdded?.Invoke(variable);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+            {
+                // Observer failures must not turn a committed item into a null
+                // result while leaving it present in the dictionaries.
+                _logger.Warning($"Variable-added handler failed for {displayName}: {ex.Message}");
+            }
 
             // Read initial value and node attributes (AccessLevel, DataType) in parallel
             await Task.WhenAll(
                 ReadInitialValueAsync(variable),
                 ReadNodeAttributesAsync(variable)
-            );
+            ).ConfigureAwait(false);
 
             return variable;
         }
         catch (Exception ex)
         {
             _logger.Error($"Failed to add monitored variable: {ex.Message}");
+            if (monitoredItem != null)
+            {
+                if (publishedLocally)
+                {
+                    lock (_lock)
+                    {
+                        _monitoredVariables.Remove(clientHandle);
+                        _opcMonitoredItems.Remove(clientHandle);
+                        _opcHandleToClientHandle.Remove(monitoredItem.ClientHandle);
+                    }
+                }
+
+                await RollbackMonitoredItemsCoreAsync(
+                    subscription,
+                    [monitoredItem],
+                    $"exception while adding {displayName}").ConfigureAwait(false);
+            }
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Detaches and removes locally-added monitored items, then best-effort applies
+    /// the removal in case a preceding create reached the server before failing.
+    /// The caller must hold <see cref="_mutationGate"/>.
+    /// </summary>
+    private async Task RollbackMonitoredItemsCoreAsync(
+        Subscription subscription,
+        IEnumerable<MonitoredItem> monitoredItems,
+        string context)
+    {
+        var removedAny = false;
+        foreach (var item in monitoredItems)
+        {
+            item.Notification -= MonitoredItem_Notification;
+            try
+            {
+                subscription.RemoveItem(item);
+                removedAny = true;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+            {
+                _logger.Warning($"Failed to remove local monitored item during {context}: {ex.Message}");
+            }
+        }
+
+        if (!removedAny || !subscription.Created)
+            return;
+
+        try
+        {
+            await subscription.ApplyChangesAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            _logger.Warning($"Failed to apply monitored-item rollback during {context}: {ex.Message}");
         }
     }
 
@@ -255,13 +383,20 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     {
         try
         {
-            var value = await _clientWrapper.ReadValueAsync(item.NodeId);
+            var session = _clientWrapper.Session;
+            if (session == null)
+                return;
+
+            var value = await OpcUaClientWrapper
+                .ReadValueCoreAsync(session, item.NodeId)
+                .ConfigureAwait(false);
             if (value != null)
             {
                 item.Value = FormatValue(value.Value);
                 item.RawValue = FormatRawValue(value.Value);
                 item.Timestamp = value.SourceTimestamp;
                 item.StatusCode = (uint)value.StatusCode.Code;
+                item.IsSyntheticValue = false;
                 ValueChanged?.Invoke(item);
             }
         }
@@ -275,13 +410,22 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     {
         try
         {
-            // Read AccessLevel and DataType attributes
-            var results = await _clientWrapper.ReadAttributesAsync(
-                item.NodeId,
-                Attributes.AccessLevel,
-                Attributes.DataType);
+            var session = _clientWrapper.Session;
+            if (session == null)
+                return;
 
-            if (results.Count >= 2)
+            // Read both server-wide and per-user access plus value shape. The
+            // write dialog currently supports scalar values only.
+            var results = await OpcUaClientWrapper.ReadAttributesCoreAsync(
+                    session,
+                    item.NodeId,
+                    Attributes.AccessLevel,
+                    Attributes.UserAccessLevel,
+                    Attributes.DataType,
+                    Attributes.ValueRank)
+                .ConfigureAwait(false);
+
+            if (results.Count >= 4)
             {
                 // AccessLevel
                 if (StatusCode.IsGood(results[0].StatusCode) && results[0].Value is byte accessLevel)
@@ -289,12 +433,24 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                     item.AccessLevel = accessLevel;
                 }
 
+                // UserAccessLevel is the permission that applies to the active
+                // identity and must drive write affordances.
+                if (StatusCode.IsGood(results[1].StatusCode) && results[1].Value is byte userAccessLevel)
+                {
+                    item.UserAccessLevel = userAccessLevel;
+                }
+
                 // DataType - this is a NodeId that we need to resolve
-                if (StatusCode.IsGood(results[1].StatusCode) && results[1].Value is NodeId dataTypeNodeId)
+                if (StatusCode.IsGood(results[2].StatusCode) && results[2].Value is NodeId dataTypeNodeId)
                 {
                     var (builtInType, typeName) = DataTypeResolver.Resolve(dataTypeNodeId);
                     item.DataType = builtInType;
                     item.DataTypeName = typeName;
+                }
+
+                if (StatusCode.IsGood(results[3].StatusCode) && results[3].Value is int valueRank)
+                {
+                    item.ValueRank = valueRank;
                 }
             }
 
@@ -308,6 +464,22 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     }
 
     public async Task<bool> RemoveNodeAsync(uint clientHandle)
+    {
+        await _mutationGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (Volatile.Read(ref _disposeStarted) != 0)
+                return false;
+
+            return await RemoveNodeCoreAsync(clientHandle).ConfigureAwait(false);
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
+    private async Task<bool> RemoveNodeCoreAsync(uint clientHandle)
     {
         MonitoredNode? variable;
         MonitoredItem? opcItem;
@@ -335,7 +507,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             {
                 opcItem.Notification -= MonitoredItem_Notification;
                 _subscription.RemoveItem(opcItem);
-                await _subscription.ApplyChangesAsync();
+                await _subscription.ApplyChangesAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -344,7 +516,14 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         }
 
         _logger.Info($"Unsubscribed from {variable.DisplayName}");
-        VariableRemoved?.Invoke(clientHandle);
+        try
+        {
+            VariableRemoved?.Invoke(clientHandle, _connectionGeneration);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            _logger.Warning($"Variable-removed handler failed for {variable.DisplayName}: {ex.Message}");
+        }
         return true;
     }
 
@@ -357,6 +536,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         variable.RawValue = FormatRawValue(dataValue.Value);
         variable.Timestamp = dataValue.SourceTimestamp;
         variable.StatusCode = (uint)dataValue.StatusCode.Code;
+        variable.IsSyntheticValue = false;
 
         if (oldValue != newValue)
         {
@@ -422,6 +602,22 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
 
     public async Task ClearAsync()
     {
+        await _mutationGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (Volatile.Read(ref _disposeStarted) != 0)
+                return;
+
+            await ClearCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
+    private async Task ClearCoreAsync()
+    {
         List<uint> handles;
         lock (_lock)
         {
@@ -429,7 +625,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
         }
         foreach (var handle in handles)
         {
-            await RemoveNodeAsync(handle);
+            await RemoveNodeCoreAsync(handle).ConfigureAwait(false);
         }
     }
 
@@ -471,6 +667,20 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     /// </summary>
     public async Task<bool> ReattachAfterReconnectAsync()
     {
+        await _mutationGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return Volatile.Read(ref _disposeStarted) == 0
+                && await ReattachAfterReconnectCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
+    private async Task<bool> ReattachAfterReconnectCoreAsync()
+    {
         if (_clientWrapper.Session == null)
         {
             _logger.Error("Cannot reattach: no session");
@@ -495,7 +705,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             }
 
             // Read current values to update UI
-            await RefreshAllValuesAsync();
+            await RefreshAllValuesAsync().ConfigureAwait(false);
 
             return true;
         }
@@ -510,6 +720,20 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     /// Preserves the MonitoredNode models and recreates the OPC UA subscription.
     /// </summary>
     public async Task<bool> RecreateSubscriptionsAsync()
+    {
+        await _mutationGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return Volatile.Read(ref _disposeStarted) == 0
+                && await RecreateSubscriptionsCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
+    private async Task<bool> RecreateSubscriptionsCoreAsync()
     {
         if (_clientWrapper.Session == null || !_clientWrapper.IsConnected)
         {
@@ -526,32 +750,37 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 .ToList();
         }
 
+        // Replace the old OPC subscription even when it contains no monitored
+        // nodes; otherwise recreation would leak a second empty subscription.
+        await CleanupOpcSubscriptionCoreAsync().ConfigureAwait(false);
+
         if (nodesToRestore.Count == 0)
         {
             _logger.Info("No subscriptions to recreate");
             // Still need to create empty subscription for future use
-            return await InitializeAsync();
+            return await InitializeCoreAsync().ConfigureAwait(false);
         }
 
         _logger.Info($"Recreating {nodesToRestore.Count} subscription(s)...");
 
-        // Clean up old OPC UA objects (but keep our MonitoredNode models)
-        await CleanupOpcSubscriptionAsync();
-
         // Create new subscription
-        if (!await InitializeAsync())
+        if (!await InitializeCoreAsync().ConfigureAwait(false))
         {
             _logger.Error("Failed to create new subscription");
             return false;
         }
 
-        // Recreate monitored items
-        int restored = 0;
+        // Build all replacement items first, but do not publish their handle maps
+        // until the server has accepted every item. The boolean method contract is
+        // intentionally all-or-nothing so ConnectionManager can run its loss fallback.
+        var subscription = _subscription!;
+        var pendingItems = new List<(uint ClientHandle, string DisplayName, MonitoredItem Item)>();
+        var constructionFailed = false;
         foreach (var (clientHandle, nodeId, displayName) in nodesToRestore)
         {
             try
             {
-                var monitoredItem = new MonitoredItem(_subscription!.DefaultItem)
+                var monitoredItem = new MonitoredItem(subscription.DefaultItem)
                 {
                     DisplayName = displayName,
                     StartNodeId = nodeId,
@@ -562,39 +791,71 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 };
 
                 monitoredItem.Notification += MonitoredItem_Notification;
-                _subscription.AddItem(monitoredItem);
-
-                lock (_lock)
-                {
-                    _opcMonitoredItems[clientHandle] = monitoredItem;
-                    _opcHandleToClientHandle[monitoredItem.ClientHandle] = clientHandle;
-                }
-
-                restored++;
+                subscription.AddItem(monitoredItem);
+                pendingItems.Add((clientHandle, displayName, monitoredItem));
             }
             catch (Exception ex)
             {
+                constructionFailed = true;
                 _logger.Warning($"Failed to recreate monitored item for {displayName}: {ex.Message}");
             }
         }
 
         // Apply all changes at once
-        if (restored > 0)
+        if (pendingItems.Count > 0)
         {
             try
             {
-                await _subscription!.ApplyChangesAsync();
-                _logger.Info($"Restored {restored} of {nodesToRestore.Count} subscription(s)");
+                await subscription.ApplyChangesAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _logger.Error($"Failed to apply subscription changes: {ex.Message}");
+                await RollbackMonitoredItemsCoreAsync(
+                    subscription,
+                    pendingItems.Select(p => p.Item),
+                    "failed subscription recreation").ConfigureAwait(false);
                 return false;
             }
         }
 
+        var failedItems = pendingItems
+            .Where(p => !p.Item.Status.Created || ServiceResult.IsBad(p.Item.Status.Error))
+            .ToList();
+        var restored = pendingItems.Count - failedItems.Count;
+
+        foreach (var failed in failedItems)
+        {
+            var status = failed.Item.Status.Error?.ToString()
+                ?? "the server did not create the monitored item";
+            _logger.Warning($"Failed to recreate monitored item for {failed.DisplayName}: {status}");
+        }
+
+        if (constructionFailed || failedItems.Count > 0 || pendingItems.Count != nodesToRestore.Count)
+        {
+            await RollbackMonitoredItemsCoreAsync(
+                subscription,
+                pendingItems.Select(p => p.Item),
+                "partial subscription recreation").ConfigureAwait(false);
+            _logger.Error(
+                $"Restored {restored} of {nodesToRestore.Count} subscription(s); " +
+                "reporting failure so stale UI handles can be removed.");
+            return false;
+        }
+
+        lock (_lock)
+        {
+            foreach (var pending in pendingItems)
+            {
+                _opcMonitoredItems[pending.ClientHandle] = pending.Item;
+                _opcHandleToClientHandle[pending.Item.ClientHandle] = pending.ClientHandle;
+            }
+        }
+
+        _logger.Info($"Restored {restored} of {nodesToRestore.Count} subscription(s)");
+
         // Read current values to update UI
-        await RefreshAllValuesAsync();
+        await RefreshAllValuesAsync().ConfigureAwait(false);
 
         return true;
     }
@@ -618,7 +879,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     /// <summary>
     /// Cleans up the OPC UA subscription objects without clearing our MonitoredNode models.
     /// </summary>
-    private async Task CleanupOpcSubscriptionAsync()
+    private async Task CleanupOpcSubscriptionCoreAsync()
     {
         lock (_lock)
         {
@@ -630,21 +891,27 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
             _opcHandleToClientHandle.Clear();
         }
 
-        if (_subscription != null)
+        var subscription = _subscription;
+        _subscription = null;
+        if (subscription != null)
         {
             try
             {
-                if (_clientWrapper.Session != null && _clientWrapper.Session.Subscriptions.Contains(_subscription))
+                if (_clientWrapper.Session != null && _clientWrapper.Session.Subscriptions.Contains(subscription))
                 {
-                    await _clientWrapper.Session.RemoveSubscriptionAsync(_subscription);
+                    await _clientWrapper.Session
+                        .RemoveSubscriptionAsync(subscription)
+                        .ConfigureAwait(false);
                 }
-                _subscription.Dispose();
             }
             catch (Exception ex)
             {
                 _logger.Warning($"Failed to cleanup OPC subscription: {ex.Message}");
             }
-            _subscription = null;
+            finally
+            {
+                subscription.Dispose();
+            }
         }
 
         _isInitialized = false;
@@ -664,6 +931,7 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
                 variable.Value = "(reconnecting...)";
                 variable.RawValue = "(reconnecting...)";
                 variable.StatusCode = StatusCodes.UncertainInitialValue;
+                variable.IsSyntheticValue = true;
             }
         }
 
@@ -679,27 +947,27 @@ public class SubscriptionManager : IDisposable, IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (_subscription != null && _clientWrapper.Session != null)
+        if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
         {
-            try
-            {
-                await _clientWrapper.Session.RemoveSubscriptionAsync(_subscription);
-                _subscription.Dispose();
-            }
-            catch (Exception ex)
-            {
-                _logger?.Warning($"Failed to dispose OPC UA subscription: {ex.Message}");
-            }
+            GC.SuppressFinalize(this);
+            return;
         }
 
-        _subscription = null;
-        _isInitialized = false;
-
-        lock (_lock)
+        await _mutationGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            _monitoredVariables.Clear();
-            _opcMonitoredItems.Clear();
-            _opcHandleToClientHandle.Clear();
+            await CleanupOpcSubscriptionCoreAsync().ConfigureAwait(false);
+
+            lock (_lock)
+            {
+                _monitoredVariables.Clear();
+                _opcMonitoredItems.Clear();
+                _opcHandleToClientHandle.Clear();
+            }
+        }
+        finally
+        {
+            _mutationGate.Release();
         }
 
         GC.SuppressFinalize(this);

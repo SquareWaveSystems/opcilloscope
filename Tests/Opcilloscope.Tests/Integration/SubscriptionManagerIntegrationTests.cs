@@ -34,23 +34,30 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
     public async Task AddNodeAsync_SubscribesToNode_Successfully()
     {
         // Arrange
-        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
+        const long connectionGeneration = 41;
+        using var subscriptionManager = new SubscriptionManager(
+            Client!,
+            _logger,
+            connectionGeneration);
         await subscriptionManager.InitializeAsync();
         var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
 
         // Act
         var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
 
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
-
         // Assert
+        Assert.NotNull(node);
         Assert.Equal("Counter", node.DisplayName);
         Assert.Equal(nodeId, node.NodeId);
+        Assert.Equal(connectionGeneration, node.ConnectionGeneration);
         Assert.Single(subscriptionManager.MonitoredVariables);
+
+        subscriptionManager.AdvanceConnectionGeneration(42);
+
+        Assert.Equal(42, node.ConnectionGeneration);
+        Assert.All(
+            subscriptionManager.MonitoredVariables,
+            monitored => Assert.Equal(42, monitored.ConnectionGeneration));
     }
 
     [Fact]
@@ -64,13 +71,8 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         // Act
         var node = await subscriptionManager.AddNodeAsync(nodeId, "ServerName");
 
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
-
         // Assert
+        Assert.NotNull(node);
         Assert.Equal("Opcilloscope Test Server", node.Value);
     }
 
@@ -85,13 +87,8 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         // Act
         var node = await subscriptionManager.AddNodeAsync(nodeId, "WritableString");
 
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
-
         // Assert
+        Assert.NotNull(node);
         Assert.NotNull(node.DataTypeName);
         Assert.Equal("String", node.DataTypeName);
     }
@@ -107,11 +104,7 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         // Act
         var firstNode = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
 
-        // Skip test if first subscription failed
-        if (firstNode == null)
-        {
-            return;
-        }
+        Assert.NotNull(firstNode);
 
         var duplicate = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
 
@@ -133,13 +126,8 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         // Act
         var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
 
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
-
         // Assert
+        Assert.NotNull(node);
         Assert.NotNull(addedNode);
         Assert.Equal("Counter", addedNode.DisplayName);
     }
@@ -153,11 +141,7 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
         var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
 
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
+        Assert.NotNull(node);
 
         // Act
         var result = await subscriptionManager.RemoveNodeAsync(node.ClientHandle);
@@ -176,14 +160,10 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
         var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
 
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
+        Assert.NotNull(node);
 
         uint? removedHandle = null;
-        subscriptionManager.VariableRemoved += handle => removedHandle = handle;
+        subscriptionManager.VariableRemoved += (handle, _) => removedHandle = handle;
 
         // Act
         await subscriptionManager.RemoveNodeAsync(node.ClientHandle);
@@ -206,11 +186,7 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         // Act
         var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
 
-        // Skip test if subscription failed (server may not support the node)
-        if (node == null)
-        {
-            return;
-        }
+        Assert.NotNull(node);
 
         // Wait for at least one subscription notification (counter updates every second)
         await Task.Delay(1500);
@@ -229,14 +205,10 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         var node2 = await subscriptionManager.AddNodeAsync(new NodeId("SineWave", (ushort)GetNamespaceIndex()), "SineWave");
         var node3 = await subscriptionManager.AddNodeAsync(new NodeId("RandomValue", (ushort)GetNamespaceIndex()), "RandomValue");
 
-        // Skip test if no subscriptions succeeded
-        if (subscriptionManager.MonitoredVariables.Count == 0)
-        {
-            return;
-        }
-
-        var initialCount = subscriptionManager.MonitoredVariables.Count;
-        Assert.True(initialCount > 0, "At least one subscription should succeed");
+        Assert.NotNull(node1);
+        Assert.NotNull(node2);
+        Assert.NotNull(node3);
+        Assert.Equal(3, subscriptionManager.MonitoredVariables.Count);
 
         // Act
         await subscriptionManager.ClearAsync();
@@ -334,5 +306,76 @@ public class SubscriptionManagerIntegrationTests : IntegrationTestBase
         // Assert - a bad monitored item status causes AddNodeAsync to clean up
         // and return null per its implementation contract.
         Assert.Null(node);
+        Assert.Empty(subscriptionManager.MonitoredVariables);
+        Assert.Equal((uint?)0, subscriptionManager.GetOpcSubscription()?.MonitoredItemCount);
+    }
+
+    [Fact]
+    public async Task AddNodeAsync_WhenVariableAddedHandlerThrows_KeepsReturnAndStateConsistent()
+    {
+        // Arrange
+        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
+        await subscriptionManager.InitializeAsync();
+        var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
+        subscriptionManager.VariableAdded += _ => throw new InvalidOperationException("test handler failure");
+
+        // Act
+        var node = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
+
+        // Assert - an observer failure must not turn a committed server item into a
+        // null result while leaving it hidden in the manager as a ghost.
+        Assert.NotNull(node);
+        Assert.Single(subscriptionManager.MonitoredVariables);
+        Assert.Equal((uint?)1, subscriptionManager.GetOpcSubscription()?.MonitoredItemCount);
+    }
+
+    [Fact]
+    public async Task RecreateSubscriptionsAsync_WhenServerRejectsOneItem_ReturnsFalseAndRollsBackItems()
+    {
+        // Arrange - changing the retained model's init-only NodeId simulates a node
+        // disappearing from the server between the original session and recreation.
+        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
+        await subscriptionManager.InitializeAsync();
+        var node = await subscriptionManager.AddNodeAsync(
+            new NodeId("Counter", (ushort)GetNamespaceIndex()),
+            "Counter");
+        Assert.NotNull(node);
+
+        var missingNodeId = new NodeId("RemovedBeforeReconnect", (ushort)GetNamespaceIndex());
+        typeof(Opcilloscope.OpcUa.Models.MonitoredNode)
+            .GetProperty(nameof(Opcilloscope.OpcUa.Models.MonitoredNode.NodeId))!
+            .SetValue(node, missingNodeId);
+
+        // Act
+        var recreated = await subscriptionManager.RecreateSubscriptionsAsync();
+
+        // Assert - the caller can now execute its explicit loss fallback instead of
+        // being told that a rejected monitored item was fully restored.
+        Assert.False(recreated);
+        Assert.Equal((uint?)0, subscriptionManager.GetOpcSubscription()?.MonitoredItemCount);
+    }
+
+    [Fact]
+    public async Task AddAndRemoveNodeAsync_ConcurrentMutationsLeaveConsistentState()
+    {
+        // Arrange
+        using var subscriptionManager = new SubscriptionManager(Client!, _logger);
+        await subscriptionManager.InitializeAsync();
+        var nodeId = new NodeId("Counter", (ushort)GetNamespaceIndex());
+        var original = await subscriptionManager.AddNodeAsync(nodeId, "Counter");
+        Assert.NotNull(original);
+
+        // Act - RemoveNodeAsync reaches its first ApplyChangesAsync before returning
+        // control, so the add attempts to mutate the same OPC subscription concurrently
+        // unless SubscriptionManager serializes the complete mutation transaction.
+        var removeTask = subscriptionManager.RemoveNodeAsync(original.ClientHandle);
+        var addTask = subscriptionManager.AddNodeAsync(nodeId, "Counter replacement");
+        await Task.WhenAll(removeTask, addTask);
+
+        // Assert
+        Assert.True(await removeTask);
+        Assert.NotNull(await addTask);
+        Assert.Single(subscriptionManager.MonitoredVariables);
+        Assert.Equal((uint?)1, subscriptionManager.GetOpcSubscription()?.MonitoredItemCount);
     }
 }

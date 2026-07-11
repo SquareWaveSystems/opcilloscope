@@ -7,7 +7,19 @@ namespace Opcilloscope.OpcUa.Models;
 /// </summary>
 public class MonitoredNode
 {
+    private long _connectionGeneration;
+
     public uint ClientHandle { get; init; }
+    /// <summary>
+    /// Connection lifecycle generation currently owning this monitored node.
+    /// Retained nodes advance with a successful reconnect; client handles may be
+    /// reused by a later generation.
+    /// </summary>
+    public long ConnectionGeneration
+    {
+        get => Volatile.Read(ref _connectionGeneration);
+        internal set => Volatile.Write(ref _connectionGeneration, value);
+    }
     public NodeId NodeId { get; init; } = ObjectIds.RootFolder;
     public string DisplayName { get; init; } = string.Empty;
     public string Value { get; set; } = string.Empty;
@@ -39,6 +51,18 @@ public class MonitoredNode
     public byte AccessLevel { get; set; } = AccessLevels.CurrentRead;
 
     /// <summary>
+    /// Effective access for the connected user. This, rather than the node's
+    /// general AccessLevel, controls whether write affordances are shown.
+    /// </summary>
+    public byte UserAccessLevel { get; set; } = AccessLevels.CurrentRead;
+
+    /// <summary>
+    /// OPC UA ValueRank. -1 is scalar; zero or greater is an array shape that
+    /// the current scalar write dialog does not support.
+    /// </summary>
+    public int ValueRank { get; set; } = ValueRanks.Any;
+
+    /// <summary>
     /// The built-in data type of the node value.
     /// </summary>
     public BuiltInType DataType { get; set; } = BuiltInType.String;
@@ -51,12 +75,16 @@ public class MonitoredNode
     /// <summary>
     /// Whether the node supports reading (has CurrentRead in AccessLevel).
     /// </summary>
-    public bool IsReadable => (AccessLevel & AccessLevels.CurrentRead) != 0;
+    public bool IsReadable => (UserAccessLevel & AccessLevels.CurrentRead) != 0;
 
     /// <summary>
     /// Whether the node supports writing (has CurrentWrite in AccessLevel).
     /// </summary>
-    public bool IsWritable => (AccessLevel & AccessLevels.CurrentWrite) != 0;
+    public bool IsWritable => (UserAccessLevel & AccessLevels.CurrentWrite) != 0;
+
+    public bool IsScalar => ValueRank == ValueRanks.Scalar;
+
+    public bool CanWrite => IsWritable && IsScalar;
 
     /// <summary>
     /// Access string for display: "R", "W", "RW", or "-".
@@ -70,6 +98,13 @@ public class MonitoredNode
     /// </summary>
     public bool IsSelectedForScope { get; set; }
 
+    /// <summary>
+    /// True when the current value is UI-only connection state rather than a
+    /// value delivered/read from the OPC UA server. Synthetic values must not
+    /// be written to CSV recordings.
+    /// </summary>
+    public bool IsSyntheticValue { get; set; }
+
     public string StatusString
     {
         get
@@ -81,5 +116,20 @@ public class MonitoredNode
         }
     }
 
-    public string TimestampString => Timestamp?.ToString("HH:mm:ss") ?? "-";
+    public string TimestampString => Timestamp is { } timestamp
+        ? ToLocalDisplayTime(timestamp).ToString("HH:mm:ss")
+        : "-";
+
+    private static DateTime ToLocalDisplayTime(DateTime timestamp)
+    {
+        // OPC UA source timestamps are UTC. Some SDK/server paths surface them
+        // with Kind=Unspecified, so attach the protocol-defined kind before
+        // converting rather than interpreting them as local wall-clock time.
+        if (timestamp.Kind == DateTimeKind.Unspecified)
+        {
+            timestamp = DateTime.SpecifyKind(timestamp, DateTimeKind.Utc);
+        }
+
+        return timestamp.ToLocalTime();
+    }
 }

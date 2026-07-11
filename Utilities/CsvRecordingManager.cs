@@ -1,16 +1,29 @@
-using System.Collections.Concurrent;
 using System.Globalization;
+using System.Threading.Channels;
 using Opcilloscope.OpcUa.Models;
 
 namespace Opcilloscope.Utilities;
 
+public readonly record struct RecordingStopResult(
+    bool Completed,
+    long RecordCount,
+    long DroppedRecordCount,
+    long FailedRecordCount,
+    string? ErrorMessage)
+{
+    public bool HasDataLoss => DroppedRecordCount > 0
+        || FailedRecordCount > 0
+        || !string.IsNullOrEmpty(ErrorMessage);
+}
+
 /// <summary>
 /// Manages CSV recording of monitored variable value changes.
 /// Writes data to file in real-time as values change using a background queue.
-/// Output is culture-invariant: timestamps are ISO 8601 (Gregorian calendar,
-/// '.' decimal / ':' time separators regardless of locale) and values are the
-/// full-precision raw representation ('.' decimal separator, arrays as
-/// semicolon-joined elements) rather than the truncated UI display string.
+/// Output is culture-invariant: timestamps are ISO 8601 UTC with a 'Z'
+/// designator (Gregorian calendar, '.' decimal / ':' time separators
+/// regardless of locale) and values are the full-precision raw representation
+/// ('.' decimal separator, arrays as semicolon-joined elements) rather than
+/// the truncated UI display string.
 /// </summary>
 public class CsvRecordingManager : IDisposable
 {
@@ -137,17 +150,28 @@ public class CsvRecordingManager : IDisposable
         string Value,
         string Status);
 
+    private sealed class RecordingSession
+    {
+        public required string FilePath { get; init; }
+        public required TextWriter Writer { get; init; }
+        public required Channel<RecordSnapshot> Queue { get; init; }
+        public required DateTime StartTime { get; init; }
+        public Task WriteTask { get; set; } = Task.CompletedTask;
+        public long RecordCount;
+        public long DroppedRecordCount;
+        public long FailedRecordCount;
+        public string? ErrorMessage;
+    }
+
     private readonly Logger _logger;
-    private StreamWriter? _writer;
-    private string? _filePath;
-    private bool _isRecording;
     private readonly object _lock = new();
-    private DateTime _recordingStartTime;
-    private long _recordCount;
-    private readonly ConcurrentQueue<RecordSnapshot> _recordQueue = new();
-    private readonly SemaphoreSlim _queueSemaphore = new(0);
-    private Task? _writeTask;
-    private CancellationTokenSource? _cancellationTokenSource;
+    private readonly int _queueCapacity;
+    private readonly Func<string, TextWriter> _writerFactory;
+    private RecordingSession? _session;
+    private RecordingSession? _stoppingSession;
+    private RecordingSession? _lastSession;
+
+    private const int DefaultQueueCapacity = 10_000;
 
     public event Action<bool>? RecordingStateChanged;
 
@@ -157,27 +181,114 @@ public class CsvRecordingManager : IDisposable
         {
             lock (_lock)
             {
-                return _isRecording;
+                return _session is not null;
             }
         }
     }
 
-    public string? FilePath => _filePath;
-    public long RecordCount => Interlocked.Read(ref _recordCount);
+    public bool IsStopping
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _stoppingSession is not null;
+            }
+        }
+    }
+
+    public string? FilePath
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return (_session ?? _lastSession)?.FilePath;
+            }
+        }
+    }
+
+    public long RecordCount
+    {
+        get
+        {
+            RecordingSession? session;
+            lock (_lock)
+            {
+                session = _session ?? _lastSession;
+            }
+            return session is null ? 0 : Interlocked.Read(ref session.RecordCount);
+        }
+    }
+
+    public long DroppedRecordCount
+    {
+        get
+        {
+            RecordingSession? session;
+            lock (_lock)
+            {
+                session = _session ?? _lastSession;
+            }
+            return session is null ? 0 : Interlocked.Read(ref session.DroppedRecordCount);
+        }
+    }
+
+    public long FailedRecordCount
+    {
+        get
+        {
+            RecordingSession? session;
+            lock (_lock)
+            {
+                session = _session ?? _stoppingSession ?? _lastSession;
+            }
+            return session is null ? 0 : Interlocked.Read(ref session.FailedRecordCount);
+        }
+    }
+
+    public string? LastError
+    {
+        get
+        {
+            RecordingSession? session;
+            lock (_lock)
+            {
+                session = _session ?? _stoppingSession ?? _lastSession;
+            }
+            return session is null ? null : Volatile.Read(ref session.ErrorMessage);
+        }
+    }
+
     public TimeSpan RecordingDuration
     {
         get
         {
             lock (_lock)
             {
-                return _isRecording ? DateTime.Now - _recordingStartTime : TimeSpan.Zero;
+                return _session is null ? TimeSpan.Zero : DateTime.Now - _session.StartTime;
             }
         }
     }
 
     public CsvRecordingManager(Logger logger)
+        : this(logger, DefaultQueueCapacity, path => new StreamWriter(path, append: false))
     {
+    }
+
+    internal CsvRecordingManager(
+        Logger logger,
+        int queueCapacity,
+        Func<string, TextWriter> writerFactory)
+    {
+        if (queueCapacity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(queueCapacity));
+        }
+
         _logger = logger;
+        _queueCapacity = queueCapacity;
+        _writerFactory = writerFactory;
     }
 
     /// <summary>
@@ -187,41 +298,51 @@ public class CsvRecordingManager : IDisposable
     {
         lock (_lock)
         {
-            if (_isRecording)
+            if (_session is not null || _stoppingSession is not null)
             {
                 _logger.Warning("Recording is already in progress");
                 return false;
             }
 
+            TextWriter? writer = null;
             try
             {
-                _filePath = filePath;
-                _writer = new StreamWriter(_filePath, append: false);
+                writer = _writerFactory(filePath);
 
                 // Write CSV header
-                _writer.WriteLine("Timestamp,DisplayName,NodeId,Value,Status");
-                _writer.Flush();
+                writer.WriteLine("Timestamp,DisplayName,NodeId,Value,Status");
+                writer.Flush();
 
-                // Discard any stale snapshots left over from a previous session
-                // so they cannot cross-contaminate the new recording.
-                while (_recordQueue.TryDequeue(out _)) { }
+                var queue = Channel.CreateBounded<RecordSnapshot>(new BoundedChannelOptions(_queueCapacity)
+                {
+                    SingleReader = true,
+                    SingleWriter = false,
+                    FullMode = BoundedChannelFullMode.Wait
+                });
+                var session = new RecordingSession
+                {
+                    FilePath = filePath,
+                    Writer = writer,
+                    Queue = queue,
+                    StartTime = DateTime.Now
+                };
 
-                _isRecording = true;
-                _recordingStartTime = DateTime.Now;
-                _recordCount = 0;
+                _session = session;
+                session.WriteTask = Task.Run(() => WriteQueuedRecordsAsync(session));
 
-                // Start background writer task
-                _cancellationTokenSource = new CancellationTokenSource();
-                _writeTask = Task.Run(() => WriteQueuedRecordsAsync(_cancellationTokenSource.Token));
-
-                _logger.Info($"Started recording to {_filePath}");
+                _logger.Info($"Started recording to {filePath}");
             }
             catch (Exception ex)
             {
                 _logger.Error($"Failed to start recording: {ex.Message}");
-                _writer?.Dispose();
-                _writer = null;
-                _filePath = null;
+                try
+                {
+                    writer?.Dispose();
+                }
+                catch (Exception disposeException)
+                {
+                    _logger.Error($"Failed to close recording file after start error: {disposeException.Message}");
+                }
                 return false;
             }
         }
@@ -236,85 +357,95 @@ public class CsvRecordingManager : IDisposable
     /// Stop recording and close the file.
     /// </summary>
     public void StopRecording()
+        => StopRecordingAsync(System.Threading.Timeout.InfiniteTimeSpan).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Stops accepting records and asynchronously drains every accepted record.
+    /// A timeout is reported explicitly; the session remains tracked and blocks a
+    /// new recording until its writer actually closes.
+    /// </summary>
+    public async Task<RecordingStopResult> StopRecordingAsync(TimeSpan? timeout = null)
     {
-        Task? taskToWait = null;
-        CancellationTokenSource? ctsToDispose = null;
+        var wait = timeout ?? TimeSpan.FromSeconds(10);
+        if (wait < TimeSpan.Zero && wait != System.Threading.Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        }
+
+        RecordingSession? session;
+        var beganStopping = false;
 
         lock (_lock)
         {
-            if (!_isRecording)
+            session = _session ?? _stoppingSession;
+            if (session is null)
             {
-                return;
+                return CreateStopResult(_lastSession, completed: true);
             }
 
-            _isRecording = false;
-            taskToWait = _writeTask;
-            ctsToDispose = _cancellationTokenSource;
+            if (_session is not null)
+            {
+                _session = null;
+                _stoppingSession = session;
+                _lastSession = session;
+                beganStopping = true;
+            }
         }
 
-        // 1. Signal cancellation BEFORE waiting
-        ctsToDispose?.Cancel();
-
-        // 2. Wait for write loop to complete with timeout
-        // This must happen BEFORE disposing the writer to prevent ObjectDisposedException
-        bool taskCompleted = false;
-        if (taskToWait != null)
+        if (beganStopping)
         {
-            try
-            {
-                // Wait with a reasonable timeout - if the task doesn't complete,
-                // we still need to clean up, but the writer access is protected by the lock
-                taskCompleted = taskToWait.Wait(TimeSpan.FromSeconds(10));
-                if (!taskCompleted)
-                {
-                    _logger.Warning("Background writer task did not complete within timeout");
-                }
-            }
-            catch (AggregateException ex)
-            {
-                // Task.Wait wraps exceptions in AggregateException
-                foreach (var inner in ex.InnerExceptions)
-                {
-                    if (inner is not OperationCanceledException)
-                    {
-                        _logger.Error($"Error in background writer: {inner.Message}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Error waiting for background writer: {ex.Message}");
-            }
+            // Completing this session's private channel prevents a late callback
+            // from crossing into the next recording and lets the reader drain all
+            // accepted records before it closes its writer.
+            session.Queue.Writer.TryComplete();
+            RecordingStateChanged?.Invoke(false);
         }
 
-        // 3. Only dispose writer AFTER the write loop has exited (or timed out)
-        lock (_lock)
+        bool completed;
+        if (wait == System.Threading.Timeout.InfiniteTimeSpan)
         {
-            try
+            await session.WriteTask.ConfigureAwait(false);
+            completed = true;
+        }
+        else
+        {
+            completed = ReferenceEquals(
+                await Task.WhenAny(session.WriteTask, Task.Delay(wait)).ConfigureAwait(false),
+                session.WriteTask);
+            if (completed)
             {
-                _writer?.Flush();
-                _writer?.Dispose();
-                _writer = null;
-
-                var duration = DateTime.Now - _recordingStartTime;
-                _logger.Info($"Stopped recording. {_recordCount} records written to {_filePath} (duration: {duration:hh\\:mm\\:ss})");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Error closing recording file: {ex.Message}");
-            }
-            finally
-            {
-                ctsToDispose?.Dispose();
-                _cancellationTokenSource = null;
-                _writeTask = null;
+                await session.WriteTask.ConfigureAwait(false);
             }
         }
 
-        // Raise the event after releasing the lock to avoid invoking
-        // subscriber callbacks while holding it.
-        RecordingStateChanged?.Invoke(false);
+        var result = CreateStopResult(session, completed);
+        if (!completed)
+        {
+            _logger.Error(
+                $"Recording writer did not finish within {wait}. The file is still open; " +
+                "new recordings remain disabled until it closes.");
+            return result;
+        }
+
+        var duration = DateTime.Now - session.StartTime;
+        var lossSuffix = result.HasDataLoss
+            ? $", {result.DroppedRecordCount} queue drops, {result.FailedRecordCount} failed writes"
+            : string.Empty;
+        _logger.Info(
+            $"Stopped recording. {result.RecordCount} records written to {session.FilePath}" +
+            $" (duration: {duration:hh\\:mm\\:ss}{lossSuffix})");
+        return result;
     }
+
+    private static RecordingStopResult CreateStopResult(RecordingSession? session, bool completed) =>
+        session is null
+            ? new RecordingStopResult(completed, 0, 0, 0, null)
+            : new RecordingStopResult(
+                completed,
+                Interlocked.Read(ref session.RecordCount),
+                Interlocked.Read(ref session.DroppedRecordCount),
+                Interlocked.Read(ref session.FailedRecordCount),
+                Volatile.Read(ref session.ErrorMessage));
 
     /// <summary>
     /// Record a value change. Called from the subscription's ValueChanged event.
@@ -322,10 +453,13 @@ public class CsvRecordingManager : IDisposable
     /// </summary>
     public void RecordValue(MonitoredNode item)
     {
-        if (!IsRecording)
+        RecordingSession? session;
+        lock (_lock)
         {
-            return;
+            session = _session;
         }
+
+        if (session is null) return;
 
         // Capture an immutable snapshot at enqueue time. The OPC notification
         // thread mutates the live MonitoredNode in place, so queuing the
@@ -341,62 +475,71 @@ public class CsvRecordingManager : IDisposable
             string.IsNullOrEmpty(item.RawValue) ? item.Value : item.RawValue,
             item.StatusString);
 
-        // Queue the snapshot for background writing (non-blocking)
-        _recordQueue.Enqueue(snapshot);
-        _queueSemaphore.Release();
+        long dropped = 0;
+        lock (_lock)
+        {
+            // The snapshot was built outside the lock. If Stop/Start happened
+            // meanwhile, discard it instead of contaminating the new file.
+            if (!ReferenceEquals(_session, session))
+            {
+                return;
+            }
+
+            if (!session.Queue.Writer.TryWrite(snapshot))
+            {
+                dropped = Interlocked.Increment(ref session.DroppedRecordCount);
+            }
+        }
+
+        if (dropped == 1)
+        {
+            _logger.Warning(
+                $"CSV recording queue reached its {_queueCapacity:N0}-record capacity; new records will be dropped until storage catches up");
+        }
     }
 
     /// <summary>
     /// Background task that processes the queue and writes records to the file.
     /// </summary>
-    private async Task WriteQueuedRecordsAsync(CancellationToken cancellationToken)
+    private async Task WriteQueuedRecordsAsync(RecordingSession session)
     {
         try
         {
-            while (!cancellationToken.IsCancellationRequested)
+            await foreach (var item in session.Queue.Reader.ReadAllAsync())
             {
-                // Wait for items in the queue or cancellation
-                try
-                {
-                    await _queueSemaphore.WaitAsync(cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Cancellation requested - exit the loop cleanly
-                    break;
-                }
-
-                // Check cancellation again before processing (defensive)
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-
-                // Process all queued items
-                while (_recordQueue.TryDequeue(out var item))
-                {
-                    // Check cancellation between items for faster shutdown
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        // Re-queue the item so it can be processed in the finally block
-                        _recordQueue.Enqueue(item);
-                        break;
-                    }
-                    WriteRecord(item);
-                }
+                WriteRecord(session, item);
             }
         }
         catch (Exception ex)
         {
-            _logger.Error($"Error in background writer: {ex.Message}");
+            RegisterSessionError(session, "Background writer failed", ex);
         }
         finally
         {
-            // Write any remaining queued items before exiting
-            // This runs BEFORE StopRecording disposes the writer (due to the Wait)
-            while (_recordQueue.TryDequeue(out var item))
+            try
             {
-                WriteRecord(item);
+                session.Writer.Flush();
+            }
+            catch (Exception ex)
+            {
+                RegisterSessionError(session, "Final recording flush failed", ex);
+            }
+
+            try
+            {
+                session.Writer.Dispose();
+            }
+            catch (Exception ex)
+            {
+                RegisterSessionError(session, "Recording file close failed", ex);
+            }
+
+            lock (_lock)
+            {
+                if (ReferenceEquals(_stoppingSession, session))
+                {
+                    _stoppingSession = null;
+                }
             }
         }
     }
@@ -404,50 +547,59 @@ public class CsvRecordingManager : IDisposable
     /// <summary>
     /// Write a single record to the CSV file.
     /// </summary>
-    private void WriteRecord(RecordSnapshot item)
+    private void WriteRecord(RecordingSession session, RecordSnapshot item)
     {
-        lock (_lock)
+        try
         {
-            // Only the writer guard here: _isRecording is cleared before the
-            // shutdown drain, so checking it would discard the in-flight tail
-            // (flush-on-stop and re-queue-on-cancel records).
-            if (_writer == null)
+            // Use ISO 8601 timestamp format with milliseconds for precision.
+            // InvariantCulture is required: the ':' custom-format specifier
+            // is replaced by the culture's time separator (fi-FI uses '.')
+            // and the culture's default calendar applies (th-TH uses the
+            // Buddhist calendar), which would break the ISO 8601 contract.
+            // All timestamps are normalized to UTC with an explicit 'Z'
+            // designator: OPC UA source timestamps are UTC while the
+            // no-timestamp fallback used to be local time, so a single file
+            // could silently mix timezones with no way to tell them apart.
+            var ts = item.Timestamp ?? DateTime.UtcNow;
+            if (ts.Kind == DateTimeKind.Local)
             {
-                return;
+                ts = ts.ToUniversalTime();
             }
+            // Kind=Unspecified is treated as UTC (the OPC UA convention)
+            // rather than local, so the recorded instant never shifts.
+            var timestamp = ts.ToString("yyyy-MM-ddTHH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
-            try
+            // Escape values for CSV (RFC 4180 quoting plus formula
+            // injection neutralization for server-supplied fields).
+            // The timestamp is generated locally in a fixed format, so it
+            // needs no escaping; the header line is a constant.
+            var displayName = EscapeCsvField(item.DisplayName);
+            var nodeId = EscapeCsvField(item.NodeId);
+            var value = EscapeCsvField(item.Value);
+            var status = EscapeCsvField(item.Status);
+
+            session.Writer.WriteLine($"{timestamp},{displayName},{nodeId},{value},{status}");
+
+            // Flush periodically (every 10 records) for durability without too much I/O
+            var count = Interlocked.Increment(ref session.RecordCount);
+            if (count % 10 == 0)
             {
-                // Use ISO 8601 timestamp format with milliseconds for precision.
-                // InvariantCulture is required: the ':' custom-format specifier
-                // is replaced by the culture's time separator (fi-FI uses '.')
-                // and the culture's default calendar applies (th-TH uses the
-                // Buddhist calendar), which would break the ISO 8601 contract.
-                var timestamp = item.Timestamp?.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture)
-                    ?? DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
-
-                // Escape values for CSV (RFC 4180 quoting plus formula
-                // injection neutralization for server-supplied fields).
-                // The timestamp is generated locally in a fixed format, so it
-                // needs no escaping; the header line is a constant.
-                var displayName = EscapeCsvField(item.DisplayName);
-                var nodeId = EscapeCsvField(item.NodeId);
-                var value = EscapeCsvField(item.Value);
-                var status = EscapeCsvField(item.Status);
-
-                _writer.WriteLine($"{timestamp},{displayName},{nodeId},{value},{status}");
-
-                // Flush periodically (every 10 records) for durability without too much I/O
-                Interlocked.Increment(ref _recordCount);
-                if (_recordCount % 10 == 0)
-                {
-                    _writer.Flush();
-                }
+                session.Writer.Flush();
             }
-            catch (Exception ex)
-            {
-                _logger.Warning($"Error writing record: {ex.Message}");
-            }
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Increment(ref session.FailedRecordCount);
+            RegisterSessionError(session, "Writing a recording row failed", ex);
+        }
+    }
+
+    private void RegisterSessionError(RecordingSession session, string context, Exception exception)
+    {
+        var message = $"{context}: {exception.Message}";
+        if (Interlocked.CompareExchange(ref session.ErrorMessage, message, null) is null)
+        {
+            _logger.Error(message);
         }
     }
 
@@ -505,6 +657,19 @@ public class CsvRecordingManager : IDisposable
 
     public void Dispose()
     {
-        StopRecording();
+        var result = StopRecordingAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+        if (!result.Completed)
+        {
+            _logger.Error("Recording shutdown is incomplete; the output file may be truncated.");
+        }
+        else if (result.HasDataLoss)
+        {
+            _logger.Error(
+                "Recording closed with data loss: " +
+                $"{result.DroppedRecordCount} dropped, {result.FailedRecordCount} failed" +
+                (string.IsNullOrEmpty(result.ErrorMessage)
+                    ? "."
+                    : $". {result.ErrorMessage}"));
+        }
     }
 }

@@ -12,8 +12,14 @@ The project name is **opcilloscope** (lowercase "o") in all contexts except wher
 | User-facing text, CLI, URLs | `opcilloscope` | `opcilloscope --help` |
 | C# namespaces, classes, projects | `Opcilloscope` | `namespace Opcilloscope.App` |
 | File/folder names (code) | `Opcilloscope` | `Opcilloscope.csproj` |
-| Config directories (all platforms) | `opcilloscope` | `~/.config/opcilloscope/` |
+| Config/data directories | `opcilloscope` | Use the platform locations below |
 | Release artifacts | `opcilloscope` | `opcilloscope-linux-x64.tar.gz` |
+
+Platform directories:
+- Linux configuration: `${XDG_CONFIG_HOME:-$HOME/.config}/opcilloscope/`
+- Linux application data (certificates and installed notices): `${XDG_DATA_HOME:-$HOME/.local/share}/opcilloscope/`
+- macOS configuration and application data: `~/Library/Application Support/opcilloscope/`
+- Windows configuration: `%APPDATA%\opcilloscope\`; certificates: `%LOCALAPPDATA%\opcilloscope\pki\`
 
 ## Environment Setup
 
@@ -34,17 +40,20 @@ export PATH="$HOME/.dotnet:$PATH"
 
 ```bash
 # Build
-dotnet build
+dotnet build Opcilloscope.sln
 
 # Run (from repo root)
-dotnet run
+dotnet run --project Opcilloscope.csproj
 
 # Run with a configuration file
-dotnet run -- config.cfg
-dotnet run -- --config config.cfg
+dotnet run --project Opcilloscope.csproj -- config.cfg
+dotnet run --project Opcilloscope.csproj -- --config config.cfg
 
-# Run tests
-dotnet test
+# Run the cross-platform unit, integration, and component suite
+dotnet test Opcilloscope.sln
+
+# Linux only: publish and exercise the real TUI through a PTY
+dotnet test Tests/Opcilloscope.E2ETests/Opcilloscope.E2ETests.csproj
 ```
 
 ## Command-Line Interface
@@ -54,14 +63,19 @@ Usage: opcilloscope [options] [file]
 
 Options:
   -f, --config <file>   Load configuration file (.cfg, .opcilloscope, or .json)
+  -c, --connect <url>   Reserved; direct URL connection is not yet implemented
       --insecure        Accept untrusted server certificates (development only)
   -h, --help            Show help message
 
 Examples:
   opcilloscope                           Start with empty configuration
-  opcilloscope production.cfg                Load configuration file
+  opcilloscope production.cfg            Load configuration file
   opcilloscope --config config.json      Load configuration file
 ```
+
+The Linux-only `Tests/Opcilloscope.E2ETests` project intentionally stays out
+of `Opcilloscope.sln`; see [`docs/TESTING.md`](docs/TESTING.md) for all test
+layers and exact-artifact usage.
 
 ## Project Structure
 
@@ -124,7 +138,8 @@ Opcilloscope/
 │
 ├── Utilities/
 │   ├── Logger.cs                   # In-app logging service
-│   ├── UiThread.cs                 # Thread marshalling for UI updates
+│   ├── UiThread.cs                 # Thread marshalling for UI updates (via TerminalUi)
+│   ├── TerminalUi.cs               # Instance-based IApplication access (timers, dialogs, message boxes, clipboard)
 │   ├── CsvRecordingManager.cs      # Background CSV recording of monitored values
 │   ├── OpcValueConverter.cs        # OPC UA value type conversion utilities
 │   ├── TaskExtensions.cs           # Async task helper extensions (FireAndForget)
@@ -195,8 +210,7 @@ Opcilloscope uses JSON-based configuration files with the `.cfg` extension:
 {
   "version": "1.0",
   "server": {
-    "endpointUrl": "opc.tcp://localhost:4840",
-    "securityMode": "None"
+    "endpointUrl": "opc.tcp://localhost:4840"
   },
   "settings": {
     "publishingIntervalMs": 1000,
@@ -218,11 +232,17 @@ Opcilloscope uses JSON-based configuration files with the `.cfg` extension:
 }
 ```
 
+An automatic/omitted or partial security profile requires a
+`SignAndEncrypt` endpoint and selects the strongest matching candidate.
+Explicit `securityMode: "Sign"` opts into signed-but-unencrypted traffic.
+Explicit `securityMode: "None"` is the unsecured plaintext opt-in for an
+anonymous connection; username authentication never permits `None`.
+
 ### Theme System
 Three built-in themes with consistent styling:
 - **DarkTheme** (default): Dark background, high contrast for terminal use
 - **LightTheme**: Light background for bright environments
-- **TerminalTheme**: Inherits the terminal's own ANSI color palette. Uses only the 16 named ANSI colors (`ColorName16`) and enables `Application.Force16Colors` so the driver emits standard SGR color codes instead of 24-bit RGB — the terminal renders them with its configured scheme. `ThemeManager.SetTheme` toggles `Force16Colors` automatically via `AppTheme.UseTerminalColors`.
+- **TerminalTheme**: Inherits the terminal's own ANSI color palette. Uses only the 16 named ANSI colors (`ColorName16`) and enables `TerminalUi.Driver.Force16Colors` so the driver emits standard SGR color codes instead of 24-bit RGB — the terminal renders them with its configured scheme. `ThemeManager.SetTheme` toggles `Force16Colors` automatically via `AppTheme.UseTerminalColors`.
 
 Toggle themes via View menu (cycles Dark → Light → Terminal) or programmatically:
 ```csharp
@@ -251,27 +271,56 @@ Record monitored variable values to CSV files:
 - Use `Height = n` instead of `Dim.Sized(n)`
 - Use `SetNeedsLayout()` or `Update()` instead of `SetNeedsDisplay()`
 - `ListView.SetSource()` requires `ObservableCollection<T>`
-- Use `Application.Invoke()` for thread marshalling (no MainLoop)
-- Use `Application.AddTimeout()` for periodic updates
+
+#### Instance-based application model (do NOT use the static `Application`)
+Terminal.Gui 2.4 deprecated the legacy static `Application` object (`Application.Invoke`,
+`AddTimeout`, `Run`, `RequestStop`, `Instance`, `Driver`, `KeyDown`, `Init`/`Shutdown`, the
+static `Clipboard`, etc.). The whole static surface is `[Obsolete]` and will be removed in a
+future release, and `TreatWarningsAsErrors` is on — so a static-`Application` call is a build
+error, not a warning. The app uses the instance-based model (`Application.Create()` →
+`IApplication`) instead:
+- `Program.Main` owns the lifecycle: `Application.Create()` → `app.Init()` →
+  `app.Run(mainWindow)` → `app.Dispose()` (Dispose replaces the obsolete `Shutdown`). It stores
+  the instance in `TerminalUi.App`.
+- **All UI code routes through the helpers in `Utilities/`, never the static `Application`:**
+  - `UiThread.Run(...)` — marshal an action onto the UI thread (thread marshalling; no MainLoop)
+  - `TerminalUi.AddTimeout(...)` / `RemoveTimeout(...)` — periodic/one-shot main-loop timers
+  - `TerminalUi.RunModal(dialog)` / `RequestStop()` — open/close a modal dialog
+  - `TerminalUi.Query(...)` / `ErrorQuery(...)` — message boxes (no need to pass the app instance)
+  - `TerminalUi.TrySetClipboardData(...)` — OS clipboard
+  - `TerminalUi.Driver`, `TopRunnableView`, `IsTopRunnable(...)`, `Add`/`RemoveKeyDownHandler(...)`
+- The direct `IApplication` uses (`Create`/`Init`/`Run`/`Dispose`, keyboard, driver) are confined
+  to `Program.cs`, `TerminalUi`, and `ThemeManager`. Add new helpers to `TerminalUi` rather than
+  reaching for the static API. In headless unit tests `TerminalUi.App` is null: fire-and-forget
+  helpers (Invoke, timers, clipboard) no-op and interactive ones (modal dialogs, message boxes) throw.
 
 ### OPC Foundation SDK API
 - Uses `Opc.Ua.Client.Session` for connection management
 - Uses proper OPC UA Subscriptions with `Subscription` and `MonitoredItem` classes
-- MonitoredItem notifications are pushed by the server (not polling)
+- MonitoredItem data-change notifications are delivered through OPC UA subscriptions (not repeated reads and not the OPC UA PubSub transport model)
 - `NodeId` constructor: `new NodeId(uint identifier)` or `new NodeId(ushort namespaceIndex, uint identifier)`
 - Use `ExpandedNodeId.ToNodeId(expandedNodeId, session.NamespaceUris)` for conversion
 - Use `ObjectIds.RootFolder` for the root node (ns=0;i=84)
 - `StatusCode.Code` returns the uint value; check with `StatusCodes.Good`, `StatusCodes.BadUnexpectedError`, etc.
 - Use `Attributes.Value`, `Attributes.DataType`, etc. for attribute IDs
-- Certificate validation: Set `AutoAcceptUntrustedCertificates = true` for development
+- An automatic/omitted or partial security profile requires `SignAndEncrypt` and selects the strongest matching endpoint. Explicit `SecurityMode=Sign` opts into signed-but-unencrypted traffic. Explicit anonymous `SecurityMode=None` opts into unsecured plaintext; username credentials never permit `None`.
+- Certificate validation rejects untrusted certificates by default. The `--insecure` CLI option may be used for a development run only; it changes certificate trust, not transport security. Production certificates belong in the trusted-peer store reported in the connection log.
 
 ### DiscoveryClient API
 The `DiscoveryClient.Create` method requires `EndpointConfiguration`, not `ApplicationConfiguration`:
 
+`DiscoveryClient.Create` and `Session.Create` are obsolete in the current SDK.
+The existing wrapper uses narrowly scoped `CS0618` pragmas because the async
+factory replacements require additional telemetry setup. Do not copy these
+calls into new code without the same documented justification, and never add
+a project-wide suppression.
+
 ```csharp
 // Correct usage - create EndpointConfiguration first
 var endpointConfig = EndpointConfiguration.Create(config);
+#pragma warning disable CS0618 // Existing wrapper exception: async factory needs telemetry setup
 using var client = DiscoveryClient.Create(uri, endpointConfig);
+#pragma warning restore CS0618
 var endpoints = await client.GetEndpointsAsync(null);
 
 // Valid DiscoveryClient.Create overloads:
@@ -301,7 +350,9 @@ await _server.StopAsync();
 ### Key OPC Foundation Classes
 ```csharp
 // Session creation
+#pragma warning disable CS0618 // Existing wrapper exception: async factory needs telemetry setup
 var session = await Session.Create(config, endpoint, false, "SessionName", 60000, new UserIdentity(new AnonymousIdentityToken()), null);
+#pragma warning restore CS0618
 
 // Subscription creation
 var subscription = new Subscription(session.DefaultSubscription) {
@@ -309,7 +360,7 @@ var subscription = new Subscription(session.DefaultSubscription) {
     PublishingEnabled = true
 };
 session.AddSubscription(subscription);
-subscription.Create();
+await subscription.CreateAsync();
 
 // MonitoredItem creation
 var monitoredItem = new MonitoredItem(subscription.DefaultItem) {
@@ -319,7 +370,7 @@ var monitoredItem = new MonitoredItem(subscription.DefaultItem) {
 };
 monitoredItem.Notification += OnNotification;
 subscription.AddItem(monitoredItem);
-subscription.ApplyChanges();
+await subscription.ApplyChangesAsync();
 ```
 
 ### ConnectionManager Pattern
@@ -339,7 +390,7 @@ await connectionManager.ConnectAsync("opc.tcp://localhost:4840");
 await connectionManager.SubscribeAsync(nodeId, displayName);
 await connectionManager.UnsubscribeAsync(clientHandle);
 await connectionManager.ReconnectAsync();
-connectionManager.Disconnect();
+await connectionManager.DisconnectAsync();
 ```
 
 ### NuGet Packages
@@ -414,12 +465,13 @@ Available test nodes:
 OPC Foundation callbacks arrive on background threads. All UI updates are marshalled to the UI thread:
 
 ```csharp
-// Using UiThread helper
+// Marshal onto the UI thread with the UiThread helper
 UiThread.Run(() => _monitoredVariablesView.UpdateVariable(variable));
-
-// Using Application.Invoke directly
-Application.Invoke(() => SetNeedsLayout());
+UiThread.Run(() => SetNeedsLayout());
 ```
+
+Do not call the deprecated static `Application.Invoke()` directly — `UiThread.Run` wraps the
+instance-based `IApplication.Invoke` (see the "Instance-based application model" note above).
 
 ### Async Pattern with FireAndForget
 For async operations from synchronous event handlers:
@@ -433,30 +485,35 @@ _connectionManager.SubscribeAsync(nodeId, displayName).FireAndForget(_logger);
 The address space tree uses lazy loading - child nodes are only fetched when a parent is expanded, preventing memory issues with large address spaces.
 
 ### OPC UA Subscriptions
-Uses proper OPC UA Publish/Subscribe with `MonitoredItem.Notification` events - values are pushed by the server, no polling required.
+Uses OPC UA client/server `Subscription` and `MonitoredItem` services with `MonitoredItem.Notification` events, so values arrive as data-change notifications instead of repeated reads. This is not the separate OPC UA PubSub transport model.
 
 ### Error Handling
 - Connection errors display in the log panel without crashing
 - Automatic reconnection with exponential backoff (1s, 2s, 4s, 8s)
 - Graceful handling of bad node IDs and access denied errors
-- CSV recording continues silently on individual write failures
+- CSV recording logs write failures, counts failed/dropped records, and reports data loss when recording stops
 
 ## CI/CD Workflows
 
 ### CI Workflow (ci.yml)
-Runs on push/PR to main:
-- Checkout, setup .NET 10, restore, build (Release), test
+Runs on push/PR to main and gates locked dependency restore, third-party
+inventory validation, formatting, the Release solution build, cross-platform
+tests, single-file layout, CLI smoke, and Linux real-PTY E2E tests against the
+exact published artifact.
 
 ### Release Workflow (release.yml)
-Automates release builds and publishing.
+Runs the cross-platform suite, then builds six locked RIDs. The native Linux
+artifact also passes the real-PTY E2E suite; native host artifacts pass CLI
+smokes. Archives preserve executable permissions, licenses, exact runtime
+notices, and are published with `SHA256SUMS` under least-privilege permissions.
 
 ## Common Issues
 
 1. **`dotnet` command not found**: Install .NET SDK using the install script (see Environment Setup above)
-2. **Tests fail with Xunit errors in main project**: Ensure `tests/**` is excluded in Opcilloscope.csproj
-3. **UI thread exceptions**: Always use `Application.Invoke()` or `UiThread.Run()` for UI updates from background threads
+2. **Tests fail with Xunit errors in main project**: Ensure `Tests/**` is excluded in Opcilloscope.csproj
+3. **UI thread exceptions**: Always use `UiThread.Run()` for UI updates from background threads (it marshals via the instance-based `IApplication.Invoke`; do not call the deprecated static `Application.Invoke()`)
 4. **Ambiguous NodeBrowser reference**: OPC Foundation has its own `Browser` class - use fully qualified names if needed
-5. **Certificate validation errors**: Set `AutoAcceptUntrustedCertificates = true` in SecurityConfiguration for development
+5. **Certificate validation errors**: Trust the server certificate in the path reported by the connection log, or re-run with `--insecure` for development only. This does not reduce message security: automatic/partial profiles still require `SignAndEncrypt`; only explicit `Sign` or anonymous `None` opts down.
 6. **Integration tests fail with "Unexpected error starting application"**: The OPC UA test server requires specific environment permissions - unit tests will still pass
 7. **Theme not applying correctly**: Ensure `ApplyTheme()` is called after all controls are created
 

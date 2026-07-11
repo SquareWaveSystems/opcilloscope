@@ -16,10 +16,10 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 
 | Traditional OPC Clients | opcilloscope |
 |------------------------|--------------|
-| Heavy desktop apps | Single portable binary |
+| Heavy desktop apps | Single self-contained executable |
 | Minutes to install | `curl \| bash` and you're running |
-| Resource-hungry GUIs | ~40 MB RAM |
-| Windows-only | Windows, Linux, macOS (x64 & ARM) |
+| Resource-hungry GUIs | Terminal-native interface |
+| Windows-only | Windows, Linux, macOS (x64 & ARM64) |
 | Click-heavy workflows | Keyboard-driven, mouse support |
 
 **Use cases:** commissioning (verify PLC tags), troubleshooting (live values during fault diagnosis), integration testing (validate OPC UA server configs), recording (export to CSV for reports).
@@ -27,16 +27,16 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 ## Features
 
 - **Browse** — Lazily explore the OPC UA address space. Expand only what you need.
-- **Monitor** — Subscribe to variables with `Enter`. Real-time updates via OPC UA pub/sub, not polling.
+- **Monitor** — Subscribe to variables with `Enter`. Receive OPC UA monitored-item notifications instead of polling values.
 - **Inspect** — Full node attributes: Description, DataType, AccessLevel, ValueRank.
 - **Scope** — Real-time multi-signal oscilloscope (up to 5 signals, 30 s sliding window).
-- **Record** — Export monitored values to CSV. Zero data loss — every server-pushed sample is captured at full precision in a locale-independent format (ISO 8601 timestamps, `.` decimal separator, arrays as semicolon-joined elements).
+- **Record** — Export selected monitored variables to CSV. Notifications are queued with full-precision, locale-independent values (ISO 8601 UTC timestamps, `.` decimal separator, arrays as semicolon-joined elements). A bounded queue protects the UI if storage falls behind, and any dropped records are reported when recording stops.
 - **Configure** — Save/load connection and subscription configs (`.cfg` JSON files).
 - **Themes** — Dark (default), light, and terminal (inherits your terminal's ANSI colour scheme).
 
 <p align="center">
-  <img src="docs/theme-dark.png" alt="Dark theme" width="49%">
-  <img src="docs/theme-light.png" alt="Light theme" width="49%">
+  <img src="docs/pr165/main-dark.png" alt="Dark theme" width="49%">
+  <img src="docs/pr165/main-light.png" alt="Light theme" width="49%">
 </p>
 
 <p align="center">
@@ -47,26 +47,28 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 <details>
 <summary><strong>How signal sampling works</strong></summary>
 
-opcilloscope does **not** poll your OPC UA server. The server *pushes* value updates using OPC UA's built-in publish/subscribe mechanism.
+opcilloscope does **not** repeatedly read each value. It creates OPC UA subscriptions and monitored items, then processes the data-change notifications delivered by the server. This is distinct from the OPC UA PubSub transport model.
 
 ```
 OPC UA Server
-  │  pushes values every 250ms (configurable 100ms–10s)
+  │  samples monitored items (250 ms requested by default)
+  │  delivers subscription notifications (250 ms publishing interval by default)
   ▼
-opcilloscope receives value change events
-  ├─→ Scope View     — stores every sample (up to 2,000 per signal)
-  └─→ CSV Recording  — writes every sample to disk (zero data loss)
+opcilloscope receives data-change notifications
+  ├─→ Scope View     — retains up to 2,000 numeric samples per signal while open
+  └─→ CSV Recording  — queues selected-variable notifications for background writes
 ```
 
 Data capture and screen rendering are decoupled:
 
 | What | Rate | Details |
 |------|------|---------|
-| Server → Client updates | ~4 Hz (250 ms) | Default publishing + sampling interval, adjustable in connect dialog |
+| Server sampling | 250 ms requested | Configurable through a saved configuration; the server may revise the interval |
+| Subscription publishing | 250 ms by default | Adjustable from 100 ms to 10 s in the connect dialog |
 | Scope redraw | 10 FPS (100 ms) | Renders whatever samples arrived since last frame |
-| CSV recording | Every update | Captures 100% of server-pushed values, flushes every 10 records |
+| CSV recording | Every accepted notification for selected variables | Uses a 10,000-record bounded queue and flushes every 10 records |
 
-The scope view holds a sliding **30-second window** (zoomable 5 s – 300 s). Display resolution is limited by terminal width — each character cell is one data point.
+The scope view starts with a sliding **30-second window** (zoomable from 5 s to 300 s). It draws with Unicode braille subcells, so display resolution depends on the terminal's dimensions.
 
 </details>
 
@@ -81,7 +83,7 @@ The scope view holds a sliding **30-second window** (zoomable 5 s – 300 s). Di
 | `Space` | Toggle selection / pause scope |
 | `S` | Open scope with selected variables |
 | `W` | Write value to node |
-| `R` | Toggle CSV recording (monitored variables) |
+| `R` | Toggle CSV recording (selected monitored variables) |
 | `+` / `-` | Zoom in / out (scope) |
 | `Ctrl+O` / `Ctrl+S` | Open / save configuration |
 | `Ctrl+R` | Toggle CSV recording |
@@ -101,6 +103,10 @@ irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/instal
 
 Or grab a binary from [GitHub Releases](https://github.com/SquareWaveSystems/opcilloscope/releases).
 
+Release archives include the self-contained executable, the project license, and notices for bundled third-party components. The installers preserve those notices in an app-owned license directory.
+
+The installers require the matching release checksum and refuse an unverified download. On Windows, the default install directory is added to your user `PATH`; a custom `OPCILLOSCOPE_INSTALL_DIR` is treated as shared and leaves `PATH` unchanged.
+
 > **macOS note:** the binaries are unsigned, so archives downloaded with a browser are
 > quarantined by Gatekeeper. Either use the curl installer above, or clear the
 > quarantine attribute after extracting: `xattr -d com.apple.quarantine <binary>`.
@@ -110,6 +116,18 @@ Then run:
 opcilloscope
 ```
 
+An automatic/omitted or partial security profile requires a `SignAndEncrypt`
+endpoint and selects the strongest matching candidate offered by the server.
+Explicit `securityMode: "Sign"` opts into signed-but-unencrypted traffic.
+Explicit anonymous `securityMode: "None"` opts into unsecured plaintext;
+username authentication never permits `None`.
+
+Server certificates that fail validation are rejected by default. For a
+development server, `opcilloscope --insecure` disables server certificate
+validation for that run; it does not enable plaintext transport. Do not use
+this option in production. The connection log reports the trusted-certificate
+store path when validation fails.
+
 <details>
 <summary>Uninstall</summary>
 
@@ -118,11 +136,21 @@ opcilloscope
 curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/uninstall.sh | bash
 ```
 
-Or manually:
+Or manually on Linux:
 ```bash
 rm ~/.local/bin/opcilloscope
-rm -rf ~/.config/opcilloscope/       # optional: remove config files
-rm -rf ~/.local/share/opcilloscope/  # optional: remove OPC UA certificates
+rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/opcilloscope/licenses"
+rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/opcilloscope"  # optional: configs and recent files
+rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/opcilloscope/pki"  # optional: certificates
+```
+
+Or manually on macOS:
+```bash
+rm ~/.local/bin/opcilloscope
+rm -rf "$HOME/Library/Application Support/opcilloscope/licenses"
+rm -rf "$HOME/Library/Application Support/opcilloscope/configs"  # optional
+rm -f "$HOME/Library/Application Support/opcilloscope/recent-files.json"  # optional
+rm -rf "$HOME/Library/Application Support/opcilloscope/pki"  # optional: certificates
 ```
 
 **Windows (PowerShell):**
@@ -132,12 +160,23 @@ irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/uninst
 
 Or manually:
 ```powershell
-Remove-Item "$env:LOCALAPPDATA\Opcilloscope" -Recurse -Force   # binary
-Remove-Item "$env:LOCALAPPDATA\opcilloscope" -Recurse -Force   # OPC UA certificates
-Remove-Item "$env:APPDATA\opcilloscope" -Recurse -Force        # config files
+$installDir = "$env:LOCALAPPDATA\Programs\opcilloscope"
+Remove-Item "$installDir\opcilloscope.exe" -Force
+Remove-Item "$installDir\opcilloscope-licenses" -Recurse -Force
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+$pathEntries = @($userPath -split ";" | Where-Object { $_.Trim().TrimEnd('\') -ine $installDir.TrimEnd('\') })
+[Environment]::SetEnvironmentVariable("Path", ($pathEntries -join ";"), "User")
+Remove-Item "$env:APPDATA\opcilloscope" -Recurse -Force             # optional: configs and recent files
+Remove-Item "$env:LOCALAPPDATA\opcilloscope\pki" -Recurse -Force    # optional: certificates
 ```
 
-If you installed to a custom directory (`OPCILLOSCOPE_INSTALL_DIR`), replace the paths above with your custom install location.
+If you set `OPCILLOSCOPE_INSTALL_DIR`, replace only the executable path above on
+Linux/macOS; license notices remain in the platform data directory shown above.
+On Windows, replace both `$installDir` executable/license paths with the custom
+directory and skip the `PATH`-removal lines; the installer never adds a custom
+directory to `PATH`. Configuration and certificate locations do not move. The
+uninstall scripts remove only files owned by opcilloscope rather than recursively
+deleting a shared custom install directory.
 
 </details>
 
@@ -148,21 +187,30 @@ Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 ```bash
 git clone https://github.com/SquareWaveSystems/opcilloscope.git
 cd opcilloscope
-dotnet build
-dotnet run
+dotnet build Opcilloscope.sln
+dotnet run --project Opcilloscope.csproj
 ```
 
-Run tests:
+Run the cross-platform unit, integration, and component suite:
 ```bash
-dotnet test
+dotnet test Opcilloscope.sln
 ```
+
+On Linux, also exercise a freshly published binary through the real PTY E2E
+harness:
+
+```bash
+dotnet test Tests/Opcilloscope.E2ETests/Opcilloscope.E2ETests.csproj
+```
+
+See [docs/TESTING.md](docs/TESTING.md) for test layers and exact-artifact usage.
 
 ## OPC UA Test Servers
 
 **Built-in test server** (Counter, SineWave, RandomValue, writable nodes):
 ```bash
 dotnet run --project Tests/Opcilloscope.TestServer
-# Starts at opc.tcp://localhost:4840
+# Starts at opc.tcp://localhost:4840/UA/OpcilloscopeTest
 ```
 
 **Public servers** (no setup required):
@@ -181,7 +229,7 @@ docker run -p 50000:50000 mcr.microsoft.com/iotedge/opc-plc:latest \
 
 ## Contributing
 
-Contributions welcome! Please submit an issue or a pull request.
+Contributions welcome! Please submit an issue or a pull request, and see [CONTRIBUTING.md](CONTRIBUTING.md) for development and review guidance.
 
 ## License
 
@@ -190,7 +238,7 @@ The opcilloscope **source code** is MIT-licensed — see [LICENSE](LICENSE).
 Official **binary releases** are self-contained builds that bundle the
 [OPC Foundation UA .NET Standard](https://github.com/OPCFoundation/UA-.NETStandard)
 stack and other third-party components. The bundled stack version
-(1.5.378.65) is distributed by the OPC Foundation under its MIT license;
+(1.5.378.156) is distributed by the OPC Foundation under its MIT license;
 earlier versions of that stack were dual-licensed GPL-2.0/RCL. See
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the full list of bundled
 components and their licenses.

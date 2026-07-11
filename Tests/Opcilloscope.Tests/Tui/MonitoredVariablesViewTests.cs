@@ -19,13 +19,19 @@ namespace Opcilloscope.Tests.Tui;
 [Collection("Tui")]
 public class MonitoredVariablesViewTests
 {
-    private static MonitoredNode Node(uint handle, string name, bool scope = false) => new()
-    {
-        ClientHandle = handle,
-        NodeId = $"ns=2;s={name}",
-        DisplayName = name,
-        IsSelectedForScope = scope,
-    };
+    private static MonitoredNode Node(
+        uint handle,
+        string name,
+        bool scope = false,
+        long connectionGeneration = 0) => new()
+        {
+            ClientHandle = handle,
+            ConnectionGeneration = connectionGeneration,
+            NodeId = $"ns=2;s={name}",
+            DisplayName = name,
+            Value = name,
+            IsSelectedForScope = scope,
+        };
 
     [Fact]
     public void NewView_StartsEmpty()
@@ -72,5 +78,84 @@ public class MonitoredVariablesViewTests
 
         Assert.Single(view.ScopeSelectedNodes);
         Assert.Equal("SineWave", view.ScopeSelectedNodes[0].DisplayName);
+    }
+
+    [Fact]
+    public void ProcessPendingUpdates_UpdateArrivesDuringIdleTransition_KeepsProcessingAlive()
+    {
+        using var view = new MonitoredVariablesView();
+        var variable = Node(1, "initial");
+        view.AddVariable(variable);
+        variable.Value = "first";
+        view.UpdateVariable(variable);
+
+        var keepRunning = view.ProcessPendingUpdatesForTest(
+            () =>
+            {
+                variable.Value = "second";
+                view.UpdateVariable(variable);
+            });
+
+        Assert.True(keepRunning);
+        Assert.Equal(1, view.PendingUpdateCountForTest);
+
+        Assert.False(view.ProcessPendingUpdatesForTest());
+        Assert.Equal("second", view.GetDisplayedValueForTest(1));
+    }
+
+    [Theory]
+    [InlineData(1L)] // Fresh manager created by a reconnect fallback in the same generation.
+    [InlineData(2L)] // Fresh manager created by a later connection generation.
+    public void Clear_InvalidatesQueuedAndLateOldSessionUpdatesBeforeClientHandleReuse(
+        long newConnectionGeneration)
+    {
+        var timerToken = new object();
+        Func<bool>? timerCallback = null;
+        object? removedTimer = null;
+        using var view = new MonitoredVariablesView(
+            (_, callback) =>
+            {
+                timerCallback = callback;
+                return timerToken;
+            },
+            token => removedTimer = token);
+
+        var oldVariable = Node(1, "old-live", connectionGeneration: 1);
+        view.AddVariable(oldVariable);
+        oldVariable.Value = "old-pending";
+        view.UpdateVariable(oldVariable);
+        Assert.NotNull(timerCallback);
+
+        view.Clear();
+        view.AddVariable(Node(
+            1,
+            "new-session",
+            connectionGeneration: newConnectionGeneration));
+
+        // A notification already in flight from the old SubscriptionManager can
+        // reach the view after Clear. Its reused handle must not target the new row.
+        oldVariable.Value = "late-old-session-update";
+        view.UpdateVariable(oldVariable);
+
+        Assert.Same(timerToken, removedTimer);
+        Assert.False(timerCallback!());
+        Assert.False(view.ProcessPendingUpdatesForTest());
+        Assert.Equal(0, view.PendingUpdateCountForTest);
+        Assert.Equal("new-session", view.GetDisplayedValueForTest(1));
+    }
+
+    [Fact]
+    public void ReconcileVariables_RebuildsMembershipAndPreservesScopeSelection()
+    {
+        using var view = new MonitoredVariablesView();
+        var retained = Node(2, "retained", connectionGeneration: 2, scope: true);
+        view.AddVariable(Node(1, "removed", connectionGeneration: 1));
+
+        view.ReconcileVariables([retained]);
+
+        Assert.Null(view.GetDisplayedValueForTest(1));
+        Assert.Equal("retained", view.GetDisplayedValueForTest(2));
+        Assert.True(retained.IsSelectedForScope);
+        Assert.Equal(1, view.ScopeSelectionCount);
     }
 }

@@ -707,8 +707,9 @@ public class ConfigurationServiceTests : IDisposable
             1000,
             new List<MonitoredNode>());
 
-        // Assert: model defaults are used rather than throwing or nulling fields.
-        Assert.Equal("None", config.Server.SecurityMode);
+        // Assert: an omitted profile means secure automatic selection rather
+        // than silently opting into SecurityMode=None.
+        Assert.Null(config.Server.SecurityMode);
         Assert.Equal(250, config.Settings.SamplingIntervalMs);
         Assert.Equal((uint)10, config.Settings.QueueSize);
     }
@@ -989,6 +990,57 @@ public class ConfigurationServiceTests : IDisposable
 
         // Assert
         Assert.Equal("1.0", loaded.Version);
+    }
+
+    [Theory]
+    [InlineData("Certificate", "operator")]
+    [InlineData("FutureAuth", "operator")]
+    [InlineData("UserName", "")]
+    public async Task LoadAsync_InvalidAuthentication_DoesNotSilentlyDowngradeToAnonymous(
+        string authenticationType,
+        string username)
+    {
+        var filePath = Path.Combine(_tempDir, "invalid-auth.cfg");
+        var json = $$"""
+        {
+          "version": "1.0",
+          "server": {
+            "endpointUrl": "opc.tcp://localhost:4840",
+            "authentication": {
+              "type": "{{authenticationType}}",
+              "username": "{{username}}"
+            }
+          },
+          "settings": {},
+          "monitoredNodes": [],
+          "metadata": {}
+        }
+        """;
+        await File.WriteAllTextAsync(filePath, json);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => _service.LoadAsync(filePath));
+    }
+
+    [Fact]
+    public async Task LoadAsync_MissingSecurityMode_RemainsSecureAutoSelection()
+    {
+        var filePath = Path.Combine(_tempDir, "auto-security.cfg");
+        await File.WriteAllTextAsync(filePath, """
+        {
+          "version": "1.0",
+          "server": {
+            "endpointUrl": "opc.tcp://localhost:4840",
+            "authentication": { "type": "Anonymous" }
+          },
+          "settings": {},
+          "monitoredNodes": [],
+          "metadata": {}
+        }
+        """);
+
+        var loaded = await _service.LoadAsync(filePath);
+
+        Assert.Null(loaded.Server.SecurityMode);
     }
 
     #endregion

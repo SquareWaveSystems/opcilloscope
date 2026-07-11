@@ -1,4 +1,5 @@
 using Terminal.Gui;
+using Opcilloscope.Utilities;
 using Opcilloscope.OpcUa.Models;
 using Opcilloscope.App.Themes;
 using System.Collections.Concurrent;
@@ -25,8 +26,12 @@ public class MonitoredVariablesView : FrameView
     // This reduces table redraws from potentially 100+/sec to max 20/sec.
     private const int UpdateBatchIntervalMs = 50;
     private readonly ConcurrentDictionary<uint, MonitoredNode> _pendingUpdates = new();
+    private readonly Func<TimeSpan, Func<bool>, object?> _addTimeout;
+    private readonly Action<object> _removeTimeout;
     private object? _updateTimer;
     private bool _updateTimerRunning;
+    private long _updateTimerEpoch;
+    private bool _disposed;
     private readonly object _timerLock = new();
 
     private readonly TableView _tableView;
@@ -92,7 +97,17 @@ public class MonitoredVariablesView : FrameView
     public int ScopeSelectionCount => _cachedScopeSelectionCount;
 
     public MonitoredVariablesView()
+        : this(TerminalUi.AddTimeout, TerminalUi.RemoveTimeout)
     {
+    }
+
+    internal MonitoredVariablesView(
+        Func<TimeSpan, Func<bool>, object?> addTimeout,
+        Action<object> removeTimeout)
+    {
+        _addTimeout = addTimeout ?? throw new ArgumentNullException(nameof(addTimeout));
+        _removeTimeout = removeTimeout ?? throw new ArgumentNullException(nameof(removeTimeout));
+
         Title = " Monitored Variables ";
         CanFocus = true;
 
@@ -221,7 +236,7 @@ public class MonitoredVariablesView : FrameView
 
     private void OnThemeChanged(AppTheme theme)
     {
-        Application.Invoke(() =>
+        UiThread.Run(() =>
         {
             BorderStyle = theme.EmphasizedBorderStyle;
 
@@ -282,97 +297,203 @@ public class MonitoredVariablesView : FrameView
 
     public void UpdateVariable(MonitoredNode variable)
     {
-        // Queue the update for batched processing
-        _pendingUpdates[variable.ClientHandle] = variable;
-
-        // Start the update timer if not already running
-        EnsureUpdateTimerRunning();
-    }
-
-    /// <summary>
-    /// Ensures the batched update timer is running.
-    /// </summary>
-    private void EnsureUpdateTimerRunning()
-    {
+        long timerEpoch;
         lock (_timerLock)
         {
-            if (_updateTimerRunning)
+            if (_disposed)
+            {
                 return;
+            }
+
+            // Enqueue and inspect timer state under one lock. Clear() uses the
+            // same lock, so an update is linearized wholly before or after a
+            // session reset instead of leaking across it.
+            if (_rowsByHandle.TryGetValue(variable.ClientHandle, out var row)
+                && !HasSameUpdateSource(row, variable))
+            {
+                // Client handles restart for each SubscriptionManager. An old
+                // notification can reach the UI after Clear() and collide with a
+                // new row's handle, so require matching connection provenance.
+                return;
+            }
+
+            _pendingUpdates[variable.ClientHandle] = variable;
+            if (_updateTimerRunning)
+            {
+                return;
+            }
 
             _updateTimerRunning = true;
-            _updateTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(UpdateBatchIntervalMs), ProcessPendingUpdates);
+            timerEpoch = ++_updateTimerEpoch;
+        }
+
+        object? timer;
+        try
+        {
+            timer = _addTimeout(
+                TimeSpan.FromMilliseconds(UpdateBatchIntervalMs),
+                () => ProcessPendingUpdates(timerEpoch));
+        }
+        catch
+        {
+            lock (_timerLock)
+            {
+                if (_updateTimerEpoch == timerEpoch)
+                {
+                    _updateTimerRunning = false;
+                    _updateTimer = null;
+                }
+            }
+            throw;
+        }
+
+        object? staleTimer = null;
+        lock (_timerLock)
+        {
+            // Clear()/Dispose() may invalidate this registration while the
+            // scheduler call is in progress. Never publish a stale token.
+            if (_disposed || _updateTimerEpoch != timerEpoch || !_updateTimerRunning)
+            {
+                staleTimer = timer;
+            }
+            else if (timer is null)
+            {
+                // Headless tests have no application timer. Leave the queued
+                // value available to the deterministic processing seam.
+                _updateTimerRunning = false;
+            }
+            else
+            {
+                _updateTimer = timer;
+            }
+        }
+
+        if (staleTimer is not null)
+        {
+            _removeTimeout(staleTimer);
         }
     }
 
     /// <summary>
     /// Processes all pending variable updates in a single batch.
     /// </summary>
-    private bool ProcessPendingUpdates()
+    private bool ProcessPendingUpdates(long timerEpoch) =>
+        ProcessPendingUpdatesCore(timerEpoch);
+
+    /// <summary>
+    /// Deterministic seam for exercising the transition between observing an
+    /// empty queue and retiring the update timer.
+    /// </summary>
+    internal bool ProcessPendingUpdatesForTest(Action? beforeIdleTransition = null)
     {
-        // Defensive check - handle case where disposal happens concurrently
-        if (_pendingUpdates.IsEmpty)
+        long timerEpoch;
+        lock (_timerLock)
         {
-            lock (_timerLock)
+            if (!_updateTimerRunning)
             {
-                _updateTimerRunning = false;
+                _updateTimerRunning = true;
+                _updateTimerEpoch++;
             }
-            return false;
+            timerEpoch = _updateTimerEpoch;
         }
 
-        // Snapshot and clear pending updates
-        var keys = _pendingUpdates.Keys.ToList();
-        var updates = new List<(uint ClientHandle, MonitoredNode Variable)>();
-
-        foreach (var key in keys)
-        {
-            if (_pendingUpdates.TryRemove(key, out var variable))
-            {
-                updates.Add((key, variable));
-            }
-        }
-
-        if (updates.Count == 0)
-        {
-            // No more updates - stop the timer
-            lock (_timerLock)
-            {
-                _updateTimerRunning = false;
-            }
-            return false;
-        }
-
-        // Apply all updates to DataTable rows
-        foreach (var (clientHandle, variable) in updates)
-        {
-            if (_rowsByHandle.TryGetValue(clientHandle, out var row))
-            {
-                row["Access"] = variable.AccessString;
-                row["Sel"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
-                row["Value"] = variable.Value;
-                row["Time"] = variable.TimestampString;
-                row["Status"] = FormatStatusWithIcon(variable);
-            }
-        }
-
-        // Check if more updates arrived while we were processing (before redraw)
-        // This avoids a race condition where updates arriving between Update() and
-        // IsEmpty check would be orphaned until the next UpdateVariable() call
-        bool hasMoreUpdates = !_pendingUpdates.IsEmpty;
-
-        // Single table redraw for all updates
-        _tableView.Update();
-
-        if (!hasMoreUpdates)
-        {
-            lock (_timerLock)
-            {
-                _updateTimerRunning = false;
-            }
-            return false; // Stop timer
-        }
-
-        return true; // Continue timer for remaining updates
+        return ProcessPendingUpdatesCore(timerEpoch, beforeIdleTransition);
     }
+
+    internal int PendingUpdateCountForTest
+    {
+        get
+        {
+            lock (_timerLock)
+            {
+                return _pendingUpdates.Count;
+            }
+        }
+    }
+
+    internal string? GetDisplayedValueForTest(uint clientHandle) =>
+        _rowsByHandle.TryGetValue(clientHandle, out var row)
+            ? row["Value"] as string
+            : null;
+
+    private bool ProcessPendingUpdatesCore(
+        long timerEpoch,
+        Action? beforeIdleTransition = null)
+    {
+        List<(uint ClientHandle, MonitoredNode Variable)> updates;
+        lock (_timerLock)
+        {
+            if (_disposed || !_updateTimerRunning || _updateTimerEpoch != timerEpoch)
+            {
+                return false;
+            }
+
+            // Snapshot and clear pending updates while enqueue/Clear are
+            // excluded. This is the batch's linearization point.
+            updates = new List<(uint ClientHandle, MonitoredNode Variable)>();
+            foreach (var key in _pendingUpdates.Keys.ToList())
+            {
+                if (_pendingUpdates.TryRemove(key, out var variable))
+                {
+                    updates.Add((key, variable));
+                }
+            }
+
+            // Apply the captured batch while Clear() is excluded. Timer
+            // callbacks and row mutations normally share the UI thread; the
+            // lock also makes the contract safe for deterministic tests.
+            foreach (var (clientHandle, variable) in updates)
+            {
+                if (_rowsByHandle.TryGetValue(clientHandle, out var row)
+                    && HasSameUpdateSource(row, variable))
+                {
+                    row["Access"] = variable.AccessString;
+                    row["Sel"] = variable.IsSelectedForScope ? CheckedBox : UncheckedBox;
+                    row["Value"] = variable.Value;
+                    row["Time"] = variable.TimestampString;
+                    row["Status"] = FormatStatusWithIcon(variable);
+                }
+            }
+
+            if (updates.Count > 0)
+            {
+                // Single table redraw for all updates.
+                _tableView.Update();
+            }
+        }
+
+        // Tests inject an update here to deterministically reproduce the race
+        // immediately before the timer attempts its idle transition.
+        beforeIdleTransition?.Invoke();
+
+        lock (_timerLock)
+        {
+            if (_disposed || _updateTimerEpoch != timerEpoch)
+            {
+                return false;
+            }
+
+            // Re-check under the same lock used by UpdateVariable. If an update
+            // arrived after the batch snapshot, the current timer remains alive;
+            // otherwise retire it atomically so the next enqueue schedules one.
+            if (!_pendingUpdates.IsEmpty)
+            {
+                return true;
+            }
+
+            _updateTimerRunning = false;
+            _updateTimer = null;
+            return false;
+        }
+    }
+
+    private static bool HasSameUpdateSource(DataRow row, MonitoredNode variable) =>
+        row["_VariableRef"] is MonitoredNode displayedVariable
+        && displayedVariable.ConnectionGeneration == variable.ConnectionGeneration
+        // A reconnect fallback can replace the SubscriptionManager without
+        // advancing the connection lifecycle again. In that case generations
+        // match, but the new row still owns a different model instance.
+        && ReferenceEquals(displayedVariable, variable);
 
     public void RemoveVariable(uint clientHandle)
     {
@@ -396,20 +517,60 @@ public class MonitoredVariablesView : FrameView
 
     public void Clear()
     {
-        // Clear all scope selections before clearing table
-        foreach (DataRow row in _dataTable.Rows)
+        object? updateTimer;
+        lock (_timerLock)
         {
-            if (row["_VariableRef"] is MonitoredNode node)
+            // Invalidate callbacks before allowing client handles to be reused
+            // by a new connection. A registration still being created observes
+            // the epoch change and removes its own stale token.
+            _updateTimerEpoch++;
+            _updateTimerRunning = false;
+            updateTimer = _updateTimer;
+            _updateTimer = null;
+            _pendingUpdates.Clear();
+
+            // Clear all scope selections before clearing table.
+            foreach (DataRow row in _dataTable.Rows)
             {
-                node.IsSelectedForScope = false;
+                if (row["_VariableRef"] is MonitoredNode node)
+                {
+                    node.IsSelectedForScope = false;
+                }
             }
+
+            _cachedScopeSelectionCount = 0;
+            _dataTable.Rows.Clear();
+            _rowsByHandle.Clear();
+            _tableView.Update();
+            UpdateEmptyState();
         }
 
-        _cachedScopeSelectionCount = 0;
-        _dataTable.Rows.Clear();
-        _rowsByHandle.Clear();
-        _tableView.Update();
-        UpdateEmptyState();
+        if (updateTimer is not null)
+        {
+            _removeTimeout(updateTimer);
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds table membership from the authoritative subscription snapshot after
+    /// reconnect. This repairs add/remove events deliberately dropped while connection
+    /// intent was changing, while preserving scope/recording selections on retained
+    /// model instances.
+    /// </summary>
+    public void ReconcileVariables(IEnumerable<MonitoredNode> variables)
+    {
+        var snapshot = variables
+            .Select(variable => (Variable: variable, variable.IsSelectedForScope))
+            .ToList();
+
+        Clear();
+        foreach (var (variable, wasSelected) in snapshot)
+        {
+            variable.IsSelectedForScope = wasSelected;
+            AddVariable(variable);
+        }
+
+        ScopeSelectionChanged?.Invoke(_cachedScopeSelectionCount);
     }
 
     private string FormatStatusWithIcon(MonitoredNode item)
@@ -532,7 +693,7 @@ public class MonitoredVariablesView : FrameView
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(2000);
-                    Application.Invoke(() => _selectionFeedback.Visible = false);
+                    UiThread.Run(() => _selectionFeedback.Visible = false);
                 });
                 return;
             }
@@ -584,17 +745,21 @@ public class MonitoredVariablesView : FrameView
     {
         if (disposing)
         {
-            // Stop the update timer
+            object? updateTimer;
             lock (_timerLock)
             {
-                if (_updateTimer != null)
-                {
-                    Application.RemoveTimeout(_updateTimer);
-                    _updateTimer = null;
-                }
+                _disposed = true;
+                _updateTimerEpoch++;
                 _updateTimerRunning = false;
+                updateTimer = _updateTimer;
+                _updateTimer = null;
+                _pendingUpdates.Clear();
             }
-            _pendingUpdates.Clear();
+
+            if (updateTimer is not null)
+            {
+                _removeTimeout(updateTimer);
+            }
 
             ThemeManager.ThemeChanged -= OnThemeChanged;
             _recordButton.Accepting -= OnRecordButtonClicked;

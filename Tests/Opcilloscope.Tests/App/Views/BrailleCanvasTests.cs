@@ -32,8 +32,8 @@ public class BrailleCanvasTests
         var canvas = new BrailleCanvas(3, 3);
 
         for (int cx = 0; cx < 3; cx++)
-        for (int cy = 0; cy < 3; cy++)
-            Assert.Equal('\u2800', canvas.GetCell(cx, cy));
+            for (int cy = 0; cy < 3; cy++)
+                Assert.Equal('\u2800', canvas.GetCell(cx, cy));
     }
 
     [Fact]
@@ -82,8 +82,8 @@ public class BrailleCanvasTests
         // All 8 bits set => U+28FF
         var canvas = new BrailleCanvas(2, 2);
         for (int dx = 0; dx < 2; dx++)
-        for (int dy = 0; dy < 4; dy++)
-            canvas.SetPixel(dx, dy);
+            for (int dy = 0; dy < 4; dy++)
+                canvas.SetPixel(dx, dy);
 
         Assert.Equal('\u28FF', canvas.GetCell(0, 0));
     }

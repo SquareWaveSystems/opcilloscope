@@ -9,6 +9,12 @@
     <AssemblyName>opcilloscope</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
 
+    <!-- Fail the build on any warning so deprecations (like the Terminal.Gui
+         legacy static Application API, migrated off in 2026-07) cannot
+         accumulate silently again. Suppress a specific warning only with a
+         targeted #pragma at the call site, with a comment explaining why. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
     <!-- Package metadata (Version is driven by MinVer from Git tags) -->
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <Authors>Brett Kinny</Authors>
@@ -22,12 +28,23 @@
 
     <!-- Publishing options -->
     <PublishSingleFile>true</PublishSingleFile>
+    <!-- Terminal.Gui 2.4 brings a native Oniguruma runtime asset via Onigwrap.
+         Embed native assets in the bundle so every RID still ships as one
+         executable instead of silently requiring a sidecar library. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <SelfContained>true</SelfContained>
     <!-- Trimming is disabled: the OPC Foundation and Terminal.Gui stack relies
          heavily on reflection and is not trim-safe. PublishTrimmed produced 23 trim
          warnings and a runtime "$schema" deserialization failure on launch, leaving a
          broken binary. Keep SelfContained + PublishSingleFile for distribution. -->
     <PublishTrimmed>false</PublishTrimmed>
+
+    <!-- Keep the transitive package graph reviewable. A per-RID lock avoids
+         restoring every platform pack on every developer machine while release
+         automation can still use locked mode for each supported target. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetLockFilePath Condition="'$(RuntimeIdentifier)' == ''">packages.$(NETCoreSdkPortableRuntimeIdentifier).lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(RuntimeIdentifier)' != ''">packages.$(RuntimeIdentifier).lock.json</NuGetLockFilePath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,8 +53,8 @@
 
   <ItemGroup>
     <PackageReference Include="Terminal.Gui" Version="2.4.5" />
-    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.378.65" />
-    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.378.156" />
+    <PackageReference Include="MinVer" Version="7.0.0" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

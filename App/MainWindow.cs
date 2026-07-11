@@ -44,6 +44,12 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     private int _connectingDotCount = 1;
     private bool _isConnecting;
     private bool _isConnected;
+    private volatile bool _isHydratingConfiguration;
+    private int _operationInProgress;
+    private readonly SemaphoreSlim _operationGate = new(1, 1);
+    private readonly object _recordingStopLock = new();
+    private Task? _recordingStopTask;
+    private int _quitInProgress;
 
     private string? _lastEndpoint;
 
@@ -69,15 +75,27 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         _connectionManager.AutoReconnectTriggered += OnAutoReconnectTriggered;
         _connectionManager.VariableAdded += variable =>
         {
-            UiThread.Run(() => _monitoredVariablesView?.AddVariable(variable));
-            _configService.MarkDirty();
-            UiThread.Run(UpdateWindowTitle);
+            if (!_connectionManager.IsConnectionGenerationActive(variable.ConnectionGeneration))
+                return;
+
+            UiThread.Run(() =>
+            {
+                if (_connectionManager.IsConnectionGenerationActive(variable.ConnectionGeneration))
+                    _monitoredVariablesView?.AddVariable(variable);
+            });
+            MarkConfigurationDirty();
         };
-        _connectionManager.VariableRemoved += handle =>
+        _connectionManager.VariableRemoved += (handle, generation) =>
         {
-            UiThread.Run(() => _monitoredVariablesView?.RemoveVariable(handle));
-            _configService.MarkDirty();
-            UiThread.Run(UpdateWindowTitle);
+            if (_connectionManager.ConnectionGeneration != generation)
+                return;
+
+            UiThread.Run(() =>
+            {
+                if (_connectionManager.ConnectionGeneration == generation)
+                    _monitoredVariablesView?.RemoveVariable(handle);
+            });
+            MarkConfigurationDirty();
         };
 
         // Wire up configuration service events
@@ -185,7 +203,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         DefaultKeybindings.Configure(_keybindingManager, this);
 
         // Intercept letter/symbol keys at application level before views consume them
-        Application.KeyDown += OnApplicationKeyDown;
+        TerminalUi.AddKeyDownHandler(OnApplicationKeyDown);
 
         // Focus tracking using polling-based FocusManager (workaround for Terminal.Gui v2 Enter event instability)
         // Only track the two interactive panes (AddressSpace and MonitoredVariables)
@@ -245,7 +263,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         });
         UpdateConnectionStatusLabelPosition();
 
-        _startupStatusTimer = Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+        _startupStatusTimer = TerminalUi.AddTimeout(TimeSpan.FromSeconds(1), () =>
         {
             step++;
             if (step == 1)
@@ -261,8 +279,9 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             }
             else
             {
-                // Final state - show disconnected
-                UpdateConnectionStatus(isConnected: false);
+                // Final state reflects the live connection. A fast CLI-config
+                // connection may complete before the startup banner does.
+                UpdateConnectionStatus(_connectionManager.IsConnected);
                 _startupStatusTimer = null; // Timer self-removes after returning false
                 return false; // Stop
             }
@@ -285,7 +304,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
                     null!, // Separator
                     new MenuItem("Toggle Recording", "", ToggleRecording, Key.R.WithCtrl),
                     null!, // Separator
-                    new MenuItem("E_xit", "", () => RequestStop(), Key.Q.WithCtrl)
+                    new MenuItem("E_xit", "", RequestQuit, Key.Q.WithCtrl)
                 }),
                 new MenuBarItem("_Connection", new MenuItem[]
                 {
@@ -397,6 +416,8 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 
     private void ShowConnectDialog()
     {
+        if (RejectInteractiveMutationWhileBusy("connect")) return;
+
         var currentInterval = _connectionManager.SubscriptionManager?.PublishingInterval ?? 250;
         var currentCredentials = _connectionManager.Credentials;
         using var dialog = new ConnectDialog(
@@ -404,7 +425,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             currentInterval,
             currentCredentials.Type,
             currentCredentials.Username);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (dialog.Confirmed)
         {
@@ -415,45 +436,103 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         }
     }
 
-    private async Task ConnectAsync(string endpoint, int publishingInterval = 250, ConnectionCredentials? credentials = null)
+    private Task ConnectAsync(string endpoint, int publishingInterval = 250, ConnectionCredentials? credentials = null)
+    {
+        var operationGeneration = _connectionManager.RegisterExplicitLifecycleIntent();
+        return RunExclusiveOperationAsync(
+            () => ConnectCoreAsync(
+                endpoint,
+                publishingInterval,
+                credentials,
+                operationGeneration));
+    }
+
+    private async Task ConnectCoreAsync(
+        string endpoint,
+        int publishingInterval,
+        ConnectionCredentials? credentials,
+        long operationGeneration)
     {
         // Disconnect if already connected
-        await DisconnectAsync();
+        if (!await DisconnectCoreAsync(operationGeneration))
+            return;
 
-        StartConnectingAnimation();
-        ShowActivity("Connecting...");
+        await UiThread.RunAsync(() =>
+        {
+            StartConnectingAnimation();
+            ShowActivity("Connecting...");
+        });
 
         try
         {
-            var success = await _connectionManager.ConnectAsync(endpoint, publishingInterval, credentials);
+            var success = await _connectionManager.ConnectWithIntentAsync(
+                endpoint,
+                publishingInterval,
+                credentials,
+                securityMode: null,
+                securityPolicy: null,
+                samplingInterval: 250,
+                queueSize: 10,
+                operationGeneration);
 
             if (success)
             {
                 _lastEndpoint = endpoint;
-                _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+                MarkConfigurationDirty();
+                // The connect continuation may resume off the UI thread.
+                UiThread.Run(() => _addressSpaceView.Initialize(_connectionManager.NodeBrowser));
             }
         }
         finally
         {
-            StopConnectingAnimation();
-            UiThread.Run(HideActivity);
+            UiThread.Run(() =>
+            {
+                StopConnectingAnimation();
+                HideActivity();
+            });
         }
     }
 
-    private async Task DisconnectAsync()
+    private Task DisconnectAsync()
     {
-        // Stop recording if active
-        if (_csvRecordingManager.IsRecording)
+        // Signal explicit user intent before waiting on the UI operation gate so an
+        // active automatic reconnect is cancelled immediately rather than allowed to
+        // publish Connected first.
+        var operationGeneration = _connectionManager.RegisterExplicitLifecycleIntent();
+        return RunExclusiveOperationAsync(
+            () => DisconnectCoreAsync(operationGeneration));
+    }
+
+    private async Task<bool> DisconnectCoreAsync(long? operationGeneration = null)
+    {
+        var hadLiveState = _connectionManager.IsConnected
+            || _connectionManager.SubscriptionManager?.MonitoredVariables.Any() == true;
+
+        // This method is also called from async config-load continuations, so
+        // marshal the pre-await recording/timer/dialog work as well as cleanup.
+        if (_csvRecordingManager.IsRecording || _csvRecordingManager.IsStopping)
         {
-            OnStopRecordingRequested();
+            await StopRecordingAndReportAsync();
         }
 
         // Async close avoids blocking the UI thread on the OPC UA round-trip.
-        await _connectionManager.DisconnectAsync();
+        var disconnected = true;
+        if (operationGeneration.HasValue)
+        {
+            disconnected = await _connectionManager
+                .DisconnectWithIntentAsync(operationGeneration.Value);
+        }
+        else
+        {
+            await _connectionManager.DisconnectAsync();
+        }
+
+        if (!disconnected)
+            return false;
 
         // The disconnect continuation may resume off the UI thread, so marshal
         // the view updates back onto it.
-        UiThread.Run(() =>
+        await UiThread.RunAsync(() =>
         {
             _addressSpaceView.Clear();
             _monitoredVariablesView.Clear();
@@ -461,9 +540,25 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 
             UpdateConnectionStatus(isConnected: false);
         });
+
+        if (hadLiveState)
+        {
+            MarkConfigurationDirty();
+        }
+
+        return true;
     }
 
-    private async Task ReconnectAsync()
+    private Task ReconnectAsync()
+    {
+        var operationGeneration = _connectionManager.RegisterExplicitLifecycleIntent();
+        return RunExclusiveOperationAsync(
+            () => ReconnectCoreAsync(explicitOperationGeneration: operationGeneration));
+    }
+
+    private async Task ReconnectCoreAsync(
+        long? automaticIntentVersion = null,
+        long? explicitOperationGeneration = null)
     {
         if (string.IsNullOrEmpty(_lastEndpoint))
         {
@@ -471,16 +566,35 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             return;
         }
 
-        StartConnectingAnimation();
-        ShowActivity("Reconnecting...");
+        await UiThread.RunAsync(() =>
+        {
+            StartConnectingAnimation();
+            ShowActivity("Reconnecting...");
+        });
 
         try
         {
-            var success = await _connectionManager.ReconnectAsync();
+            var success = automaticIntentVersion.HasValue
+                ? await _connectionManager.ReconnectAutomaticallyAsync(automaticIntentVersion.Value)
+                : explicitOperationGeneration.HasValue
+                    && await _connectionManager.ReconnectWithIntentAsync(
+                        explicitOperationGeneration.Value);
 
             if (success)
             {
-                _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+                var monitoredVariables = _connectionManager.SubscriptionManager?
+                    .MonitoredVariables
+                    .ToList()
+                    ?? new List<MonitoredNode>();
+                // Reconcile membership before releasing the UI operation gate. A
+                // subscribe/unsubscribe that committed while reconnect intent advanced
+                // intentionally had its stale event dropped; this authoritative snapshot
+                // repairs the table without losing scope/recording selections.
+                await UiThread.RunAsync(() =>
+                {
+                    _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+                    _monitoredVariablesView.ReconcileVariables(monitoredVariables);
+                });
                 _logger.Info("Reconnected successfully - subscriptions restored");
             }
             else
@@ -490,13 +604,18 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         }
         finally
         {
-            StopConnectingAnimation();
-            UiThread.Run(HideActivity);
+            UiThread.Run(() =>
+            {
+                StopConnectingAnimation();
+                HideActivity();
+            });
         }
     }
 
     private void RefreshTree()
     {
+        if (RejectInteractiveMutationWhileBusy("refresh the address space")) return;
+
         if (_connectionManager.IsConnected)
         {
             _addressSpaceView.Refresh();
@@ -524,6 +643,8 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 
     private void WriteSelected()
     {
+        if (RejectInteractiveMutationWhileBusy("write a value")) return;
+
         if (!_connectionManager.IsConnected)
         {
             _logger.Warning("Not connected");
@@ -554,14 +675,21 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         if (!variable.IsWritable)
         {
             _logger.Warning($"Node '{variable.DisplayName}' is not writable");
-            MessageBox.ErrorQuery(Application.Instance, "Write", $"Node '{variable.DisplayName}' is not writable.", "OK");
+            TerminalUi.ErrorQuery("Write", $"Node '{variable.DisplayName}' is not writable.", "OK");
+            return;
+        }
+
+        if (!variable.IsScalar)
+        {
+            _logger.Warning($"Array writes are not supported for node '{variable.DisplayName}'");
+            TerminalUi.ErrorQuery("Write", "Array writes are not currently supported.", "OK");
             return;
         }
 
         if (!OpcValueConverter.IsWriteSupported(variable.DataType))
         {
             _logger.Warning($"Write not supported for data type {variable.DataType}");
-            MessageBox.ErrorQuery(Application.Instance, "Write", $"Write not supported for data type: {variable.DataType}", "OK");
+            TerminalUi.ErrorQuery("Write", $"Write not supported for data type: {variable.DataType}", "OK");
             return;
         }
 
@@ -570,35 +698,52 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             variable.DisplayName,
             variable.DataType,
             variable.DataTypeName,
-            variable.Value);
+            variable.Value,
+            variable.ConnectionGeneration);
     }
 
     private async Task WriteToAddressSpaceNodeAsync(BrowsedNode node)
     {
-        byte accessLevel = 0;
+        var connectionGeneration = node.ConnectionGeneration;
+        byte userAccessLevel = 0;
+        // Fail closed until the server confirms the node is scalar. Treating a
+        // failed ValueRank read as scalar could offer an unsupported array write.
+        int valueRank = Opc.Ua.ValueRanks.Any;
         Opc.Ua.BuiltInType builtInType = Opc.Ua.BuiltInType.Variant;
         string dataTypeName = "Unknown";
         string? currentValue = null;
 
         try
         {
-            var attrs = await _connectionManager.Client.ReadAttributesAsync(
+            var snapshot = await _connectionManager.ReadWriteSnapshotAsync(
                 node.NodeId,
-                Opc.Ua.Attributes.AccessLevel,
-                Opc.Ua.Attributes.DataType);
+                connectionGeneration,
+                Opc.Ua.Attributes.UserAccessLevel,
+                Opc.Ua.Attributes.DataType,
+                Opc.Ua.Attributes.ValueRank);
+            if (!snapshot.HasValue)
+            {
+                _logger.Warning("Write cancelled because the connection changed");
+                return;
+            }
 
-            if (attrs.Count >= 2)
+            var attrs = snapshot.Value.Attributes;
+
+            if (attrs.Count >= 3)
             {
                 if (Opc.Ua.StatusCode.IsGood(attrs[0].StatusCode) && attrs[0].Value is byte al)
-                    accessLevel = al;
+                    userAccessLevel = al;
 
                 if (Opc.Ua.StatusCode.IsGood(attrs[1].StatusCode) && attrs[1].Value is Opc.Ua.NodeId dataTypeNodeId)
                 {
                     (builtInType, dataTypeName) = DataTypeResolver.Resolve(dataTypeNodeId);
                 }
+
+                if (Opc.Ua.StatusCode.IsGood(attrs[2].StatusCode) && attrs[2].Value is int rank)
+                    valueRank = rank;
             }
 
-            var dv = await _connectionManager.Client.ReadValueAsync(node.NodeId);
+            var dv = snapshot.Value.Value;
             currentValue = dv?.Value?.ToString();
         }
         catch (Exception ex)
@@ -607,37 +752,69 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             return;
         }
 
-        if ((accessLevel & Opc.Ua.AccessLevels.CurrentWrite) == 0)
+        if ((userAccessLevel & Opc.Ua.AccessLevels.CurrentWrite) == 0)
         {
             _logger.Warning($"Node '{node.DisplayName}' is not writable");
-            UiThread.Run(() => MessageBox.ErrorQuery(Application.Instance, "Write", $"Node '{node.DisplayName}' is not writable.", "OK"));
+            UiThread.Run(() => TerminalUi.ErrorQuery("Write", $"Node '{node.DisplayName}' is not writable.", "OK"));
+            return;
+        }
+
+        if (valueRank != Opc.Ua.ValueRanks.Scalar)
+        {
+            _logger.Warning($"Array writes are not supported for node '{node.DisplayName}'");
+            UiThread.Run(() => TerminalUi.ErrorQuery("Write", "Array writes are not currently supported.", "OK"));
             return;
         }
 
         if (!OpcValueConverter.IsWriteSupported(builtInType))
         {
             _logger.Warning($"Write not supported for data type {builtInType}");
-            UiThread.Run(() => MessageBox.ErrorQuery(Application.Instance, "Write", $"Write not supported for data type: {builtInType}", "OK"));
+            UiThread.Run(() => TerminalUi.ErrorQuery("Write", $"Write not supported for data type: {builtInType}", "OK"));
             return;
         }
 
-        UiThread.Run(() => OpenWriteDialogAndWrite(node.NodeId, node.DisplayName, builtInType, dataTypeName, currentValue));
+        UiThread.Run(() =>
+        {
+            if (_connectionManager.ConnectionGeneration != connectionGeneration)
+            {
+                _logger.Warning("Write cancelled because the connection changed");
+                return;
+            }
+
+            OpenWriteDialogAndWrite(
+                node.NodeId,
+                node.DisplayName,
+                builtInType,
+                dataTypeName,
+                currentValue,
+                connectionGeneration);
+        });
     }
 
-    private void OpenWriteDialogAndWrite(Opc.Ua.NodeId nodeId, string displayName, Opc.Ua.BuiltInType dataType, string dataTypeName, string? currentValue)
+    private void OpenWriteDialogAndWrite(
+        Opc.Ua.NodeId nodeId,
+        string displayName,
+        Opc.Ua.BuiltInType dataType,
+        string dataTypeName,
+        string? currentValue,
+        long connectionGeneration)
     {
         using var dialog = new WriteValueDialog(nodeId, displayName, dataType, dataTypeName, currentValue);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (!dialog.Confirmed || dialog.ParsedValue == null) return;
 
         var parsedValue = dialog.ParsedValue;
-        PerformWriteAsync(nodeId, displayName, parsedValue).FireAndForget(_logger);
+        PerformWriteAsync(nodeId, displayName, parsedValue, connectionGeneration).FireAndForget(_logger);
     }
 
-    private async Task PerformWriteAsync(Opc.Ua.NodeId nodeId, string displayName, object value)
+    private async Task PerformWriteAsync(
+        Opc.Ua.NodeId nodeId,
+        string displayName,
+        object value,
+        long connectionGeneration)
     {
-        var status = await _connectionManager.WriteValueAsync(nodeId, value);
+        var status = await _connectionManager.WriteValueAsync(nodeId, value, connectionGeneration);
         if (Opc.Ua.StatusCode.IsGood(status))
         {
             _logger.Info($"Wrote {value} to {displayName}");
@@ -655,7 +832,9 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 
     private void OnMonitoredVariableSelected(MonitoredNode node)
     {
-        _nodeDetailsView.ShowNodeByIdAsync(node.NodeId).FireAndForget(_logger);
+        _nodeDetailsView
+            .ShowNodeByIdAsync(node.NodeId, node.ConnectionGeneration)
+            .FireAndForget(_logger);
     }
 
     #region Focus Tracking and Context-Aware UI
@@ -747,7 +926,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     private void OnApplicationKeyDown(object? sender, Key e)
     {
         if (e.Handled) return;
-        if (Application.TopRunnable != this) return; // Don't fire during dialogs
+        if (!TerminalUi.IsTopRunnable(this)) return; // Don't fire during dialogs
 
         if (IsViewNavigationKey(e)) return; // Let Enter/Space/etc reach local handlers
 
@@ -773,6 +952,14 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     /// </summary>
     protected override bool OnKeyDown(Key key)
     {
+        // A Window's default Esc handling requests application stop. Route it
+        // through the same unsaved-change guard as Ctrl+Q and the File menu.
+        if (IsQuitKey(key))
+        {
+            RequestQuit();
+            return true;
+        }
+
         // Use the centralized keybinding manager for all key handling
         if (_keybindingManager.TryHandle(key))
         {
@@ -782,10 +969,14 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         return base.OnKeyDown(key);
     }
 
+    internal static bool IsQuitKey(Key key) => key.KeyCode == KeyCode.Esc;
+
     #endregion
 
     private void OnSubscribeRequested(BrowsedNode node)
     {
+        if (RejectInteractiveMutationWhileBusy("change subscriptions")) return;
+
         if (!_connectionManager.IsConnected)
         {
             _logger.Warning("Not connected");
@@ -798,29 +989,43 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             return;
         }
 
-        _connectionManager.SubscribeAsync(node.NodeId, node.DisplayName).FireAndForget(_logger);
+        _connectionManager
+            .SubscribeAsync(node.NodeId, node.DisplayName, node.ConnectionGeneration)
+            .FireAndForget(_logger);
     }
 
     private void OnUnsubscribeRequested(MonitoredNode item)
     {
-        _connectionManager.UnsubscribeAsync(item.ClientHandle).FireAndForget(_logger);
+        if (RejectInteractiveMutationWhileBusy("change subscriptions")) return;
+
+        _connectionManager
+            .UnsubscribeAsync(item.ClientHandle, item.ConnectionGeneration)
+            .FireAndForget(_logger);
     }
 
     private void OnValueChanged(MonitoredNode variable)
     {
+        if (!_connectionManager.IsConnectionGenerationActive(variable.ConnectionGeneration))
+            return;
+
         // Record to CSV if recording is active AND variable is selected for scope/recording
-        if (variable.IsSelectedForScope)
+        if (variable.IsSelectedForScope && !variable.IsSyntheticValue)
         {
             _csvRecordingManager.RecordValue(variable);
         }
 
-        UiThread.Run(() => _monitoredVariablesView.UpdateVariable(variable));
+        UiThread.Run(() =>
+        {
+            if (_connectionManager.IsConnectionGenerationActive(variable.ConnectionGeneration))
+                _monitoredVariablesView.UpdateVariable(variable);
+        });
     }
 
     private void OnConnectionStateChanged(ConnectionState state)
     {
         UiThread.Run(() =>
         {
+            CancelStartupStatus();
             var isConnected = state == ConnectionState.Connected;
             UpdateConnectionStatus(isConnected);
 
@@ -835,21 +1040,39 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     {
         UiThread.Run(() =>
         {
-            MessageBox.ErrorQuery(Application.Instance, "Connection Error", message, "OK");
+            TerminalUi.ErrorQuery("Connection Error", message, "OK");
         });
     }
 
-    private void OnAutoReconnectTriggered()
+    private void OnAutoReconnectTriggered(long intentVersion)
     {
         UiThread.Run(() =>
         {
             _logger.Warning("Connection lost - attempting automatic reconnection...");
-            ShowActivity("Reconnecting...");
-            StartConnectingAnimation();
-
-            // Start reconnection asynchronously
-            ReconnectAsync().FireAndForget(_logger);
+            RunExclusiveOperationAsync(() => ReconnectCoreAsync(intentVersion)).FireAndForget(_logger);
         });
+    }
+
+    private void CancelStartupStatus()
+    {
+        if (_startupStatusTimer is null)
+        {
+            return;
+        }
+
+        TerminalUi.RemoveTimeout(_startupStatusTimer);
+        _startupStatusTimer = null;
+    }
+
+    private void MarkConfigurationDirty()
+    {
+        if (_isHydratingConfiguration)
+        {
+            return;
+        }
+
+        _configService.MarkDirty();
+        UiThread.Run(UpdateWindowTitle);
     }
 
     private void UpdateConnectionStatus(bool isConnected)
@@ -892,9 +1115,18 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 
     private void ToggleRecording()
     {
+        if (RejectInteractiveMutationWhileBusy("change recording state")) return;
+
         if (_csvRecordingManager.IsRecording)
         {
             OnStopRecordingRequested();
+        }
+        else if (_csvRecordingManager.IsStopping)
+        {
+            TerminalUi.Query(
+                "Recording",
+                "The previous recording is still flushing to storage. Please wait.",
+                "OK");
         }
         else
         {
@@ -906,7 +1138,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     {
         _isConnecting = true;
         _connectingDotCount = 1;
-        _connectingAnimationTimer = Application.AddTimeout(TimeSpan.FromMilliseconds(400), () =>
+        _connectingAnimationTimer = TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(400), () =>
         {
             if (!_isConnecting)
                 return false; // Stop animation
@@ -925,7 +1157,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         _isConnecting = false;
         if (_connectingAnimationTimer != null)
         {
-            Application.RemoveTimeout(_connectingAnimationTimer);
+            TerminalUi.RemoveTimeout(_connectingAnimationTimer);
             _connectingAnimationTimer = null;
         }
     }
@@ -957,7 +1189,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     {
         if (_connectionManager.SubscriptionManager == null)
         {
-            MessageBox.Query(Application.Instance, "Scope", "Connect to a server first.", "OK");
+            TerminalUi.Query("Scope", "Connect to a server first.", "OK");
             return;
         }
 
@@ -965,12 +1197,12 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 
         if (selectedNodes.Count == 0)
         {
-            MessageBox.Query(Application.Instance, "Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored variables.", "OK");
+            TerminalUi.Query("Scope", "Select up to 5 nodes to display in Scope.\nUse Space to toggle selection on monitored variables.", "OK");
             return;
         }
 
         using var dialog = new ScopeDialog(selectedNodes, _connectionManager.SubscriptionManager);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
     }
 
     private void OnRecordRequested()
@@ -984,7 +1216,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         var subscriptionManager = _connectionManager.SubscriptionManager;
         if (subscriptionManager == null || !subscriptionManager.MonitoredVariables.Any())
         {
-            MessageBox.Query(Application.Instance, "Record", "No variables to record. Subscribe to variables first.", "OK");
+            TerminalUi.Query("Record", "No variables to record. Subscribe to variables first.", "OK");
             return;
         }
 
@@ -992,7 +1224,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
         var selectedCount = _monitoredVariablesView.ScopeSelectionCount;
         if (selectedCount == 0)
         {
-            MessageBox.Query(Application.Instance, "Record",
+            TerminalUi.Query("Record",
                 "No variables selected for recording.\n\n" +
                 "Use Space to select variables in the Sel column (◉).\n" +
                 "Selected variables will be recorded and shown in Scope.", "OK");
@@ -1006,7 +1238,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             selectedCount);
 
         using var dialog = new SaveRecordingDialog(defaultDir, defaultFilename);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (dialog.Confirmed && dialog.FilePath != null)
         {
@@ -1017,28 +1249,85 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
             }
             else
             {
-                MessageBox.ErrorQuery(Application.Instance, "Recording Error", "Failed to start recording", "OK");
+                TerminalUi.ErrorQuery("Recording Error", "Failed to start recording", "OK");
             }
         }
     }
 
     private void OnStopRecordingRequested()
+        => StopRecordingAndReportAsync().FireAndForget(_logger);
+
+    private Task StopRecordingAndReportAsync()
     {
-        if (!_csvRecordingManager.IsRecording)
+        lock (_recordingStopLock)
+        {
+            if (_recordingStopTask is { IsCompleted: false })
+            {
+                return _recordingStopTask;
+            }
+
+            _recordingStopTask = StopRecordingAndReportCoreAsync();
+            return _recordingStopTask;
+        }
+    }
+
+    private async Task StopRecordingAndReportCoreAsync()
+    {
+        if (!_csvRecordingManager.IsRecording && !_csvRecordingManager.IsStopping)
         {
             return;
         }
 
-        StopRecordingStatusUpdates();
-        _csvRecordingManager.StopRecording();
-        _monitoredVariablesView.UpdateRecordingStatus("", false);
-        MessageBox.Query(Application.Instance, "Recording", $"Recording saved.\n{_csvRecordingManager.RecordCount} records written.", "OK");
+        await UiThread.RunAsync(() =>
+        {
+            StopRecordingStatusUpdates();
+            _monitoredVariablesView.UpdateRecordingStatus("Finishing...", true);
+        });
+
+        // Storage work is awaited asynchronously, so a slow disk never freezes
+        // the terminal UI. Do not claim success until the writer has closed.
+        var result = await _csvRecordingManager
+            .StopRecordingAsync(System.Threading.Timeout.InfiniteTimeSpan)
+            .ConfigureAwait(false);
+
+        await UiThread.RunAsync(() =>
+        {
+            _monitoredVariablesView.UpdateRecordingStatus("", false);
+
+            if (!result.Completed)
+            {
+                TerminalUi.ErrorQuery(
+                    "Recording Incomplete",
+                    "The recording file is still open and has not finished writing.",
+                    "OK");
+                return;
+            }
+
+            if (result.HasDataLoss)
+            {
+                var error = string.IsNullOrEmpty(result.ErrorMessage)
+                    ? string.Empty
+                    : $"\nStorage error: {result.ErrorMessage}";
+                TerminalUi.ErrorQuery(
+                    "Recording Incomplete",
+                    $"{result.RecordCount} records were written.\n" +
+                    $"{result.DroppedRecordCount} records were dropped because the queue was full.\n" +
+                    $"{result.FailedRecordCount} records failed during writing.{error}",
+                    "OK");
+                return;
+            }
+
+            TerminalUi.Query(
+                "Recording",
+                $"Recording saved.\n{result.RecordCount} records written.",
+                "OK");
+        });
     }
 
     private void StartRecordingStatusUpdates()
     {
-        // Use Terminal.Gui's Application.AddTimeout for periodic updates
-        _recordingStatusTimer = Application.AddTimeout(TimeSpan.FromSeconds(1), () =>
+        // Use the UI main-loop timer for periodic updates
+        _recordingStatusTimer = TerminalUi.AddTimeout(TimeSpan.FromSeconds(1), () =>
         {
             if (_csvRecordingManager.IsRecording)
             {
@@ -1054,7 +1343,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     {
         if (_recordingStatusTimer != null)
         {
-            Application.RemoveTimeout(_recordingStatusTimer);
+            TerminalUi.RemoveTimeout(_recordingStatusTimer);
             _recordingStatusTimer = null;
         }
     }
@@ -1062,7 +1351,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
     private void ShowHelp()
     {
         using var dialog = new HelpDialog(_keybindingManager);
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
     }
 
     private void ShowAbout()
@@ -1093,7 +1382,7 @@ Built with:
 © 2026 Square Wave Systems
 License: MIT
 ";
-        MessageBox.Query(Application.Instance, "About opcilloscope", about, "OK");
+        TerminalUi.Query("About opcilloscope", about, "OK");
     }
 
     /// <summary>
@@ -1125,12 +1414,14 @@ License: MIT
     /// </summary>
     private void OpenConfig()
     {
+        if (RejectInteractiveMutationWhileBusy("open a configuration")) return;
+
         if (_configService.HasUnsavedChanges && !ConfirmDiscardChanges())
             return;
 
         using var dialog = new Dialogs.OpenConfigDialog();
 
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (dialog.Confirmed && dialog.SelectedFilePath != null)
         {
@@ -1143,6 +1434,8 @@ License: MIT
     /// </summary>
     private void SaveConfig()
     {
+        if (RejectInteractiveMutationWhileBusy("save the configuration")) return;
+
         if (string.IsNullOrEmpty(_configService.CurrentFilePath))
         {
             SaveConfigAs();
@@ -1159,13 +1452,15 @@ License: MIT
     /// </summary>
     private void SaveConfigAs()
     {
+        if (RejectInteractiveMutationWhileBusy("save the configuration")) return;
+
         // Get the default directory and generate a default filename
         var defaultDir = ConfigurationService.GetDefaultConfigDirectory();
         var defaultFilename = ConfigurationService.GenerateDefaultFilename(_connectionManager.CurrentEndpoint);
 
         using var dialog = new Dialogs.SaveConfigDialog(defaultDir, defaultFilename);
 
-        Application.Run(dialog);
+        TerminalUi.RunModal(dialog);
 
         if (dialog.Confirmed)
         {
@@ -1176,11 +1471,23 @@ License: MIT
     /// <summary>
     /// Loads a configuration from the specified file path.
     /// </summary>
-    private async Task LoadConfigurationAsync(string filePath)
+    private Task LoadConfigurationAsync(string filePath)
     {
+        var expectedIntentVersion = _connectionManager.ConnectionIntentVersion;
+        return RunExclusiveOperationAsync(
+            () => LoadConfigurationCoreAsync(filePath, expectedIntentVersion));
+    }
+
+    private async Task LoadConfigurationCoreAsync(
+        string filePath,
+        long expectedIntentVersion)
+    {
+        long? registeredGeneration = null;
+        var sessionTeardownCompleted = false;
+        _isHydratingConfiguration = true;
         try
         {
-            ShowActivity("Loading configuration...");
+            await UiThread.RunAsync(() => ShowActivity("Loading configuration..."));
             _logger.Info($"Loading configuration from {filePath}...");
 
             var config = await _configService.LoadAsync(filePath);
@@ -1194,18 +1501,24 @@ License: MIT
                 if (authType == AuthenticationType.UserName
                     && !string.IsNullOrEmpty(config.Server.Authentication.Username))
                 {
-                    using var pwDialog = new PasswordPromptDialog(
-                        config.Server.Authentication.Username,
-                        config.Server.EndpointUrl);
-                    Application.Run(pwDialog);
+                    // This continuation may resume off the UI thread, so run the
+                    // modal prompt via the UI loop and await its outcome.
+                    var (confirmed, password) = await UiThread.RunAsync(() =>
+                    {
+                        using var pwDialog = new PasswordPromptDialog(
+                            config.Server.Authentication.Username,
+                            config.Server.EndpointUrl);
+                        TerminalUi.RunModal(pwDialog);
+                        return (pwDialog.Confirmed, pwDialog.Password);
+                    });
 
-                    if (!pwDialog.Confirmed)
+                    if (!confirmed)
                     {
                         // Nothing was torn down, but the load already switched the Ctrl+S
                         // target to this file; revert to untitled so a save cannot write
                         // the still-running session's state over it.
                         _configService.Reset();
-                        UpdateWindowTitle();
+                        UiThread.Run(UpdateWindowTitle);
                         _logger.Info("Password prompt cancelled - skipping connection");
                         return;
                     }
@@ -1213,48 +1526,78 @@ License: MIT
                     credentials = new ConnectionCredentials(
                         AuthenticationType.UserName,
                         config.Server.Authentication.Username,
-                        pwDialog.Password);
+                        password);
                 }
 
                 // Tear down the current session first: stops any active recording and
                 // clears the views, so the UI cannot keep showing dead rows from the
                 // old server while (or after) the new connection is attempted.
-                await DisconnectAsync();
+                if (!_connectionManager.TryRegisterExplicitLifecycleIntent(
+                        expectedIntentVersion,
+                        out var operationGeneration))
+                {
+                    AbortLoadedConfigurationForNewerConnectionIntent();
+                    return;
+                }
+
+                registeredGeneration = operationGeneration;
+                if (!await DisconnectCoreAsync(operationGeneration))
+                {
+                    AbortLoadedConfigurationForNewerConnectionIntent();
+                    return;
+                }
+                sessionTeardownCompleted = true;
 
                 // Honor the config's security and subscription settings (the connect dialog
                 // has no UI for these, so the config file is their only source).
-                var connected = await _connectionManager.ConnectAsync(
+                var connected = await _connectionManager.ConnectWithIntentAsync(
                     config.Server.EndpointUrl,
                     config.Settings.PublishingIntervalMs,
                     credentials,
                     config.Server.SecurityMode,
                     config.Server.SecurityPolicy,
                     config.Settings.SamplingIntervalMs,
-                    config.Settings.QueueSize);
+                    config.Settings.QueueSize,
+                    operationGeneration);
 
                 if (connected)
                 {
                     _lastEndpoint = config.Server.EndpointUrl;
                     _currentMetadata = config.Metadata;
 
-                    _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+                    UiThread.Run(() => _addressSpaceView.Initialize(_connectionManager.NodeBrowser));
 
                     // Subscribe to saved nodes
+                    var allSubscriptionsRestored = true;
                     foreach (var node in config.MonitoredNodes.Where(n => n.Enabled))
                     {
                         try
                         {
                             var nodeId = Opc.Ua.NodeId.Parse(node.NodeId);
-                            await _connectionManager.SubscribeAsync(nodeId, node.DisplayName);
+                            var restored = await _connectionManager.SubscribeAsync(nodeId, node.DisplayName);
+                            if (restored is null)
+                            {
+                                allSubscriptionsRestored = false;
+                                _logger.Warning($"Failed to subscribe to {node.DisplayName}");
+                            }
                         }
                         catch (Exception ex)
                         {
+                            allSubscriptionsRestored = false;
                             _logger.Warning($"Failed to subscribe to {node.DisplayName}: {ex.Message}");
                         }
                     }
 
                     _recentFiles.Add(filePath);
-                    UpdateWindowTitle();
+                    if (allSubscriptionsRestored)
+                    {
+                        _configService.MarkClean();
+                    }
+                    else
+                    {
+                        _configService.MarkDirty();
+                    }
+                    UiThread.Run(UpdateWindowTitle);
 
                     var nodeCount = config.MonitoredNodes.Count(n => n.Enabled);
                     _logger.Info($"Configuration loaded: {nodeCount} nodes");
@@ -1265,55 +1608,129 @@ License: MIT
                     // would let a save overwrite it with the now-empty session state.
                     _configService.Reset();
                     _currentMetadata = null;
-                    UpdateWindowTitle();
 
                     _logger.Error($"Failed to connect to {config.Server.EndpointUrl}");
-                    MessageBox.ErrorQuery(Application.Instance, "Connection Failed",
-                        $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection has been closed. Use Connect to reconnect.",
-                        "OK");
+                    UiThread.Run(() =>
+                    {
+                        UpdateWindowTitle();
+                        TerminalUi.ErrorQuery("Connection Failed",
+                            $"Could not connect to server:\n{config.Server.EndpointUrl}\n\nThe previous connection has been closed. Use Connect to reconnect.",
+                            "OK");
+                    });
                 }
             }
             else
             {
                 // No endpoint URL: tear down any current session (stops recording,
                 // clears views) and just adopt the loaded settings.
-                await DisconnectAsync();
+                if (!_connectionManager.TryRegisterExplicitLifecycleIntent(
+                        expectedIntentVersion,
+                        out var operationGeneration))
+                {
+                    AbortLoadedConfigurationForNewerConnectionIntent();
+                    return;
+                }
+
+                registeredGeneration = operationGeneration;
+                if (!await DisconnectCoreAsync(operationGeneration))
+                {
+                    AbortLoadedConfigurationForNewerConnectionIntent();
+                    return;
+                }
+                sessionTeardownCompleted = true;
 
                 _currentMetadata = config.Metadata;
                 _recentFiles.Add(filePath);
-                UpdateWindowTitle();
+                _configService.MarkClean();
+                UiThread.Run(UpdateWindowTitle);
                 _logger.Info("Configuration loaded (no server connection)");
             }
         }
         catch (Exception ex)
         {
+            if (registeredGeneration.HasValue && !sessionTeardownCompleted)
+                RestoreSessionAfterAbandonedLoad(registeredGeneration.Value);
+
             _logger.Error($"Failed to load configuration: {ex.Message}");
-            MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to load configuration:\n{ex.Message}", "OK");
+            UiThread.Run(() =>
+                TerminalUi.ErrorQuery("Error", $"Failed to load configuration:\n{ex.Message}", "OK"));
         }
         finally
         {
-            UiThread.Run(HideActivity);
+            _isHydratingConfiguration = false;
+            await UiThread.RunAsync(HideActivity);
         }
+    }
+
+    private void AbortLoadedConfigurationForNewerConnectionIntent()
+    {
+        _configService.Reset();
+        _currentMetadata = null;
+        UiThread.Run(UpdateWindowTitle);
+        _logger.Info("Configuration load abandoned because a newer connection operation was requested");
+    }
+
+    private void RestoreSessionAfterAbandonedLoad(long operationGeneration)
+    {
+        _connectionManager.RestoreSessionAfterAbandonedIntent(operationGeneration);
+        if (!_connectionManager.IsConnectionGenerationActive(operationGeneration))
+            return;
+
+        UiThread.Run(() =>
+        {
+            if (!_connectionManager.IsConnectionGenerationActive(operationGeneration))
+                return;
+
+            _addressSpaceView.Initialize(_connectionManager.NodeBrowser);
+            _nodeDetailsView.Clear();
+        });
     }
 
     /// <summary>
     /// Saves the current configuration to the specified file path.
     /// </summary>
-    private async Task SaveConfigurationAsync(string filePath)
+    private Task SaveConfigurationAsync(string filePath)
+        => RunExclusiveOperationAsync(
+            () => SaveConfigurationCoreAsync(filePath));
+
+    private async Task SaveConfigurationCoreAsync(string filePath)
     {
         try
         {
-            ShowActivity("Saving configuration...");
+            await UiThread.RunAsync(() => ShowActivity("Saving configuration..."));
 
             var monitoredVariables = _connectionManager.SubscriptionManager?.MonitoredVariables
                 ?? Enumerable.Empty<MonitoredNode>();
+
+            // Persist the profile actually selected/applied by the active
+            // connection. Falling back to model defaults here previously wrote
+            // SecurityMode=None for a credentialed secure session, so reload
+            // could downgrade or reject the connection.
+            ServerConfig? activeServer = null;
+            SubscriptionSettings? activeSettings = null;
+            if (_connectionManager.IsConnected)
+            {
+                activeServer = new ServerConfig
+                {
+                    SecurityMode = _connectionManager.CurrentSecurityMode?.ToString(),
+                    SecurityPolicy = _connectionManager.CurrentSecurityPolicy
+                };
+                activeSettings = new SubscriptionSettings
+                {
+                    PublishingIntervalMs = _connectionManager.SubscriptionManager?.PublishingInterval ?? 250,
+                    SamplingIntervalMs = _connectionManager.SamplingInterval,
+                    QueueSize = _connectionManager.QueueSize
+                };
+            }
 
             var config = _configService.CaptureCurrentState(
                 _connectionManager.CurrentEndpoint,
                 _connectionManager.SubscriptionManager?.PublishingInterval ?? 250,
                 monitoredVariables,
                 _currentMetadata,
-                _connectionManager.Credentials
+                _connectionManager.Credentials,
+                existingServer: activeServer,
+                existingSettings: activeSettings
             );
 
             // Update metadata name from filename if not set
@@ -1326,18 +1743,19 @@ License: MIT
 
             _currentMetadata = config.Metadata;
             _recentFiles.Add(filePath);
-            UpdateWindowTitle();
+            UiThread.Run(UpdateWindowTitle);
 
             _logger.Info($"Configuration saved to {filePath}");
         }
         catch (Exception ex)
         {
             _logger.Error($"Failed to save configuration: {ex.Message}");
-            MessageBox.ErrorQuery(Application.Instance, "Error", $"Failed to save:\n{ex.Message}", "OK");
+            UiThread.Run(() =>
+                TerminalUi.ErrorQuery("Error", $"Failed to save:\n{ex.Message}", "OK"));
         }
         finally
         {
-            UiThread.Run(HideActivity);
+            await UiThread.RunAsync(HideActivity);
         }
     }
 
@@ -1362,7 +1780,7 @@ License: MIT
     /// <returns>True if the user confirms, false to cancel the operation.</returns>
     private bool ConfirmDiscardChanges()
     {
-        var result = MessageBox.Query(Application.Instance, 
+        var result = TerminalUi.Query(
             "Unsaved Changes",
             "You have unsaved changes. Do you want to discard them?",
             "Discard",
@@ -1371,13 +1789,145 @@ License: MIT
         return result == 0; // Discard
     }
 
+    internal static bool CanQuit(bool hasUnsavedChanges, Func<bool> confirmDiscard)
+        => !hasUnsavedChanges || confirmDiscard();
+
+    private async Task RunExclusiveOperationAsync(Func<Task> operation)
+    {
+        await _operationGate.WaitAsync();
+        Volatile.Write(ref _operationInProgress, 1);
+
+        try
+        {
+            await operation();
+        }
+        finally
+        {
+            Volatile.Write(ref _operationInProgress, 0);
+            _operationGate.Release();
+        }
+    }
+
+    private bool RejectInteractiveMutationWhileBusy(string action)
+    {
+        if (Volatile.Read(ref _operationInProgress) == 0)
+        {
+            return false;
+        }
+
+        _logger.Warning($"Cannot {action}: another connection or configuration operation is still running");
+        TerminalUi.Query(
+            "Operation In Progress",
+            "Please wait for the current connection or configuration operation to finish.",
+            "OK");
+        return true;
+    }
+
+    private void RequestQuit()
+    {
+        if (!CanQuit(_configService.HasUnsavedChanges, ConfirmDiscardChanges))
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _quitInProgress, 1) != 0)
+            return;
+
+        RequestQuitCoreAsync().FireAndForget(_logger);
+    }
+
+    private async Task RequestQuitCoreAsync()
+    {
+        try
+        {
+            if (_csvRecordingManager.IsRecording || _csvRecordingManager.IsStopping)
+            {
+                var stopTask = StopRecordingAndReportAsync();
+                var canStopUi = await AwaitRecordingStopForQuitAsync(
+                    stopTask,
+                    TimeSpan.FromSeconds(10),
+                    PromptForSlowRecordingShutdownAsync).ConfigureAwait(false);
+                if (!canStopUi)
+                {
+                    Interlocked.Exchange(ref _quitInProgress, 0);
+                    return;
+                }
+            }
+
+            await UiThread.RunAsync(TerminalUi.RequestStop).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            _logger.Error($"Quit preparation failed: {ex.Message}");
+            Interlocked.Exchange(ref _quitInProgress, 0);
+            await UiThread.RunAsync(() => TerminalUi.ErrorQuery(
+                "Unable to Quit",
+                "The application could not finish preparing to quit. Review the log and try again.",
+                "OK")).ConfigureAwait(false);
+        }
+    }
+
+    internal enum SlowRecordingQuitDecision
+    {
+        KeepWaiting,
+        QuitAnyway,
+        Cancel
+    }
+
+    internal static async Task<bool> AwaitRecordingStopForQuitAsync(
+        Task stopTask,
+        TimeSpan timeout,
+        Func<Task<SlowRecordingQuitDecision>> getTimeoutDecision)
+    {
+        ArgumentNullException.ThrowIfNull(stopTask);
+        ArgumentNullException.ThrowIfNull(getTimeoutDecision);
+
+        while (!stopTask.IsCompleted)
+        {
+            var completed = await Task.WhenAny(stopTask, Task.Delay(timeout)).ConfigureAwait(false);
+            if (ReferenceEquals(completed, stopTask))
+                break;
+
+            var decision = await getTimeoutDecision().ConfigureAwait(false);
+            if (decision == SlowRecordingQuitDecision.QuitAnyway)
+                return true;
+            if (decision == SlowRecordingQuitDecision.Cancel)
+                return false;
+        }
+
+        // Observe any exception before allowing the UI to stop.
+        await stopTask.ConfigureAwait(false);
+        return true;
+    }
+
+    private async Task<SlowRecordingQuitDecision> PromptForSlowRecordingShutdownAsync()
+    {
+        var decision = SlowRecordingQuitDecision.Cancel;
+        await UiThread.RunAsync(() =>
+        {
+            var choice = TerminalUi.Query(
+                "Recording Still Finishing",
+                "The recording file is still being flushed. Quitting now may truncate it.",
+                "Keep Waiting",
+                "Quit Anyway",
+                "Cancel Quit");
+            decision = choice switch
+            {
+                0 => SlowRecordingQuitDecision.KeepWaiting,
+                1 => SlowRecordingQuitDecision.QuitAnyway,
+                _ => SlowRecordingQuitDecision.Cancel
+            };
+        }).ConfigureAwait(false);
+        return decision;
+    }
+
     /// <summary>
     /// Loads a configuration file from the command line argument.
     /// </summary>
     /// <param name="configPath">Path to the configuration file.</param>
     public void LoadConfigFromCommandLine(string configPath)
     {
-        Application.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
+        TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
         {
             LoadConfigurationAsync(configPath).FireAndForget(_logger);
             return false;
@@ -1402,7 +1952,7 @@ License: MIT
     void DefaultKeybindings.IKeybindingActions.ToggleRecording() => ToggleRecording();
     void DefaultKeybindings.IKeybindingActions.Connect() => ShowConnectDialog();
     void DefaultKeybindings.IKeybindingActions.Disconnect() => DisconnectAsync().FireAndForget(_logger);
-    void DefaultKeybindings.IKeybindingActions.Quit() => RequestStop();
+    void DefaultKeybindings.IKeybindingActions.Quit() => RequestQuit();
 
     #endregion
 
@@ -1414,11 +1964,7 @@ License: MIT
             StopConnectingAnimation();
 
             // Remove the startup status timer if it hasn't yet self-removed.
-            if (_startupStatusTimer != null)
-            {
-                Application.RemoveTimeout(_startupStatusTimer);
-                _startupStatusTimer = null;
-            }
+            CancelStartupStatus();
 
             _csvRecordingManager.Dispose();
             ThemeManager.ThemeChanged -= OnThemeChanged;
@@ -1431,7 +1977,7 @@ License: MIT
                 _focusManager.FocusChanged -= OnPanelFocusChanged;
             }
 
-            Application.KeyDown -= OnApplicationKeyDown;
+            TerminalUi.RemoveKeyDownHandler(OnApplicationKeyDown);
 
             _connectionManager.Dispose();
         }

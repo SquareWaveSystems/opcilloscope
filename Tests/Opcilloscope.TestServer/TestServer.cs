@@ -11,6 +11,7 @@ public class TestServer : IAsyncDisposable, IDisposable
 {
     private StandardServer? _server;
     private ApplicationInstance? _application;
+    private readonly string _pkiRootPath;
     private bool _disposed;
 
     public const string ApplicationName = "Opcilloscope Test Server";
@@ -18,6 +19,17 @@ public class TestServer : IAsyncDisposable, IDisposable
 
     public string EndpointUrl { get; private set; } = string.Empty;
     public bool IsRunning => _server != null;
+
+    public TestServer(string? pkiRootPath = null)
+    {
+        _pkiRootPath = string.IsNullOrWhiteSpace(pkiRootPath)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "opcilloscope",
+                "TestServer",
+                "pki")
+            : Path.GetFullPath(pkiRootPath);
+    }
 
     /// <summary>
     /// Starts the test server on the specified port.
@@ -68,12 +80,6 @@ public class TestServer : IAsyncDisposable, IDisposable
 
     private ApplicationConfiguration CreateApplicationConfiguration(int port)
     {
-        var pkiPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "opcilloscope",
-            "TestServer",
-            "pki");
-
         var config = new ApplicationConfiguration
         {
             ApplicationName = ApplicationName,
@@ -86,23 +92,23 @@ public class TestServer : IAsyncDisposable, IDisposable
                 ApplicationCertificate = new CertificateIdentifier
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiPath, "own"),
+                    StorePath = Path.Combine(_pkiRootPath, "own"),
                     SubjectName = $"CN={ApplicationName}, O=Opcilloscope, DC=localhost"
                 },
                 TrustedIssuerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiPath, "issuers")
+                    StorePath = Path.Combine(_pkiRootPath, "issuers")
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiPath, "trusted")
+                    StorePath = Path.Combine(_pkiRootPath, "trusted")
                 },
                 RejectedCertificateStore = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(pkiPath, "rejected")
+                    StorePath = Path.Combine(_pkiRootPath, "rejected")
                 },
                 // WARNING: Auto-accepting untrusted certificates is appropriate for test/development
                 // environments only. NEVER use this setting in production.

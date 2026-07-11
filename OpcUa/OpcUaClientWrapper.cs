@@ -14,27 +14,54 @@ public class OpcUaClientWrapper : IDisposable
     private ISession? _session;
     private readonly Logger _logger;
     private string? _currentEndpoint;
+    private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private CancellationTokenSource? _reconnectCts;
     private readonly object _reconnectCtsLock = new();
-    private bool _disposed;
+    private int _disposed;
     private ApplicationConfiguration? _appConfig;
     private ConfiguredEndpoint? _lastConfiguredEndpoint;
     private ConnectionCredentials _credentials = ConnectionCredentials.Anonymous;
     private readonly bool _allowInsecure;
+    private readonly string _pkiRootPath;
     private string? _securityMode;
     private string? _securityPolicy;
+    private int _currentSecurityMode = -1;
+    private string? _currentSecurityPolicy;
 
     /// <summary>
-    /// Process-wide default for whether untrusted server certificates are auto-accepted.
+    /// Process-wide default for whether server certificate validation failures are accepted.
     /// Set once at startup from the <c>--insecure</c> CLI flag (see <c>Program.cs</c>).
     /// Wrapper instances created without an explicit <c>allowInsecure</c> argument inherit
     /// this value. Defaults to <c>false</c> (secure-by-default).
     /// </summary>
     public static bool AllowInsecureByDefault { get; set; }
 
+    // Assembly-wide test seam so integration tests never create certificates in
+    // the interactive user's real PKI store. Production code leaves this null.
+    internal static string? PkiRootPathOverrideForTests { get; set; }
+
     public bool IsConnected => _session?.Connected ?? false;
     public string? CurrentEndpoint => _currentEndpoint;
     public ISession? Session => _session;
+
+    /// <summary>
+    /// Gets the message security mode of the endpoint used by the active session.
+    /// This is the actual discovered selection, not merely the requested mode.
+    /// </summary>
+    public MessageSecurityMode? CurrentSecurityMode
+    {
+        get
+        {
+            var value = Volatile.Read(ref _currentSecurityMode);
+            return value < 0 ? null : (MessageSecurityMode)value;
+        }
+    }
+
+    /// <summary>
+    /// Gets the full security-policy URI of the endpoint used by the active session.
+    /// This is the actual discovered selection, not merely the requested policy.
+    /// </summary>
+    public string? CurrentSecurityPolicy => Volatile.Read(ref _currentSecurityPolicy);
 
     /// <summary>
     /// Raised when connection is established (initial or after reconnect).
@@ -61,14 +88,32 @@ public class OpcUaClientWrapper : IDisposable
     /// </summary>
     /// <param name="logger">Optional logger.</param>
     /// <param name="allowInsecure">
-    /// When <c>true</c>, untrusted server certificates are auto-accepted (development only).
+    /// When <c>true</c>, server certificate validation failures are accepted (development only).
     /// When <c>null</c> (the default), the value of <see cref="AllowInsecureByDefault"/> is used.
     /// </param>
     public OpcUaClientWrapper(Logger? logger = null, bool? allowInsecure = null)
+        : this(logger, allowInsecure, GetDefaultPkiRootPath())
     {
+    }
+
+    // Test seam for keeping generated certificates and trust decisions out of the
+    // interactive user's real PKI directories.
+    internal OpcUaClientWrapper(Logger? logger, bool? allowInsecure, string pkiRootPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pkiRootPath);
+
         _logger = logger ?? new Logger();
         _allowInsecure = allowInsecure ?? AllowInsecureByDefault;
+        _pkiRootPath = Path.GetFullPath(pkiRootPath);
     }
+
+    private static string GetDefaultPkiRootPath()
+        => PkiRootPathOverrideForTests is { Length: > 0 } overridePath
+            ? Path.GetFullPath(overridePath)
+            : Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "opcilloscope",
+                "pki");
 
     private async Task<ApplicationConfiguration> GetApplicationConfigAsync()
     {
@@ -86,31 +131,23 @@ public class OpcUaClientWrapper : IDisposable
                 ApplicationCertificate = new CertificateIdentifier
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "opcilloscope", "pki", "own"),
+                    StorePath = Path.Combine(_pkiRootPath, "own"),
                     SubjectName = "CN=Opcilloscope, O=Opcilloscope, DC=localhost"
                 },
                 TrustedIssuerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "opcilloscope", "pki", "issuer")
+                    StorePath = Path.Combine(_pkiRootPath, "issuer")
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "opcilloscope", "pki", "trusted")
+                    StorePath = Path.Combine(_pkiRootPath, "trusted")
                 },
                 RejectedCertificateStore = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "opcilloscope", "pki", "rejected")
+                    StorePath = Path.Combine(_pkiRootPath, "rejected")
                 },
                 // Secure-by-default: never blanket-accept. Acceptance is decided per
                 // certificate by OnCertificateValidation, gated on the --insecure flag.
@@ -137,11 +174,11 @@ public class OpcUaClientWrapper : IDisposable
 
         if (_allowInsecure)
         {
-            _logger.Warning("Insecure mode enabled (--insecure): untrusted server certificates will be auto-accepted. Not recommended for production.");
+            _logger.Warning("Insecure mode enabled (--insecure): server certificate validation is disabled. Not recommended for production.");
         }
         else
         {
-            _logger.Info("Certificate validation enabled. Untrusted server certificates will be rejected (re-run with --insecure to override).");
+            _logger.Info("Certificate validation enabled. Invalid server certificates will be rejected (re-run with --insecure to override).");
         }
 
         return _appConfig;
@@ -149,7 +186,7 @@ public class OpcUaClientWrapper : IDisposable
 
     /// <summary>
     /// Decides whether to accept a server certificate that failed validation.
-    /// Without <c>--insecure</c>, untrusted certificates are rejected with a clear,
+    /// Without <c>--insecure</c>, certificate validation failures are rejected with a clear,
     /// actionable log message. With <c>--insecure</c>, they are accepted (development only).
     /// </summary>
     private void OnCertificateValidation(CertificateValidator sender, CertificateValidationEventArgs e)
@@ -160,7 +197,7 @@ public class OpcUaClientWrapper : IDisposable
 
         if (_allowInsecure)
         {
-            _logger.Warning($"Accepting untrusted server certificate (--insecure): '{e.Certificate?.Subject}' [{e.Error.StatusCode}]");
+            _logger.Warning($"Bypassing server certificate validation (--insecure): '{e.Certificate?.Subject}' [{e.Error.StatusCode}]");
             e.AcceptAll = true;
             e.Accept = true;
             return;
@@ -169,12 +206,75 @@ public class OpcUaClientWrapper : IDisposable
         var trustedStorePath = _appConfig?.SecurityConfiguration?.TrustedPeerCertificates?.StorePath;
         _logger.Error(
             $"Server certificate rejected ({e.Error.StatusCode}): '{e.Certificate?.Subject}'. Connection refused. " +
-            "Re-run with --insecure to accept untrusted certificates (development only), " +
+            "Re-run with --insecure to bypass server certificate validation (development only), " +
             $"or add the trusted certificate to the PKI store at: {trustedStorePath}");
         e.Accept = false;
     }
 
-    public async Task<bool> ConnectAsync(
+    public Task<bool> ConnectAsync(
+        string endpointUrl,
+        ConnectionCredentials? credentials = null,
+        string? securityMode = null,
+        string? securityPolicy = null)
+    {
+        CancelPendingReconnect();
+        return ExecuteLifecycleAsync(
+            () => ConnectCoreAsync(endpointUrl, credentials, securityMode, securityPolicy));
+    }
+
+    /// <summary>
+    /// Runs a complete lifecycle transaction under the wrapper's single async gate.
+    /// ConnectionManager uses this same gate so session and subscription state change
+    /// as one serialized operation rather than through two independently locked layers.
+    /// </summary>
+    internal async Task<T> ExecuteLifecycleAsync<T>(Func<Task<T>> operation)
+    {
+        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return await operation().ConfigureAwait(false);
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    internal async Task ExecuteLifecycleAsync(Func<Task> operation)
+    {
+        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await operation().ConfigureAwait(false);
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Runs a complete application operation against one pinned session while holding
+    /// the lifecycle gate. Connection changes therefore wait for the operation, and an
+    /// operation queued behind a connection change cannot accidentally capture the old
+    /// session and continue through the new one.
+    /// </summary>
+    internal Task<T> ExecuteSessionOperationAsync<T>(Func<ISession, Task<T>> operation)
+        => ExecuteLifecycleAsync(async () =>
+        {
+            var session = _session;
+            if (session == null || !session.Connected)
+                throw new InvalidOperationException("Not connected");
+
+            return await operation(session).ConfigureAwait(false);
+        });
+
+    /// <summary>
+    /// Connect implementation for callers that already own <see cref="_lifecycleGate"/>.
+    /// Never call a public lifecycle method from this method: doing so would wait on
+    /// the non-reentrant gate and deadlock.
+    /// </summary>
+    internal async Task<bool> ConnectCoreAsync(
         string endpointUrl,
         ConnectionCredentials? credentials = null,
         string? securityMode = null,
@@ -182,42 +282,70 @@ public class OpcUaClientWrapper : IDisposable
     {
         try
         {
-            await DisconnectAsync();
+            if (Volatile.Read(ref _disposed) != 0)
+                throw new ObjectDisposedException(nameof(OpcUaClientWrapper));
+
+            await DisconnectCoreAsync().ConfigureAwait(false);
 
             _credentials = credentials ?? ConnectionCredentials.Anonymous;
-            _securityMode = securityMode;
-            _securityPolicy = securityPolicy;
+            _credentials.Validate();
+            _securityMode = NormalizeSecuritySetting(securityMode);
+            _securityPolicy = NormalizeSecuritySetting(securityPolicy);
             _logger.Info($"Connecting to {endpointUrl}...");
 
-            var config = await GetApplicationConfigAsync();
+            var config = await GetApplicationConfigAsync().ConfigureAwait(false);
 
             // Select the strongest endpoint matching the requested security settings.
-            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, endpointUrl, _securityMode, _securityPolicy);
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(
+                config,
+                endpointUrl,
+                _securityMode,
+                _securityPolicy).ConfigureAwait(false);
 
             // Create session
             var endpointConfig = EndpointConfiguration.Create(config);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
-            _lastConfiguredEndpoint = endpoint;
 
 #pragma warning disable CS0618 // Session.Create is obsolete but ISessionFactory.CreateAsync requires additional setup
-            _session = await Opc.Ua.Client.Session.Create(
+            var newSession = await Opc.Ua.Client.Session.Create(
                 config,
                 endpoint,
                 false,
                 "Opcilloscope Session",
                 60000,
                 CreateUserIdentity(),
-                null
-            );
+                null).ConfigureAwait(false);
 #pragma warning restore CS0618
 
-            // Configure session for subscription preservation during reconnection
-            _session.DeleteSubscriptionsOnClose = false;
-            _session.TransferSubscriptionsOnReconnect = true;
+            var published = false;
+            try
+            {
+                // Configure session for subscription preservation during reconnection.
+                newSession.DeleteSubscriptionsOnClose = false;
+                newSession.TransferSubscriptionsOnReconnect = true;
+                newSession.KeepAlive += Session_KeepAlive;
 
-            _session.KeepAlive += Session_KeepAlive;
+                _session = newSession;
+                published = true;
+                _lastConfiguredEndpoint = endpoint;
+                _currentEndpoint = endpointUrl;
+                SetCurrentSecurityProfile(selectedEndpoint);
+            }
+            catch
+            {
+                // Session.Create succeeded, so this local session must be retired even
+                // if subsequent setup fails before ownership transfers to _session.
+                if (!published)
+                {
+                    try { newSession.Dispose(); }
+                    catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+                    {
+                        _logger.Warning($"Session cleanup error after failed setup: {ex.Message}");
+                    }
+                }
+                throw;
+            }
 
-            _currentEndpoint = endpointUrl;
             _logger.Info($"Connected to {endpointUrl}");
             Connected?.Invoke();
             return true;
@@ -231,21 +359,26 @@ public class OpcUaClientWrapper : IDisposable
                 ? "Authentication failed: invalid username or password."
                 : "Authentication rejected by server: " + sre.Message;
             _logger.Error(msg);
+            await DisconnectCoreAsync().ConfigureAwait(false);
             ConnectionError?.Invoke(msg);
-            await DisconnectAsync();
             return false;
         }
         catch (Exception ex)
         {
             _logger.Error($"Connection failed: {ex.Message}");
+            await DisconnectCoreAsync().ConfigureAwait(false);
             ConnectionError?.Invoke(ex.Message);
-            await DisconnectAsync();
             return false;
         }
     }
 
     private void Session_KeepAlive(ISession session, KeepAliveEventArgs e)
     {
+        // Keep-alive callbacks can already be queued when a session is detached.
+        // Never let stale session A mark a newly installed session B unhealthy.
+        if (!IsCurrentSessionCallback(session))
+            return;
+
         // A bad keep-alive status indicates the connection is unhealthy. On a transient
         // TCP drop the SDK can still report session.Connected == true, so do NOT gate on
         // it - that previously prevented auto-reconnect from ever firing for network
@@ -257,6 +390,9 @@ public class OpcUaClientWrapper : IDisposable
         }
     }
 
+    internal bool IsCurrentSessionCallback(ISession session)
+        => Volatile.Read(ref _disposed) == 0 && ReferenceEquals(session, _session);
+
     /// <summary>
     /// Synchronously disconnects the current session. Kept for back-compat with
     /// existing synchronous callers; UI callers should prefer <see cref="DisconnectAsync"/>
@@ -264,47 +400,38 @@ public class OpcUaClientWrapper : IDisposable
     /// </summary>
     public void Disconnect()
     {
-        DisposeReconnectCts();
-
-        var session = _session;
-        if (session != null)
-        {
-            _session = null;
-            _currentEndpoint = null;
-            try
-            {
-                session.KeepAlive -= Session_KeepAlive;
-                session.CloseAsync().GetAwaiter().GetResult();
-                session.Dispose();
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
-            {
-                // Session cleanup errors are expected during network issues
-                _logger.Warning($"Session cleanup error (non-critical): {ex.Message}");
-            }
-            Disconnected?.Invoke();
-        }
+        CancelPendingReconnect();
+        DisconnectAsync().ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
     /// <summary>
-    /// Cancels and disposes the reconnect cancellation token source, if any.
-    /// Safe to race with <see cref="ReconnectAsync"/>: the field swap happens
-    /// under a lock, so two callers can never dispose the same instance twice.
+    /// Cancels an in-flight reconnect before a connect or disconnect waits for the
+    /// lifecycle gate. The reconnect operation remains the sole owner responsible
+    /// for disposing its token source.
     /// </summary>
-    private void DisposeReconnectCts()
+    internal void CancelPendingReconnect()
     {
         CancellationTokenSource? cts;
         lock (_reconnectCtsLock)
         {
             cts = _reconnectCts;
-            _reconnectCts = null;
         }
 
         if (cts != null)
         {
             try { cts.Cancel(); } catch (ObjectDisposedException) { }
-            cts.Dispose();
         }
+    }
+
+    private void CompleteReconnect(CancellationTokenSource cts)
+    {
+        lock (_reconnectCtsLock)
+        {
+            if (ReferenceEquals(_reconnectCts, cts))
+                _reconnectCts = null;
+        }
+
+        cts.Dispose();
     }
 
     /// <summary>
@@ -313,87 +440,108 @@ public class OpcUaClientWrapper : IDisposable
     /// with subscription transfer.
     /// </summary>
     /// <returns>True if reconnection succeeded, false otherwise.</returns>
-    public async Task<bool> ReconnectAsync()
+    public Task<bool> ReconnectAsync() => ExecuteLifecycleAsync(() => ReconnectCoreAsync());
+
+    /// <summary>
+    /// Reconnect implementation for callers that already own the lifecycle gate.
+    /// </summary>
+    internal async Task<bool> ReconnectCoreAsync(
+        CancellationToken cancellationToken = default)
     {
+        if (Volatile.Read(ref _disposed) != 0)
+            return false;
+
         if (_session == null && string.IsNullOrEmpty(_currentEndpoint))
         {
             _logger.Warning("No session or endpoint to reconnect");
             return false;
         }
 
-        DisposeReconnectCts();
-
-        // Work with a local reference throughout: a concurrent Disconnect() can null
-        // and dispose the field at any time, so re-reading it mid-loop would NRE or
-        // touch a disposed CTS.
-        var cts = new CancellationTokenSource();
+        var cts = cancellationToken.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : new CancellationTokenSource();
         lock (_reconnectCtsLock)
         {
             _reconnectCts = cts;
         }
         var token = cts.Token;
 
-        // Exponential backoff: 1s, 2s, 4s, 8s
-        int[] delays = { 1000, 2000, 4000, 8000 };
-
-        for (int attempt = 0; attempt < delays.Length; attempt++)
+        try
         {
-            if (token.IsCancellationRequested)
-                return false;
+            // Exponential backoff: 1s, 2s, 4s, 8s
+            int[] delays = { 1000, 2000, 4000, 8000 };
 
-            _logger.Info($"Reconnection attempt {attempt + 1}/{delays.Length}...");
-
-            try
+            for (int attempt = 0; attempt < delays.Length; attempt++)
             {
-                // Strategy 1: Try to reconnect the existing session (preserves subscriptions automatically)
-                if (_session != null)
+                if (token.IsCancellationRequested)
+                    return false;
+
+                _logger.Info($"Reconnection attempt {attempt + 1}/{delays.Length}...");
+
+                try
                 {
-                    var reconnectResult = await TrySessionReconnectAsync(token);
-                    if (reconnectResult && !token.IsCancellationRequested)
+                    // Strategy 1: Try to reconnect the existing session (preserves subscriptions automatically)
+                    if (_session != null)
                     {
-                        _logger.Info("Session reconnected successfully (subscriptions preserved)");
+                        var reconnectResult = await TrySessionReconnectAsync(token).ConfigureAwait(false);
+                        if (reconnectResult && !token.IsCancellationRequested)
+                        {
+                            _logger.Info("Session reconnected successfully (subscriptions preserved)");
+                            Connected?.Invoke();
+                            return true;
+                        }
+                    }
+
+                    if (token.IsCancellationRequested)
+                        return false;
+
+                    // Strategy 2: Recreate session and transfer subscriptions
+                    var recreateResult = await TryRecreateSessionAsync(token).ConfigureAwait(false);
+                    if (recreateResult)
+                    {
+                        if (token.IsCancellationRequested)
+                        {
+                            // The user disconnected while the session was being recreated;
+                            // don't resurrect a connection they asked to close. Call the core
+                            // method because this operation already owns the lifecycle gate.
+                            _logger.Info("Reconnect cancelled after session recreation - closing the new session");
+                            await DisconnectCoreAsync().ConfigureAwait(false);
+                            return false;
+                        }
+
+                        _logger.Info("Session recreated successfully (subscriptions transferred)");
                         Connected?.Invoke();
                         return true;
                     }
                 }
-
-                // Strategy 2: Recreate session and transfer subscriptions
-                var recreateResult = await TryRecreateSessionAsync(token);
-                if (recreateResult)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
-                    if (token.IsCancellationRequested)
-                    {
-                        // The user disconnected while the session was being recreated;
-                        // don't resurrect a connection they asked to close.
-                        _logger.Info("Reconnect cancelled after session recreation - closing the new session");
-                        await DisconnectAsync();
-                        return false;
-                    }
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning($"Reconnection attempt {attempt + 1} failed: {ex.Message}");
+                }
 
-                    _logger.Info("Session recreated successfully (subscriptions transferred)");
-                    Connected?.Invoke();
-                    return true;
+                // Wait before next attempt
+                try
+                {
+                    await Task.Delay(delays[attempt], token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return false;
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.Warning($"Reconnection attempt {attempt + 1} failed: {ex.Message}");
-            }
 
-            // Wait before next attempt
-            try
-            {
-                await Task.Delay(delays[attempt], token);
-            }
-            catch (OperationCanceledException)
-            {
-                return false;
-            }
+            _logger.Error("Reconnection failed after all attempts");
+            Disconnected?.Invoke();
+            return false;
         }
-
-        _logger.Error("Reconnection failed after all attempts");
-        Disconnected?.Invoke();
-        return false;
+        finally
+        {
+            CompleteReconnect(cts);
+        }
     }
 
     /// <summary>
@@ -402,14 +550,15 @@ public class OpcUaClientWrapper : IDisposable
     /// </summary>
     private async Task<bool> TrySessionReconnectAsync(CancellationToken cancellationToken)
     {
-        if (_session == null)
+        var session = _session;
+        if (session == null)
             return false;
 
         try
         {
             _logger.Info("Attempting session reconnect...");
-            await _session.ReconnectAsync(cancellationToken);
-            return _session.Connected;
+            await session.ReconnectAsync(cancellationToken).ConfigureAwait(false);
+            return ReferenceEquals(session, _session) && session.Connected;
         }
         catch (ServiceResultException ex)
         {
@@ -424,16 +573,21 @@ public class OpcUaClientWrapper : IDisposable
     /// </summary>
     private async Task<bool> TryRecreateSessionAsync(CancellationToken cancellationToken)
     {
-        if (_lastConfiguredEndpoint == null || string.IsNullOrEmpty(_currentEndpoint))
+        cancellationToken.ThrowIfCancellationRequested();
+        var endpointUrl = _currentEndpoint;
+        if (_lastConfiguredEndpoint == null || string.IsNullOrEmpty(endpointUrl))
             return false;
+
+        var oldSession = _session;
+        ISession? newSession = null;
+        var installed = false;
 
         try
         {
             _logger.Info("Recreating session...");
 
-            var config = await GetApplicationConfigAsync();
-
-            var oldSession = _session;
+            var config = await GetApplicationConfigAsync().ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
             // Capture existing subscriptions before replacing the session
             SubscriptionCollection? subscriptionsToTransfer = null;
@@ -444,70 +598,78 @@ public class OpcUaClientWrapper : IDisposable
             }
 
             // Rediscover endpoint in case server configuration changed
-            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(config, _currentEndpoint, _securityMode, _securityPolicy);
+            var selectedEndpoint = await DiscoverAndSelectEndpointAsync(
+                config,
+                endpointUrl,
+                _securityMode,
+                _securityPolicy).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             var endpointConfig = EndpointConfiguration.Create(config);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
-            _lastConfiguredEndpoint = endpoint;
+            cancellationToken.ThrowIfCancellationRequested();
 
             // Create the new session before touching the old one, so a failure here
             // leaves the existing state unchanged for the next retry attempt.
 #pragma warning disable CS0618
-            var newSession = await Opc.Ua.Client.Session.Create(
+            newSession = await Opc.Ua.Client.Session.Create(
                 config,
                 endpoint,
                 false,
                 "Opcilloscope Session",
                 60000,
                 CreateUserIdentity(),
-                null
-            );
+                null).ConfigureAwait(false);
 #pragma warning restore CS0618
 
+            cancellationToken.ThrowIfCancellationRequested();
             newSession.DeleteSubscriptionsOnClose = false;
             newSession.TransferSubscriptionsOnReconnect = true;
             newSession.KeepAlive += Session_KeepAlive;
             _session = newSession;
+            installed = true;
+            _lastConfiguredEndpoint = endpoint;
+            SetCurrentSecurityProfile(selectedEndpoint);
 
             // Transfer subscriptions while the old session is still alive. The client-side
             // half of TransferSubscriptionsAsync detaches each subscription from its previous
             // session; if that session is already disposed this throws, the SDK swallows it
             // and reports failure - after the server-side transfer already succeeded - leaving
             // orphaned subscriptions on the server and forcing a duplicate recreate.
-            try
+            if (subscriptionsToTransfer != null && subscriptionsToTransfer.Count > 0)
             {
-                if (subscriptionsToTransfer != null && subscriptionsToTransfer.Count > 0)
-                {
-                    var transferred = await TransferSubscriptionsAsync(subscriptionsToTransfer, cancellationToken);
-                    _logger.Info($"Transferred {transferred} of {subscriptionsToTransfer.Count} subscription(s)");
-                }
-            }
-            finally
-            {
-                // Retire the old session even if the transfer throws - once _session
-                // points at the new session the old one would otherwise leak. Dispose
-                // without CloseAsync() - sending CloseSession would delete any
-                // server-side subscriptions that were not transferred, and the
-                // transport is typically already dead on this path.
-                if (oldSession != null)
-                {
-                    oldSession.KeepAlive -= Session_KeepAlive;
-                    try
-                    {
-                        oldSession.Dispose();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Warning($"Session cleanup error during reconnection: {ex.Message}");
-                    }
-                }
+                var transferred = await TransferSubscriptionsAsync(
+                    subscriptionsToTransfer,
+                    cancellationToken).ConfigureAwait(false);
+                _logger.Info($"Transferred {transferred} of {subscriptionsToTransfer.Count} subscription(s)");
             }
 
             return newSession.Connected;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
         }
         catch (Exception ex)
         {
             _logger.Error($"Session recreation failed: {ex.Message}");
             return false;
+        }
+        finally
+        {
+            if (installed)
+            {
+                // Once the new session is installed, always retire the old local
+                // session even if transfer or status inspection throws. Do not send
+                // CloseSession here: it could delete server-side subscriptions that
+                // were just transferred.
+                if (oldSession != null && !ReferenceEquals(oldSession, newSession))
+                    DisposeSessionWithoutClose(oldSession, "during reconnection");
+            }
+            else if (newSession != null)
+            {
+                // Session.Create completed but ownership was never published.
+                DisposeSessionWithoutClose(newSession, "after failed reconnection setup");
+            }
         }
     }
 
@@ -516,7 +678,8 @@ public class OpcUaClientWrapper : IDisposable
     /// </summary>
     private async Task<int> TransferSubscriptionsAsync(SubscriptionCollection subscriptions, CancellationToken cancellationToken)
     {
-        if (_session == null || subscriptions == null)
+        var session = _session;
+        if (session == null || subscriptions == null)
             return 0;
 
         int transferred = 0;
@@ -524,10 +687,10 @@ public class OpcUaClientWrapper : IDisposable
         try
         {
             // Use the OPC UA TransferSubscriptions service
-            var success = await _session.TransferSubscriptionsAsync(
+            var success = await session.TransferSubscriptionsAsync(
                 subscriptions,
                 sendInitialValues: true,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
 
             if (success)
             {
@@ -556,36 +719,43 @@ public class OpcUaClientWrapper : IDisposable
         return transferred;
     }
 
-    public async Task<ReferenceDescriptionCollection> BrowseAsync(NodeId nodeId)
-    {
-        if (_session == null)
-            throw new InvalidOperationException("Not connected");
+    public Task<ReferenceDescriptionCollection> BrowseAsync(NodeId nodeId)
+        => ExecuteSessionOperationAsync(session => BrowseCoreAsync(session, nodeId));
 
-        var browser = new Browser(_session)
+    internal static async Task<ReferenceDescriptionCollection> BrowseCoreAsync(
+        ISession session,
+        NodeId nodeId)
+    {
+        var browser = new Browser(session)
         {
             BrowseDirection = BrowseDirection.Forward,
-            NodeClassMask = (int)NodeClass.Object | (int)NodeClass.Variable | (int)NodeClass.Method,
+            // A zero mask requests all node classes. Restricting this to Object,
+            // Variable, and Method hid ObjectType, VariableType, ReferenceType,
+            // DataType, and View nodes from standard hierarchy browsing.
+            NodeClassMask = 0,
             ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
             IncludeSubtypes = true,
             ResultMask = (uint)BrowseResultMask.All
         };
 
-        return await browser.BrowseAsync(nodeId);
+        return await browser.BrowseAsync(nodeId).ConfigureAwait(false);
     }
 
-    public async Task<DataValue?> ReadValueAsync(NodeId nodeId)
+    public Task<DataValue?> ReadValueAsync(NodeId nodeId)
+        => ExecuteSessionOperationAsync(session => ReadValueCoreAsync(session, nodeId));
+
+    internal static async Task<DataValue?> ReadValueCoreAsync(ISession session, NodeId nodeId)
+        => await session.ReadValueAsync(nodeId).ConfigureAwait(false);
+
+    public Task<DataValueCollection> ReadAttributesAsync(NodeId nodeId, params uint[] attributeIds)
+        => ExecuteSessionOperationAsync(
+            session => ReadAttributesCoreAsync(session, nodeId, attributeIds));
+
+    internal static async Task<DataValueCollection> ReadAttributesCoreAsync(
+        ISession session,
+        NodeId nodeId,
+        params uint[] attributeIds)
     {
-        if (_session == null)
-            throw new InvalidOperationException("Not connected");
-
-        return await _session.ReadValueAsync(nodeId);
-    }
-
-    public async Task<DataValueCollection> ReadAttributesAsync(NodeId nodeId, params uint[] attributeIds)
-    {
-        if (_session == null)
-            throw new InvalidOperationException("Not connected");
-
         var nodesToRead = new ReadValueIdCollection();
         foreach (var attrId in attributeIds)
         {
@@ -596,7 +766,7 @@ public class OpcUaClientWrapper : IDisposable
             });
         }
 
-        var response = await _session.ReadAsync(
+        var response = await session.ReadAsync(
             null,
             0,
             TimestampsToReturn.Both,
@@ -607,11 +777,15 @@ public class OpcUaClientWrapper : IDisposable
         return response.Results;
     }
 
-    public async Task<StatusCode> WriteValueAsync(NodeId nodeId, object value)
-    {
-        if (_session == null)
-            throw new InvalidOperationException("Not connected");
+    public Task<StatusCode> WriteValueAsync(NodeId nodeId, object value)
+        => ExecuteSessionOperationAsync(
+            session => WriteValueCoreAsync(session, nodeId, value));
 
+    internal static async Task<StatusCode> WriteValueCoreAsync(
+        ISession session,
+        NodeId nodeId,
+        object value)
+    {
         var nodesToWrite = new WriteValueCollection
         {
             new WriteValue
@@ -622,7 +796,7 @@ public class OpcUaClientWrapper : IDisposable
             }
         };
 
-        var response = await _session.WriteAsync(
+        var response = await session.WriteAsync(
             null,
             nodesToWrite,
             CancellationToken.None
@@ -635,48 +809,103 @@ public class OpcUaClientWrapper : IDisposable
     /// Asynchronously disconnects the current session without blocking the calling thread
     /// on the OPC UA close round-trip. Preferred over <see cref="Disconnect"/> for UI callers.
     /// </summary>
-    public async Task DisconnectAsync()
+    public Task DisconnectAsync()
     {
-        DisposeReconnectCts();
+        CancelPendingReconnect();
+        return ExecuteLifecycleAsync(DisconnectCoreAsync);
+    }
 
+    /// <summary>
+    /// Disconnect implementation for callers that already own the lifecycle gate.
+    /// The session is detached before any fallible cleanup, and Dispose always runs
+    /// even when event removal or CloseAsync throws.
+    /// </summary>
+    internal async Task DisconnectCoreAsync()
+    {
         var session = _session;
-        if (session != null)
+        _session = null;
+        _currentEndpoint = null;
+        ClearCurrentSecurityProfile();
+
+        if (session == null)
+            return;
+
+        try
         {
-            _session = null;
-            _currentEndpoint = null;
             try
             {
                 session.KeepAlive -= Session_KeepAlive;
-                await session.CloseAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+            {
+                _logger.Warning($"Session event cleanup error (non-critical): {ex.Message}");
+            }
+
+            await session.CloseAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Session close errors are expected during network issues.
+            _logger.Warning($"Session close error (non-critical): {ex.Message}");
+        }
+        finally
+        {
+            try
+            {
                 session.Dispose();
             }
             catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
             {
-                // Session cleanup errors are expected during network issues
-                _logger.Warning($"Session cleanup error (non-critical): {ex.Message}");
+                _logger.Warning($"Session dispose error (non-critical): {ex.Message}");
             }
-            Disconnected?.Invoke();
         }
+
+        Disconnected?.Invoke();
     }
 
     public void Dispose()
     {
-        if (!_disposed)
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        CancelPendingReconnect();
+        try
         {
-            _disposed = true;
+            // Bounded synchronous wait to avoid deadlocks when disposed from a
+            // synchronization context (mirrors SubscriptionManager.Dispose). Use
+            // the core method because the disposed flag intentionally blocks connect.
+            Task.Run(() => ExecuteLifecycleAsync(DisconnectCoreAsync))
+                .Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (AggregateException ex)
+        {
+            _logger.Warning($"Disposal warning: {ex.InnerException?.Message ?? ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Disposal warning: {ex.Message}");
+        }
+    }
+
+    private void DisposeSessionWithoutClose(ISession session, string context)
+    {
+        try
+        {
+            session.KeepAlive -= Session_KeepAlive;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            _logger.Warning($"Session event cleanup error {context}: {ex.Message}");
+        }
+        finally
+        {
             try
             {
-                // Bounded synchronous wait to avoid deadlocks when disposed from a
-                // synchronization context (mirrors SubscriptionManager.Dispose).
-                Task.Run(async () => await DisconnectAsync()).Wait(TimeSpan.FromSeconds(5));
+                session.Dispose();
             }
-            catch (AggregateException ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
             {
-                _logger.Warning($"Disposal warning: {ex.InnerException?.Message ?? ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                _logger.Warning($"Disposal warning: {ex.Message}");
+                _logger.Warning($"Session dispose error {context}: {ex.Message}");
             }
         }
     }
@@ -699,6 +928,21 @@ public class OpcUaClientWrapper : IDisposable
         string? securityMode,
         string? securityPolicy)
     {
+        var hasRequestedMode = !string.IsNullOrEmpty(securityMode);
+
+        if (_credentials.Type == AuthenticationType.UserName
+            && hasRequestedMode
+            && string.Equals(
+                securityMode,
+                nameof(MessageSecurityMode.None),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Username credentials require an encrypted or signed OPC UA endpoint; " +
+                "SecurityMode=None is not permitted. The --insecure option only controls " +
+                "certificate trust and never permits plaintext credentials.");
+        }
+
         // Discover endpoints from the server
         var uri = new Uri(endpointUrl);
         _logger.Info($"Discovering endpoints at {uri}...");
@@ -711,7 +955,7 @@ public class OpcUaClientWrapper : IDisposable
         EndpointDescriptionCollection endpoints;
         try
         {
-            endpoints = await client.GetEndpointsAsync(null);
+            endpoints = await client.GetEndpointsAsync(null).ConfigureAwait(false);
             _logger.Info($"Found {endpoints.Count} endpoints");
         }
         catch (Exception ex)
@@ -728,34 +972,12 @@ public class OpcUaClientWrapper : IDisposable
                 $"No endpoints offered by server at {endpointUrl}");
         }
 
-        // Security is requested either by an explicit, non-"None" SecurityMode, or whenever
-        // credentials are supplied: username/password tokens must never be sent over an
-        // unencrypted channel. SelectEndpoint falls back to a None endpoint only if the server
-        // offers no secure endpoint, so this never hard-fails a None-only server.
-        bool securityRequested = !string.IsNullOrEmpty(securityMode)
-            && !string.Equals(securityMode, nameof(MessageSecurityMode.None), StringComparison.OrdinalIgnoreCase);
-        bool useSecurity = securityRequested || _credentials.Type != AuthenticationType.Anonymous;
-
-        // If a specific SecurityMode/SecurityPolicy was requested, honor it by narrowing the
-        // candidate set to exact matches; fall back to all endpoints if none match.
-        var candidates = endpoints;
-        if (useSecurity && (!string.IsNullOrEmpty(securityMode) || !string.IsNullOrEmpty(securityPolicy)))
-        {
-            var matches = endpoints
-                .Where(ep => MatchesSecurityMode(ep, securityMode) && MatchesSecurityPolicy(ep, securityPolicy))
-                .ToList();
-
-            if (matches.Count > 0)
-            {
-                candidates = new EndpointDescriptionCollection(matches);
-            }
-            else
-            {
-                _logger.Warning(
-                    $"No endpoint matched requested SecurityMode='{securityMode}' / SecurityPolicy='{securityPolicy}'. " +
-                    "Selecting the strongest available endpoint instead.");
-            }
-        }
+        var (candidates, useSecurity) = FilterEndpointCandidates(
+            endpoints,
+            _credentials.Type,
+            securityMode,
+            securityPolicy,
+            endpointUrl);
 
         // CoreClientUtils.SelectEndpoint sorts by SecurityLevel and returns the strongest
         // endpoint matching the security preference (instead of the first match).
@@ -773,9 +995,9 @@ public class OpcUaClientWrapper : IDisposable
         if (_credentials.Type != AuthenticationType.Anonymous
             && selectedEndpoint.SecurityMode == MessageSecurityMode.None)
         {
-            _logger.Warning(
-                "Credentials will be sent over an UNENCRYPTED channel: the selected endpoint uses SecurityMode=None. " +
-                "Anyone on the network can read the username and password. Prefer a server endpoint with Sign or SignAndEncrypt.");
+            throw new ServiceResultException(
+                StatusCodes.BadSecurityChecksFailed,
+                "Endpoint selection refused SecurityMode=None for username credentials.");
         }
 
         // Update the endpoint URL to use the requested host if different
@@ -793,6 +1015,151 @@ public class OpcUaClientWrapper : IDisposable
         return selectedEndpoint;
     }
 
+    internal static (EndpointDescriptionCollection Candidates, bool UseSecurity) FilterEndpointCandidates(
+        EndpointDescriptionCollection endpoints,
+        AuthenticationType authenticationType,
+        string? securityMode,
+        string? securityPolicy,
+        string endpointUrl)
+    {
+        var hasRequestedMode = !string.IsNullOrEmpty(securityMode);
+        var hasRequestedPolicy = !string.IsNullOrEmpty(securityPolicy);
+        var hasExplicitSecurityProfile = hasRequestedMode || hasRequestedPolicy;
+        var explicitlyAllowsNone = hasRequestedMode
+            && string.Equals(
+                securityMode,
+                nameof(MessageSecurityMode.None),
+                StringComparison.OrdinalIgnoreCase);
+        var explicitlyAllowsSignOnly = hasRequestedMode
+            && string.Equals(
+                securityMode,
+                nameof(MessageSecurityMode.Sign),
+                StringComparison.OrdinalIgnoreCase);
+
+        if (hasRequestedPolicy
+            && IsNoneSecurityPolicy(securityPolicy!)
+            && !explicitlyAllowsNone)
+        {
+            throw new ServiceResultException(
+                StatusCodes.BadSecurityChecksFailed,
+                "SecurityPolicy=None does not opt into plaintext transport by itself; " +
+                "set SecurityMode=None explicitly as well.");
+        }
+
+        // An explicit mode or policy is a contract, not a preference. Narrow to exact
+        // matches and fail closed instead of silently choosing a different profile.
+        var candidates = endpoints;
+        if (hasExplicitSecurityProfile)
+        {
+            var matches = endpoints
+                .Where(ep => MatchesSecurityMode(ep, securityMode) && MatchesSecurityPolicy(ep, securityPolicy))
+                .ToList();
+
+            if (matches.Count == 0)
+            {
+                throw new ServiceResultException(
+                    StatusCodes.BadSecurityChecksFailed,
+                    $"No endpoint matched requested SecurityMode='{securityMode ?? "<any>"}' / " +
+                    $"SecurityPolicy='{securityPolicy ?? "<any>"}' at {endpointUrl}.");
+            }
+
+            candidates = new EndpointDescriptionCollection(matches);
+        }
+
+        // Unless the mode explicitly opts into Sign-only or None, require encryption.
+        // This prevents an omitted/partial profile from silently exposing browse,
+        // read, or write payloads on a Sign-only channel. UserName credentials always
+        // require at least signing, even if a caller requests None.
+        var requireEncryption = !explicitlyAllowsSignOnly && !explicitlyAllowsNone;
+        var requireSecuredEndpoint = authenticationType == AuthenticationType.UserName
+            || !explicitlyAllowsNone;
+        if (requireEncryption)
+        {
+            var encryptedCandidates = candidates
+                .Where(ep => ep.SecurityMode == MessageSecurityMode.SignAndEncrypt)
+                .ToList();
+
+            if (encryptedCandidates.Count == 0)
+            {
+                throw new ServiceResultException(
+                    StatusCodes.BadSecurityChecksFailed,
+                    "The server offered no SignAndEncrypt OPC UA endpoint. " +
+                    "To deliberately allow signed-but-unencrypted traffic, set SecurityMode=Sign; " +
+                    "for unauthenticated plaintext, set SecurityMode=None with anonymous authentication.");
+            }
+
+            candidates = new EndpointDescriptionCollection(encryptedCandidates);
+        }
+        else if (requireSecuredEndpoint)
+        {
+            var signedCandidates = candidates
+                .Where(ep => ep.SecurityMode is MessageSecurityMode.Sign or MessageSecurityMode.SignAndEncrypt)
+                .ToList();
+            if (signedCandidates.Count == 0)
+            {
+                throw new ServiceResultException(
+                    StatusCodes.BadSecurityChecksFailed,
+                    "Username credentials require an encrypted or signed OPC UA endpoint.");
+            }
+
+            candidates = new EndpointDescriptionCollection(signedCandidates);
+        }
+
+        // Endpoint security and user-token security are separate OPC UA contracts.
+        // Keep only endpoints that advertise the requested identity type, and only
+        // expose compatible policies to Session.Create so it cannot select an
+        // incompatible first policy from a mixed collection. In particular, a
+        // username token with SecurityPolicy=None is invalid on a Sign-only channel:
+        // the password would not be encrypted.
+        var identityCandidates = new EndpointDescriptionCollection();
+        foreach (var endpoint in candidates)
+        {
+            var compatiblePolicies = new UserTokenPolicyCollection();
+            if (endpoint.UserIdentityTokens != null)
+            {
+                foreach (var policy in endpoint.UserIdentityTokens)
+                {
+                    if (IsCompatibleUserTokenPolicy(endpoint, policy, authenticationType))
+                        compatiblePolicies.Add((UserTokenPolicy)policy.Clone());
+                }
+            }
+
+            if (compatiblePolicies.Count == 0)
+                continue;
+
+            var compatibleEndpoint = (EndpointDescription)endpoint.Clone();
+            compatibleEndpoint.UserIdentityTokens = compatiblePolicies;
+            identityCandidates.Add(compatibleEndpoint);
+        }
+
+        if (identityCandidates.Count == 0)
+        {
+            var identityType = authenticationType == AuthenticationType.UserName
+                ? nameof(AuthenticationType.UserName)
+                : nameof(AuthenticationType.Anonymous);
+            var userNameSecurityRequirement = authenticationType == AuthenticationType.UserName
+                ? " UserName policies with SecurityPolicy=None are compatible only with " +
+                  "SignAndEncrypt endpoints; Sign endpoints require an encrypted user-token policy."
+                : string.Empty;
+
+            throw new ServiceResultException(
+                StatusCodes.BadIdentityTokenRejected,
+                $"No endpoint at {endpointUrl} offered a compatible {identityType} user-token policy." +
+                userNameSecurityRequirement);
+        }
+
+        candidates = identityCandidates;
+
+        var requestedSecureMode = hasRequestedMode
+            && !string.Equals(
+                securityMode,
+                nameof(MessageSecurityMode.None),
+                StringComparison.OrdinalIgnoreCase);
+        var requestedSecurePolicy = hasRequestedPolicy && !IsNoneSecurityPolicy(securityPolicy!);
+        var useSecurity = requireSecuredEndpoint || requestedSecureMode || requestedSecurePolicy;
+        return (candidates, useSecurity);
+    }
+
     private static bool MatchesSecurityMode(EndpointDescription endpoint, string? securityMode)
         => string.IsNullOrEmpty(securityMode)
            || string.Equals(endpoint.SecurityMode.ToString(), securityMode, StringComparison.OrdinalIgnoreCase);
@@ -802,4 +1169,82 @@ public class OpcUaClientWrapper : IDisposable
            || string.Equals(endpoint.SecurityPolicyUri, securityPolicy, StringComparison.OrdinalIgnoreCase)
            || endpoint.SecurityPolicyUri?.EndsWith("#" + securityPolicy, StringComparison.OrdinalIgnoreCase) == true
            || endpoint.SecurityPolicyUri?.EndsWith("/" + securityPolicy, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool IsCompatibleUserTokenPolicy(
+        EndpointDescription endpoint,
+        UserTokenPolicy policy,
+        AuthenticationType authenticationType)
+    {
+        var requiredTokenType = authenticationType switch
+        {
+            AuthenticationType.Anonymous => UserTokenType.Anonymous,
+            AuthenticationType.UserName => UserTokenType.UserName,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(authenticationType),
+                authenticationType,
+                "Unsupported OPC UA authentication type.")
+        };
+
+        if (policy.TokenType != requiredTokenType)
+            return false;
+
+        if (authenticationType == AuthenticationType.Anonymous)
+            return true;
+
+        // A null/empty user-token policy inherits the endpoint SecurityPolicy.
+        // A Username/None token is still confidential on SignAndEncrypt because
+        // the SecureChannel encrypts the ActivateSession request. It is invalid on
+        // Sign, where the password would otherwise be transmitted in clear text.
+        var tokenSecurityPolicy = string.IsNullOrWhiteSpace(policy.SecurityPolicyUri)
+            ? endpoint.SecurityPolicyUri
+            : policy.SecurityPolicyUri;
+        if (string.IsNullOrWhiteSpace(tokenSecurityPolicy))
+            return false;
+
+        // Discovery data must use the canonical URI because the SDK later uses
+        // this value verbatim to choose encryption algorithms. Do not accept the
+        // shorthand forms allowed for human-entered configuration.
+        if (string.Equals(tokenSecurityPolicy, SecurityPolicies.None, StringComparison.Ordinal))
+        {
+            return endpoint.SecurityMode == MessageSecurityMode.SignAndEncrypt
+                && !string.IsNullOrWhiteSpace(endpoint.SecurityPolicyUri)
+                && !string.Equals(
+                    endpoint.SecurityPolicyUri,
+                    SecurityPolicies.None,
+                    StringComparison.Ordinal);
+        }
+
+        // Non-None user-token encryption requires the server certificate carried
+        // by the EndpointDescription. Full trust and algorithm compatibility are
+        // validated by the OPC UA stack during session creation; reject a missing
+        // certificate here before selecting an unusable endpoint.
+        return SecurityPolicies.IsValidSecurityPolicyUri(tokenSecurityPolicy)
+            && endpoint.ServerCertificate is { Length: > 0 };
+    }
+
+    private static bool IsNoneSecurityPolicy(string securityPolicy)
+        => string.Equals(securityPolicy, SecurityPolicies.None, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(securityPolicy, "None", StringComparison.OrdinalIgnoreCase)
+           || securityPolicy.EndsWith("#None", StringComparison.OrdinalIgnoreCase)
+           || securityPolicy.EndsWith("/None", StringComparison.OrdinalIgnoreCase);
+
+    private static string? NormalizeSecuritySetting(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void SetCurrentSecurityProfile(EndpointDescription endpoint)
+    {
+        Volatile.Write(ref _currentSecurityMode, (int)endpoint.SecurityMode);
+        Volatile.Write(ref _currentSecurityPolicy, endpoint.SecurityPolicyUri);
+
+        // Pin subsequent session recreation to the profile that was actually
+        // negotiated, even when the original request left mode or policy open.
+        _securityMode = endpoint.SecurityMode.ToString();
+        _securityPolicy = endpoint.SecurityPolicyUri;
+    }
+
+    private void ClearCurrentSecurityProfile()
+    {
+        Volatile.Write(ref _currentSecurityMode, -1);
+        Volatile.Write(ref _currentSecurityPolicy, null);
+    }
 }
