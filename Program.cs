@@ -67,6 +67,15 @@ class Program
                 return 1;
             }
 
+            // Warn about unimplemented auto-connect before initializing the terminal;
+            // once the alternate screen buffer is active the message would be lost.
+            if (string.IsNullOrEmpty(configPath) && !string.IsNullOrEmpty(autoConnectUrl))
+            {
+                Console.Error.WriteLine(
+                    $"Warning: Auto-connect via command-line URL ('{autoConnectUrl}') is not currently implemented. " +
+                    "Please use a configuration file with an endpoint URL instead.");
+            }
+
             app = Application.Create();
             TerminalUi.App = app;
             app.Init();
@@ -78,13 +87,6 @@ class Program
                 if (!string.IsNullOrEmpty(configPath))
                 {
                     mainWindow.LoadConfigFromCommandLine(configPath);
-                }
-                // Otherwise, if auto-connect URL provided, show warning (not yet implemented)
-                else if (!string.IsNullOrEmpty(autoConnectUrl))
-                {
-                    Console.Error.WriteLine(
-                        $"Warning: Auto-connect via command-line URL ('{autoConnectUrl}') is not currently implemented. " +
-                        "Please use a configuration file with an endpoint URL instead.");
                 }
 
                 app.Run(mainWindow);

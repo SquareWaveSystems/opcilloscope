@@ -280,8 +280,36 @@ public class CsvRecordingManagerTests : IDisposable
 
         // Assert
         var content = File.ReadAllText(filePath);
-        // Should use ISO 8601 format with T separator
-        Assert.Contains("2026-01-06T14:30:45.678", content);
+        // Should use ISO 8601 format with T separator and UTC 'Z' designator
+        // (Kind=Unspecified is treated as UTC per the OPC UA convention).
+        Assert.Contains("2026-01-06T14:30:45.678Z", content);
+    }
+
+    [Fact]
+    public void RecordValue_LocalKindTimestamp_IsConvertedToUtc()
+    {
+        // Arrange - a Kind=Local timestamp must be converted to UTC before
+        // formatting so a single file never mixes timezones.
+        var filePath = Path.Combine(_testDirectory, "test.csv");
+        _manager.StartRecording(filePath);
+        var localTime = new DateTime(2026, 1, 6, 14, 30, 45, 678, DateTimeKind.Local);
+        var expected = localTime.ToUniversalTime()
+            .ToString("yyyy-MM-ddTHH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+        var node = new MonitoredNode
+        {
+            DisplayName = "TestNode",
+            NodeId = new NodeId(1234),
+            Value = "100",
+            Timestamp = localTime
+        };
+
+        // Act
+        _manager.RecordValue(node);
+        _manager.StopRecording();
+
+        // Assert
+        var content = File.ReadAllText(filePath);
+        Assert.Contains(expected, content);
     }
 
     [Fact]
@@ -604,8 +632,9 @@ public class CsvRecordingManagerTests : IDisposable
             var lines = File.ReadAllLines(filePath);
             Assert.True(lines.Length >= 2);
             var timestamp = lines[1].Split(',')[0];
-            // ISO 8601: 'T' separator and ':' time separators (fi-FI would emit '.')
-            Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$", timestamp);
+            // ISO 8601 UTC: 'T' separator, ':' time separators (fi-FI would
+            // emit '.') and a 'Z' designator on the normalized-to-UTC instant.
+            Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$", timestamp);
         });
     }
 
