@@ -1,6 +1,6 @@
-# Contributing to Opcilloscope
+# Contributing to opcilloscope
 
-Thank you for your interest in contributing to Opcilloscope!
+Thank you for your interest in contributing to opcilloscope!
 
 ## Getting Started
 
@@ -16,10 +16,15 @@ Thank you for your interest in contributing to Opcilloscope!
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [.NET SDK 10.0.109](https://dotnet.microsoft.com/download/dotnet/10.0),
+  matching the exact version pinned in `global.json`
 - **Linux only:** ICU libraries (`sudo apt install libicu-dev` on Debian/Ubuntu, `sudo dnf install libicu-devel` on Fedora/RHEL)
 
 ### Building and Testing
+
+If needed, install the pinned SDK with Microsoft's `dotnet-install.sh` using
+`--version 10.0.109`; the repository intentionally does not roll forward to a
+different feature band.
 
 ```bash
 dotnet restore Opcilloscope.sln

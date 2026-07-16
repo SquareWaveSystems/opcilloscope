@@ -1,4 +1,4 @@
-# Opcilloscope black-box E2E tests
+# opcilloscope black-box E2E tests
 
 These Linux-only tests launch the published `opcilloscope` binary on a sized pseudo-terminal,
 answer Terminal.Gui's terminal-capability queries, reconstruct its VT/ANSI output, and assert

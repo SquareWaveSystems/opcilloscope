@@ -20,12 +20,18 @@ public sealed class OpcilloscopeSession : IDisposable
         string binaryPath,
         IReadOnlyList<string>? arguments = null,
         int rows = 30,
-        int cols = 100)
+        int cols = 100,
+        IReadOnlyDictionary<string, string>? extraEnvironment = null)
     {
         Rows = rows;
         Cols = cols;
         _screen = new VtScreen(rows, cols);
-        _pty = Pty.Spawn(binaryPath, arguments ?? Array.Empty<string>(), rows, cols);
+        _pty = Pty.Spawn(
+            binaryPath,
+            arguments ?? Array.Empty<string>(),
+            rows,
+            cols,
+            extraEnvironment);
         _reader = new Thread(ReadLoop)
         {
             IsBackground = true,

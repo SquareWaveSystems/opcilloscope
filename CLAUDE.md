@@ -24,13 +24,13 @@ Platform directories:
 ## Environment Setup
 
 ### .NET SDK Installation
-If the `dotnet` command is not available, install .NET 10 SDK using Microsoft's install script:
+Install the exact .NET SDK version pinned by `global.json` using Microsoft's install script:
 
 ```bash
 # Download and run the install script
 curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
 chmod +x /tmp/dotnet-install.sh
-/tmp/dotnet-install.sh --channel 10.0 --install-dir ~/.dotnet
+/tmp/dotnet-install.sh --version 10.0.109 --install-dir ~/.dotnet
 
 # Add to PATH for the current session
 export PATH="$HOME/.dotnet:$PATH"
@@ -63,14 +63,16 @@ Usage: opcilloscope [options] [file]
 
 Options:
   -f, --config <file>   Load configuration file (.cfg, .opcilloscope, or .json)
-  -c, --connect <url>   Reserved; direct URL connection is not yet implemented
+  -c, --connect <url>   Connect directly to an OPC UA endpoint
       --insecure        Accept untrusted server certificates (development only)
+  -V, --version         Show version information
   -h, --help            Show help message
 
 Examples:
   opcilloscope                           Start with empty configuration
   opcilloscope production.cfg            Load configuration file
   opcilloscope --config config.json      Load configuration file
+  opcilloscope --connect opc.tcp://localhost:4840
 ```
 
 The Linux-only `Tests/Opcilloscope.E2ETests` project intentionally stays out
@@ -219,6 +221,7 @@ Opcilloscope uses JSON-based configuration files with the `.cfg` extension:
   "monitoredNodes": [
     {
       "nodeId": "ns=2;s=Counter",
+      "namespaceUri": "urn:example:machine",
       "displayName": "Counter",
       "enabled": true
     }
@@ -231,6 +234,10 @@ Opcilloscope uses JSON-based configuration files with the `.cfg` extension:
   }
 }
 ```
+
+Newly saved non-standard nodes include `namespaceUri`. The URI is stable across
+sessions; the numeric namespace index inside `nodeId` is retained for backward
+compatibility but ignored when the URI is present.
 
 An automatic/omitted or partial security profile requires a
 `SignAndEncrypt` endpoint and selects the strongest matching candidate.

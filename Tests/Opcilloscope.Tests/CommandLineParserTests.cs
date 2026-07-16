@@ -55,6 +55,20 @@ public class CommandLineParserTests
         var options = CommandLineParser.Parse([help, "--wat", "--config"]);
 
         Assert.True(options.ShowHelp);
+        Assert.False(options.ShowVersion);
+        Assert.Null(options.ConfigPath);
+        Assert.Null(options.AutoConnectUrl);
+    }
+
+    [Theory]
+    [InlineData("--version")]
+    [InlineData("-V")]
+    public void Parse_Version_ShortCircuitsTrailingInvalidArguments(string version)
+    {
+        var options = CommandLineParser.Parse([version, "--wat", "--config"]);
+
+        Assert.True(options.ShowVersion);
+        Assert.False(options.ShowHelp);
         Assert.Null(options.ConfigPath);
         Assert.Null(options.AutoConnectUrl);
     }
@@ -69,5 +83,6 @@ public class CommandLineParserTests
         Assert.Equal("opc.tcp://server:4840", options.AutoConnectUrl);
         Assert.True(options.AllowInsecureCertificates);
         Assert.False(options.ShowHelp);
+        Assert.False(options.ShowVersion);
     }
 }

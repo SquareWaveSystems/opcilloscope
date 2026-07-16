@@ -4,7 +4,8 @@ internal sealed record CommandLineOptions(
     string? ConfigPath,
     string? AutoConnectUrl,
     bool AllowInsecureCertificates,
-    bool ShowHelp);
+    bool ShowHelp,
+    bool ShowVersion);
 
 internal static class CommandLineParser
 {
@@ -14,7 +15,23 @@ internal static class CommandLineParser
         // when a shell alias appends stale/invalid arguments after --help.
         if (args.Any(arg => arg is "--help" or "-h"))
         {
-            return new CommandLineOptions(null, null, false, ShowHelp: true);
+            return new CommandLineOptions(
+                null,
+                null,
+                false,
+                ShowHelp: true,
+                ShowVersion: false);
+        }
+
+        // Version is also safe to answer without initializing a terminal.
+        if (args.Any(arg => arg is "--version" or "-V"))
+        {
+            return new CommandLineOptions(
+                null,
+                null,
+                false,
+                ShowHelp: false,
+                ShowVersion: true);
         }
 
         string? configPath = null;
@@ -62,7 +79,12 @@ internal static class CommandLineParser
             }
         }
 
-        return new CommandLineOptions(configPath, autoConnectUrl, allowInsecure, ShowHelp: false);
+        return new CommandLineOptions(
+            configPath,
+            autoConnectUrl,
+            allowInsecure,
+            ShowHelp: false,
+            ShowVersion: false);
     }
 
     private static string ReadOptionValue(IReadOnlyList<string> args, ref int index, string option)

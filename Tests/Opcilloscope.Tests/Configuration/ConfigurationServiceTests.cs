@@ -415,6 +415,76 @@ public class ConfigurationServiceTests : IDisposable
     }
 
     [Fact]
+    public void CaptureCurrentState_WithNamespaceTable_PersistsStableNamespaceUri()
+    {
+        var namespaceUris = new NamespaceTable();
+        var namespaceIndex = namespaceUris.GetIndexOrAppend("urn:example:machine");
+        var monitoredVariables = new List<MonitoredNode>
+        {
+            new()
+            {
+                NodeId = new NodeId("Counter", (ushort)namespaceIndex),
+                DisplayName = "Counter"
+            }
+        };
+
+        var config = _service.CaptureCurrentState(
+            "opc.tcp://localhost:4840",
+            250,
+            monitoredVariables,
+            namespaceUris: namespaceUris);
+
+        var node = Assert.Single(config.MonitoredNodes);
+        Assert.Equal($"ns={namespaceIndex};s=Counter", node.NodeId);
+        Assert.Equal("urn:example:machine", node.NamespaceUri);
+    }
+
+    [Fact]
+    public void ResolveNodeId_WithNamespaceUri_UsesCurrentSessionIndex()
+    {
+        var namespaceUris = new NamespaceTable();
+        namespaceUris.GetIndexOrAppend("urn:example:other");
+        var currentIndex = namespaceUris.GetIndexOrAppend("urn:example:machine");
+        var configuredNode = new MonitoredNodeConfig
+        {
+            NodeId = "ns=2;s=Counter",
+            NamespaceUri = "urn:example:machine",
+            DisplayName = "Counter"
+        };
+
+        var resolved = ConfigurationService.ResolveNodeId(configuredNode, namespaceUris);
+
+        Assert.Equal((ushort)currentIndex, resolved.NamespaceIndex);
+        Assert.Equal("Counter", resolved.Identifier);
+    }
+
+    [Fact]
+    public void ResolveNodeId_WithoutNamespaceUri_PreservesLegacyNumericIndex()
+    {
+        var resolved = ConfigurationService.ResolveNodeId(
+            new MonitoredNodeConfig { NodeId = "ns=7;s=Counter" },
+            new NamespaceTable());
+
+        Assert.Equal((ushort)7, resolved.NamespaceIndex);
+        Assert.Equal("Counter", resolved.Identifier);
+    }
+
+    [Fact]
+    public void ResolveNodeId_WithMissingNamespaceUri_ThrowsClearError()
+    {
+        var error = Assert.Throws<InvalidDataException>(() =>
+            ConfigurationService.ResolveNodeId(
+                new MonitoredNodeConfig
+                {
+                    NodeId = "ns=2;s=Counter",
+                    NamespaceUri = "urn:example:missing"
+                },
+                new NamespaceTable()));
+
+        Assert.Contains("urn:example:missing", error.Message);
+    }
+
+    [Fact]
     public void GetDefaultConfigDirectory_ReturnsValidPath()
     {
         // Act
@@ -742,7 +812,13 @@ public class ConfigurationServiceTests : IDisposable
         config.MonitoredNodes = new List<MonitoredNodeConfig>
         {
             new() { NodeId = "ns=2;s=Counter", DisplayName = "Counter", Enabled = true },
-            new() { NodeId = "ns=2;s=Spare", DisplayName = "Spare", Enabled = false }
+            new()
+            {
+                NodeId = "ns=2;s=Spare",
+                NamespaceUri = "urn:example:machine",
+                DisplayName = "Spare",
+                Enabled = false
+            }
         };
         var filePath = Path.Combine(_tempDir, "disabled.cfg");
         await _service.SaveAsync(config, filePath);
@@ -765,6 +841,7 @@ public class ConfigurationServiceTests : IDisposable
         var disabled = captured.MonitoredNodes.Single(n => n.NodeId == "ns=2;s=Spare");
         Assert.False(disabled.Enabled);
         Assert.Equal("Spare", disabled.DisplayName);
+        Assert.Equal("urn:example:machine", disabled.NamespaceUri);
     }
 
     [Fact]

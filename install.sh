@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Opcilloscope installer for Linux and macOS
+# opcilloscope installer for Linux and macOS
 # Usage: curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.sh | bash
 
 REPO="SquareWaveSystems/opcilloscope"
@@ -160,7 +160,7 @@ install_opcilloscope() {
         error "Installed executable failed its command-line smoke test"
     fi
 
-    info "Opcilloscope ${version} installed successfully!"
+    info "opcilloscope ${version} installed successfully!"
     echo ""
 
     if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
@@ -182,8 +182,8 @@ install_opcilloscope() {
 main() {
     echo ""
     echo "  ╔═══════════════════════════════════╗"
-    echo "  ║     Opcilloscope Installer        ║"
-    echo "  ║   Terminal OPC UA Client          ║"
+    echo "  ║     opcilloscope installer        ║"
+    echo "  ║   terminal OPC UA client          ║"
     echo "  ╚═══════════════════════════════════╝"
     echo ""
 

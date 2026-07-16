@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Opcilloscope uninstaller for Linux and macOS
+# opcilloscope uninstaller for Linux and macOS
 # Usage: curl -fsSL https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/uninstall.sh | bash
 
 INSTALL_DIR="${OPCILLOSCOPE_INSTALL_DIR:-$HOME/.local/bin}"
@@ -45,8 +45,8 @@ confirm_removal() {
 uninstall_opcilloscope() {
     echo ""
     echo "  ╔═══════════════════════════════════╗"
-    echo "  ║    Opcilloscope Uninstaller       ║"
-    echo "  ║   Terminal OPC UA Client          ║"
+    echo "  ║    opcilloscope uninstaller       ║"
+    echo "  ║   terminal OPC UA client          ║"
     echo "  ╚═══════════════════════════════════╝"
     echo ""
 
@@ -117,9 +117,9 @@ uninstall_opcilloscope() {
 
     echo ""
     if [ "$removed_something" = true ]; then
-        info "Opcilloscope has been uninstalled."
+        info "opcilloscope has been uninstalled."
     else
-        warn "Opcilloscope does not appear to be installed at ${INSTALL_DIR}."
+        warn "opcilloscope does not appear to be installed at ${INSTALL_DIR}."
         echo ""
         echo "If you installed to a custom directory, run:"
         echo "  OPCILLOSCOPE_INSTALL_DIR=/your/path bash uninstall.sh"
