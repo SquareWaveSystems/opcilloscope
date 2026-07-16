@@ -1,4 +1,4 @@
-# Opcilloscope installer for Windows
+# opcilloscope installer for Windows
 # Usage: irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
@@ -111,8 +111,8 @@ function Install-LicenseMaterial {
 function Install-Opcilloscope {
     Write-Host ""
     Write-Host "  +===================================+" -ForegroundColor Cyan
-    Write-Host "  |     Opcilloscope Installer        |" -ForegroundColor Cyan
-    Write-Host "  |   Terminal OPC UA Client          |" -ForegroundColor Cyan
+    Write-Host "  |     opcilloscope installer        |" -ForegroundColor Cyan
+    Write-Host "  |   terminal OPC UA client          |" -ForegroundColor Cyan
     Write-Host "  +===================================+" -ForegroundColor Cyan
     Write-Host ""
 
@@ -207,7 +207,7 @@ function Install-Opcilloscope {
             Write-Warn "Custom install directory is not in PATH; PATH was left unchanged."
         }
 
-        Write-Info "Opcilloscope $version installed successfully!"
+        Write-Info "opcilloscope $version installed successfully!"
         Write-Host ""
         Write-Host "Run 'opcilloscope' to start the application." -ForegroundColor White
         Write-Host "(You may need to restart other terminals for PATH changes to take effect)" -ForegroundColor Gray

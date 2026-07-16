@@ -86,7 +86,11 @@ The scope view starts with a sliding **30-second window** (zoomable from 5 s to 
 | `R` | Toggle CSV recording (selected monitored variables) |
 | `+` / `-` | Zoom in / out (scope) |
 | `Ctrl+O` / `Ctrl+S` | Open / save configuration |
+| `Ctrl+Shift+S` | Save configuration as |
 | `Ctrl+R` | Toggle CSV recording |
+| `[` / `]` | Widen / narrow the scope time window |
+| Arrow keys | Pan scope; move the cursor left/right while paused |
+| `Ctrl+Q` | Quit |
 | `?` | Help |
 
 ## Install
@@ -127,6 +131,10 @@ development server, `opcilloscope --insecure` disables server certificate
 validation for that run; it does not enable plaintext transport. Do not use
 this option in production. The connection log reports the trusted-certificate
 store path when validation fails.
+
+Saved non-standard monitored nodes include their stable OPC UA namespace URI.
+On reload, opcilloscope resolves that URI against the new session instead of
+assuming the server reused a previous session's numeric namespace index.
 
 <details>
 <summary>Uninstall</summary>
@@ -180,9 +188,12 @@ deleting a shared custom install directory.
 
 </details>
 
-## Quickstart (Developer)
+## Quickstart (developer)
 
-Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+Requires [.NET SDK 10.0.109](https://dotnet.microsoft.com/download/dotnet/10.0),
+as pinned by [`global.json`](global.json). A different .NET 10 feature band will
+not be selected automatically. Microsoft's install script can install the exact
+version with `--version 10.0.109`.
 
 ```bash
 git clone https://github.com/SquareWaveSystems/opcilloscope.git
@@ -209,9 +220,18 @@ See [docs/TESTING.md](docs/TESTING.md) for test layers and exact-artifact usage.
 
 **Built-in test server** (Counter, SineWave, RandomValue, writable nodes):
 ```bash
+# Terminal 1: start the self-signed development server
 dotnet run --project Tests/Opcilloscope.TestServer
 # Starts at opc.tcp://localhost:4840/UA/OpcilloscopeTest
+
+# Terminal 2: connect while explicitly accepting its development certificate
+dotnet run --project Opcilloscope.csproj -- --insecure --connect \
+  opc.tcp://localhost:4840/UA/OpcilloscopeTest
 ```
+
+`--insecure` is appropriate only for this disposable local server. For a
+long-lived server, trust its certificate using the store path reported in the
+connection log.
 
 **Public servers** (no setup required):
 
@@ -219,6 +239,10 @@ dotnet run --project Tests/Opcilloscope.TestServer
 |--------|--------------|
 | OPC UA Server | `opc.tcp://opcuaserver.com:48010` |
 | Eclipse Milo | `opc.tcp://milo.digitalpetri.com:62541/milo` |
+
+These endpoints are operated by third parties, so availability and certificates
+can change. Enter the endpoint through **Connection → Connect**, then validate
+or trust the certificate reported by the connection log.
 
 **Docker** ([Microsoft OPC PLC](https://github.com/Azure-Samples/iot-edge-opc-plc)):
 ```bash

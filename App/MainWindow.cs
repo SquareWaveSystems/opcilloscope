@@ -1,4 +1,3 @@
-using System.Reflection;
 using Terminal.Gui;
 using Opcilloscope.App.Keybindings;
 using Opcilloscope.App.Views;
@@ -1356,7 +1355,7 @@ public class MainWindow : Window, DefaultKeybindings.IKeybindingActions
 
     private void ShowAbout()
     {
-        var version = GetDisplayVersion();
+        var version = VersionInfo.DisplayVersion;
         var titleLine = $"opcilloscope v{version}";
         var titlePadded = titleLine.PadLeft((38 + titleLine.Length) / 2).PadRight(38);
 
@@ -1383,28 +1382,6 @@ Built with:
 License: MIT
 ";
         TerminalUi.Query("About opcilloscope", about, "OK");
-    }
-
-    /// <summary>
-    /// Gets the application version for display. MinVer writes the full semver to
-    /// <see cref="AssemblyInformationalVersionAttribute"/> (AssemblyVersion is frozen at
-    /// MAJOR.0.0.0), so prefer that and strip any "+commitsha" build metadata.
-    /// </summary>
-    private static string GetDisplayVersion()
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var informational = assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion;
-
-        if (!string.IsNullOrEmpty(informational))
-        {
-            var metadataIndex = informational.IndexOf('+');
-            return metadataIndex >= 0 ? informational[..metadataIndex] : informational;
-        }
-
-        // Fall back to the assembly version if the attribute is missing
-        return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
     }
 
     #region Configuration File Handling
@@ -1573,7 +1550,10 @@ License: MIT
                     {
                         try
                         {
-                            var nodeId = Opc.Ua.NodeId.Parse(node.NodeId);
+                            var namespaceUris = _connectionManager.Client.Session?.NamespaceUris
+                                ?? throw new InvalidOperationException(
+                                    "Connected session does not expose a namespace table");
+                            var nodeId = ConfigurationService.ResolveNodeId(node, namespaceUris);
                             var restored = await _connectionManager.SubscribeAsync(nodeId, node.DisplayName);
                             if (restored is null)
                             {
@@ -1730,7 +1710,8 @@ License: MIT
                 _currentMetadata,
                 _connectionManager.Credentials,
                 existingServer: activeServer,
-                existingSettings: activeSettings
+                existingSettings: activeSettings,
+                namespaceUris: _connectionManager.Client.Session?.NamespaceUris
             );
 
             // Update metadata name from filename if not set
@@ -1930,6 +1911,19 @@ License: MIT
         TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
         {
             LoadConfigurationAsync(configPath).FireAndForget(_logger);
+            return false;
+        });
+    }
+
+    /// <summary>
+    /// Connects to an endpoint supplied on the command line after the terminal
+    /// main loop has started.
+    /// </summary>
+    public void ConnectFromCommandLine(string endpoint)
+    {
+        TerminalUi.AddTimeout(TimeSpan.FromMilliseconds(100), () =>
+        {
+            ConnectAsync(endpoint).FireAndForget(_logger);
             return false;
         });
     }

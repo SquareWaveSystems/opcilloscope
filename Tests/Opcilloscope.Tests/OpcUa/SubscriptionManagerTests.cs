@@ -262,24 +262,22 @@ public class SubscriptionManagerTests
 public class FormatRawValueTests
 {
     /// <summary>
-    /// Runs an action with the given culture set as both the current and the
-    /// default thread culture, restoring the originals afterwards.
+    /// Runs an action with the given culture as the current async-flow culture,
+    /// restoring it afterwards. Do not mutate DefaultThreadCurrentCulture here:
+    /// it is process-global and races with parallel test workers.
     /// </summary>
     private static void WithCulture(string cultureName, Action action)
     {
         var culture = new CultureInfo(cultureName);
         var originalCurrent = CultureInfo.CurrentCulture;
-        var originalDefault = CultureInfo.DefaultThreadCurrentCulture;
         try
         {
             CultureInfo.CurrentCulture = culture;
-            CultureInfo.DefaultThreadCurrentCulture = culture;
             action();
         }
         finally
         {
             CultureInfo.CurrentCulture = originalCurrent;
-            CultureInfo.DefaultThreadCurrentCulture = originalDefault;
         }
     }
 

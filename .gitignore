@@ -2,6 +2,7 @@
 bin/
 obj/
 publish/
+publish-e2e/
 
 # IDE
 .vs/
@@ -20,9 +21,6 @@ Thumbs.db
 # Test results
 TestResults/
 
-# Node modules (test server)
-test-server/node_modules/
-
 # Logs
 *.log
 nul
@@ -39,4 +37,7 @@ appsettings.*.json
 
 # Claude Code local settings
 .claude/settings.local.json
-publish/
+
+# Local review automation and generated working reports
+.claude/workflows/
+docs/V1-REVIEW.md

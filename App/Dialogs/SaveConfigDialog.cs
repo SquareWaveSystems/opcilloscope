@@ -108,7 +108,7 @@ public class SaveConfigDialog : Dialog
         {
             X = 1,
             Y = 6,
-            Text = $"Save as type: Opcilloscope Config (*{ConfigurationService.ConfigFileExtension})",
+            Text = $"Save as type: opcilloscope config (*{ConfigurationService.ConfigFileExtension})",
         }.WithScheme(theme.MainColorScheme);
 
         // Info hint about preserving filename
@@ -158,7 +158,7 @@ public class SaveConfigDialog : Dialog
             Title = "Browse for Save Location",
             AllowedTypes = new List<IAllowedType>
             {
-                new AllowedType("Opcilloscope Config", ConfigurationService.ConfigFileExtension)
+                new AllowedType("opcilloscope config", ConfigurationService.ConfigFileExtension)
             },
             Path = _currentDirectory,
             // We'll let user navigate to any directory and extract the directory path

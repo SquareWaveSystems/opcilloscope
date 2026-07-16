@@ -98,7 +98,18 @@ public class SubscriptionSettings
 /// </summary>
 public class MonitoredNodeConfig
 {
+    /// <summary>
+    /// The node identifier. Older configurations may include a numeric namespace
+    /// index; when <see cref="NamespaceUri"/> is present that index is ignored on
+    /// load and resolved against the active server session instead.
+    /// </summary>
     public string NodeId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Stable namespace URI used to resolve the session-local namespace index.
+    /// Null preserves compatibility with v1.0.0 and older configurations.
+    /// </summary>
+    public string? NamespaceUri { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;
 }

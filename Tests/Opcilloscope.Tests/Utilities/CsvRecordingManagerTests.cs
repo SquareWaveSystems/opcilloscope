@@ -537,26 +537,23 @@ public class CsvRecordingManagerTests : IDisposable
     }
 
     /// <summary>
-    /// Runs an action under a hostile culture, set as both the current culture
-    /// (flows to the background writer task via ExecutionContext) and the
-    /// default thread culture (covers any thread that does not inherit it).
-    /// Restored in a finally block so other tests are unaffected.
+    /// Runs an action under a hostile culture. CurrentCulture flows to the
+    /// background writer task via ExecutionContext. Avoid changing
+    /// DefaultThreadCurrentCulture because it is process-global and would race
+    /// with parallel test workers.
     /// </summary>
     private static void WithCulture(string cultureName, Action action)
     {
         var culture = new CultureInfo(cultureName);
         var originalCurrent = CultureInfo.CurrentCulture;
-        var originalDefault = CultureInfo.DefaultThreadCurrentCulture;
         try
         {
             CultureInfo.CurrentCulture = culture;
-            CultureInfo.DefaultThreadCurrentCulture = culture;
             action();
         }
         finally
         {
             CultureInfo.CurrentCulture = originalCurrent;
-            CultureInfo.DefaultThreadCurrentCulture = originalDefault;
         }
     }
 

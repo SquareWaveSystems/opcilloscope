@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Opc.Ua;
 using Opcilloscope.Configuration.Models;
 using Opcilloscope.OpcUa;
 using Opcilloscope.OpcUa.Models;
@@ -264,7 +265,8 @@ public class ConfigurationService
         ConfigMetadata? existingMetadata = null,
         ConnectionCredentials? credentials = null,
         ServerConfig? existingServer = null,
-        SubscriptionSettings? existingSettings = null)
+        SubscriptionSettings? existingSettings = null,
+        NamespaceTable? namespaceUris = null)
     {
         // Preserve fields that the UI does not currently surface (security mode/policy,
         // sampling interval, queue size) so a load/save round-trip does not drop them.
@@ -299,6 +301,9 @@ public class ConfigurationService
         var monitoredNodes = monitoredVariables.Select(m => new MonitoredNodeConfig
         {
             NodeId = m.NodeId.ToString(),
+            NamespaceUri = m.NodeId.NamespaceIndex == 0
+                ? null
+                : namespaceUris?.GetString(m.NodeId.NamespaceIndex),
             DisplayName = m.DisplayName,
             Enabled = true
         }).ToList();
@@ -319,6 +324,7 @@ public class ConfigurationService
                 .Select(n => new MonitoredNodeConfig
                 {
                     NodeId = n.NodeId,
+                    NamespaceUri = n.NamespaceUri,
                     DisplayName = n.DisplayName,
                     Enabled = false
                 }));
@@ -335,6 +341,34 @@ public class ConfigurationService
                 LastModified = DateTime.UtcNow
             }
         };
+    }
+
+    /// <summary>
+    /// Resolves a configured node against the active session namespace table.
+    /// Namespace URIs take precedence over numeric indexes because indexes are
+    /// allocated per session and may change after a server restart.
+    /// </summary>
+    internal static NodeId ResolveNodeId(
+        MonitoredNodeConfig configuredNode,
+        NamespaceTable namespaceUris)
+    {
+        ArgumentNullException.ThrowIfNull(configuredNode);
+        ArgumentNullException.ThrowIfNull(namespaceUris);
+
+        var nodeId = NodeId.Parse(configuredNode.NodeId);
+        if (string.IsNullOrWhiteSpace(configuredNode.NamespaceUri))
+        {
+            return nodeId;
+        }
+
+        var namespaceIndex = namespaceUris.GetIndex(configuredNode.NamespaceUri);
+        if (namespaceIndex < 0)
+        {
+            throw new InvalidDataException(
+                $"Server does not expose namespace URI '{configuredNode.NamespaceUri}'");
+        }
+
+        return new NodeId(nodeId.Identifier, (ushort)namespaceIndex);
     }
 
     /// <summary>

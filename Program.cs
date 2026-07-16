@@ -30,6 +30,12 @@ class Program
                 return 0;
             }
 
+            if (options.ShowVersion)
+            {
+                Console.WriteLine($"opcilloscope {VersionInfo.DisplayVersion}");
+                return 0;
+            }
+
             OpcUaClientWrapper.AllowInsecureByDefault = options.AllowInsecureCertificates;
 
             // Validate the config file path before initializing the terminal, so the error
@@ -39,15 +45,6 @@ class Program
             {
                 Console.Error.WriteLine($"Error: Configuration file not found: {options.ConfigPath}");
                 return 1;
-            }
-
-            // Warn about unimplemented auto-connect before initializing the terminal;
-            // once the alternate screen buffer is active the message would be lost.
-            if (string.IsNullOrEmpty(options.ConfigPath) && !string.IsNullOrEmpty(options.AutoConnectUrl))
-            {
-                Console.Error.WriteLine(
-                    $"Warning: Auto-connect via command-line URL ('{options.AutoConnectUrl}') is not currently implemented. " +
-                    "Please use a configuration file with an endpoint URL instead.");
             }
 
             app = Application.Create();
@@ -61,6 +58,10 @@ class Program
                 if (!string.IsNullOrEmpty(options.ConfigPath))
                 {
                     mainWindow.LoadConfigFromCommandLine(options.ConfigPath);
+                }
+                else if (!string.IsNullOrEmpty(options.AutoConnectUrl))
+                {
+                    mainWindow.ConnectFromCommandLine(options.AutoConnectUrl);
                 }
 
                 app.Run(mainWindow);
@@ -77,7 +78,6 @@ class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Fatal error: {ex.Message}");
-            Console.Error.WriteLine(ex.StackTrace);
             return 1;
         }
         finally
@@ -93,23 +93,22 @@ class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("opcilloscope - Terminal-based OPC UA Client");
+        Console.WriteLine("opcilloscope - terminal-based OPC UA client");
         Console.WriteLine();
         Console.WriteLine("Usage: opcilloscope [options] [file]");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  -f, --config <file>   Load configuration file (.cfg, .opcilloscope, or .json)");
-        Console.WriteLine("  -c, --connect <url>   Reserved; direct URL connection is not yet implemented");
+        Console.WriteLine("  -c, --connect <url>   Connect directly to an OPC UA endpoint");
         Console.WriteLine("      --insecure        Disable server certificate validation (development only)");
+        Console.WriteLine("  -V, --version         Show version information");
         Console.WriteLine("  -h, --help            Show this help message");
-        Console.WriteLine();
-        Console.WriteLine("Note: Direct server connection via --connect or opc.tcp:// URLs is not yet");
-        Console.WriteLine("      implemented. Please create a configuration file with the server URL.");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  opcilloscope                           Start with empty configuration");
         Console.WriteLine("  opcilloscope production.cfg            Load configuration file");
         Console.WriteLine("  opcilloscope --config config.json      Load configuration file");
+        Console.WriteLine("  opcilloscope --connect opc.tcp://localhost:4840");
         Console.WriteLine();
     }
 }

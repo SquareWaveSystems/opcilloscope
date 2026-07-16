@@ -69,6 +69,19 @@ public sealed class StartupTests
         Assert.Equal(0, application.ExitCode);
     }
 
+    [Fact]
+    public void Version_PrintsVersionWithoutOpeningTheTui()
+    {
+        using var application = new OpcilloscopeSession(_fixture.BinaryPath, ["--version"]);
+
+        Assert.True(
+            application.WaitForText("opcilloscope ", TimeSpan.FromSeconds(5)),
+            RenderedScreen(application));
+        Assert.True(application.WaitForExit(TimeSpan.FromSeconds(5)));
+        Assert.Equal(0, application.ExitCode);
+        Assert.DoesNotContain("Address Space", application.Snapshot());
+    }
+
     private static string RenderedScreen(OpcilloscopeSession application) =>
         "Rendered screen was:\n" + application.Snapshot();
 }

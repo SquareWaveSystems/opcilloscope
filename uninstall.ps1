@@ -1,4 +1,4 @@
-# Opcilloscope uninstaller for Windows
+# opcilloscope uninstaller for Windows
 # Usage: irm https://raw.githubusercontent.com/SquareWaveSystems/opcilloscope/main/uninstall.ps1 | iex
 
 $ErrorActionPreference = "Stop"
@@ -59,8 +59,8 @@ function Remove-DirectoryIfEmpty {
 function Uninstall-Opcilloscope {
     Write-Host ""
     Write-Host "  +===================================+" -ForegroundColor Cyan
-    Write-Host "  |    Opcilloscope Uninstaller       |" -ForegroundColor Cyan
-    Write-Host "  |   Terminal OPC UA Client          |" -ForegroundColor Cyan
+    Write-Host "  |    opcilloscope uninstaller       |" -ForegroundColor Cyan
+    Write-Host "  |   terminal OPC UA client          |" -ForegroundColor Cyan
     Write-Host "  +===================================+" -ForegroundColor Cyan
     Write-Host ""
 
@@ -125,10 +125,10 @@ function Uninstall-Opcilloscope {
 
     Write-Host ""
     if ($removedSomething) {
-        Write-Info "Opcilloscope has been uninstalled."
+        Write-Info "opcilloscope has been uninstalled."
         Write-Host "(Restart open terminals to pick up PATH changes.)" -ForegroundColor Gray
     } else {
-        Write-Warn "Opcilloscope does not appear to be installed at $InstallDir."
+        Write-Warn "opcilloscope does not appear to be installed at $InstallDir."
         Write-Host ""
         Write-Host 'If you installed to a custom directory, set $env:OPCILLOSCOPE_INSTALL_DIR first:' -ForegroundColor White
         Write-Host '  $env:OPCILLOSCOPE_INSTALL_DIR = "C:\your\path"; .\uninstall.ps1' -ForegroundColor White
