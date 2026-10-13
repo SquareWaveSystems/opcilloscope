@@ -8,10 +8,12 @@ holds only rules and pitfalls that can't be read off the code. Layout, features,
 and config format live in README.md, CONTRIBUTING.md and docs/TESTING.md. -->
 
 Read on demand rather than duplicating here:
-- `README.md` — features, keyboard shortcuts, install, config file format
+- `README.md` — features, keyboard shortcuts, install
 - `CONTRIBUTING.md` — architecture overview, code style, PR guidelines
 - `docs/TESTING.md` — the three test layers and exact-artifact E2E usage
 - `App/Keybindings/DefaultKeybindings.cs` — source of truth for keybindings
+- `Configuration/Models/OpcilloscopeConfig.cs` — source of truth for the `.cfg` JSON format
+- `CommandLineOptions.cs` — source of truth for CLI options and accepted config extensions
 - `Tests/Opcilloscope.TestServer/TestNodeManager.cs` — source of truth for test server nodes
 
 ## Commands
