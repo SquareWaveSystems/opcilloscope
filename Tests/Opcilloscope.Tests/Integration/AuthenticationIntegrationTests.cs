@@ -74,7 +74,7 @@ public class AuthenticationIntegrationTests : IClassFixture<TestServerFixture>
         }
         finally
         {
-            DeleteTemporaryPkiRoot(pkiRoot);
+            DeleteTemporaryPkiRoot(pkiRoot, waitForRejectedCertificate: true);
         }
     }
 
@@ -347,9 +347,35 @@ public class AuthenticationIntegrationTests : IClassFixture<TestServerFixture>
     private static string CreateTemporaryPkiRoot()
         => Path.Combine(Path.GetTempPath(), "opcilloscope-tests", "client-pki", Guid.NewGuid().ToString("N"));
 
-    private static void DeleteTemporaryPkiRoot(string path)
+    private static void DeleteTemporaryPkiRoot(string path, bool waitForRejectedCertificate = false)
     {
-        if (Directory.Exists(path))
-            Directory.Delete(path, recursive: true);
+        // The SDK saves a rejected server certificate on a background task that can
+        // finish after ConnectAsync returns. Deleting before that write lands either
+        // races with it ("Directory not empty") or lets it recreate the directory.
+        if (waitForRejectedCertificate)
+        {
+            var rejectedStore = Path.Combine(path, "rejected");
+            SpinWait.SpinUntil(
+                () => Directory.Exists(rejectedStore)
+                    && Directory.EnumerateFiles(rejectedStore, "*", SearchOption.AllDirectories).Any(),
+                TimeSpan.FromSeconds(2));
+        }
+
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                    Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Best-effort temp cleanup must not fail the test.
+                if (attempt < maxAttempts)
+                    Thread.Sleep(100);
+            }
+        }
     }
 }
