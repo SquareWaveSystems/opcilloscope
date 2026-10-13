@@ -28,20 +28,14 @@ public class HelpDialog : Dialog
         SetScheme(theme.MainColorScheme);
         BorderStyle = theme.EmphasizedBorderStyle;
 
-        // Create content view with the help text.
-        // TextView is obsolete in Terminal.Gui 2.4.5, superseded by EditorView from
-        // the separate gui-cs/Editor package. A read-only scrolling text pane is all
-        // that's needed here, so keep TextView rather than take on a new dependency;
-        // revisit if/when EditorView ships in the Terminal.Gui package itself.
-#pragma warning disable CS0618 // TextView is obsolete (replacement lives in gui-cs/Editor)
-        var contentView = new TextView
+        // Create content view with the help text
+        var contentView = new ScrollingTextView
         {
             X = 1,
             Y = 0,
             Width = Dim.Fill(1),
             Height = Dim.Fill(2),
-            ReadOnly = true,
-            WordWrap = true,
+            Text = GenerateHelpFromBindings(keybindingManager),
         }.WithScheme(new Scheme
         {
             Normal = new Attribute(theme.Foreground, theme.Background),
@@ -50,9 +44,6 @@ public class HelpDialog : Dialog
             HotFocus = new Attribute(theme.Foreground, theme.Background),
             Disabled = new Attribute(theme.MutedText, theme.Background)
         });
-#pragma warning restore CS0618
-
-        contentView.Text = GenerateHelpFromBindings(keybindingManager);
 
         // OK button - highlighted with accent color (default action)
         var defaultButtonScheme = new Scheme
@@ -143,5 +134,57 @@ public class HelpDialog : Dialog
             ThemeManager.ThemeChanged -= OnThemeChanged;
         }
         base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// Read-only, word-wrapped text that scrolls vertically, built on a plain View
+    /// (content size + built-in vertical scrollbar) instead of the obsolete TextView.
+    /// </summary>
+    private sealed class ScrollingTextView : View
+    {
+        private int _wrappedWidth = -1;
+
+        public ScrollingTextView()
+        {
+            CanFocus = true;
+            TextFormatter.WordWrap = true;
+            ViewportSettings |= ViewportSettingsFlags.HasVerticalScrollBar;
+
+            AddCommand(Command.ScrollUp, () => ScrollVertical(-1));
+            AddCommand(Command.ScrollDown, () => ScrollVertical(1));
+            AddCommand(Command.PageUp, () => ScrollVertical(-Viewport.Height));
+            AddCommand(Command.PageDown, () => ScrollVertical(Viewport.Height));
+            AddCommand(Command.Start, () => ScrollVertical(-Viewport.Y));
+            AddCommand(Command.End, () => ScrollVertical(GetContentSize().Height));
+
+            KeyBindings.Add(Key.CursorUp, Command.ScrollUp);
+            KeyBindings.Add(Key.CursorDown, Command.ScrollDown);
+            KeyBindings.Add(Key.PageUp, Command.PageUp);
+            KeyBindings.Add(Key.PageDown, Command.PageDown);
+            KeyBindings.Add(Key.Home, Command.Start);
+            KeyBindings.Add(Key.End, Command.End);
+
+            ViewportChanged += (_, _) => UpdateContentSize();
+            TextChanged += (_, _) =>
+            {
+                _wrappedWidth = -1;
+                UpdateContentSize();
+            };
+        }
+
+        // Content height is the number of wrapped lines at the current width,
+        // so the scrollbar range follows the dialog size.
+        private void UpdateContentSize()
+        {
+            var width = Viewport.Width;
+            if (width <= 0 || width == _wrappedWidth)
+            {
+                return;
+            }
+
+            _wrappedWidth = width;
+            var lines = TextFormatter.Format(Text, width, justify: false, wordWrap: true);
+            SetContentSize(new System.Drawing.Size(width, lines.Count));
+        }
     }
 }
