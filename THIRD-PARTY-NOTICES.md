@@ -70,7 +70,7 @@ The following copyright notices apply to the remaining MIT components:
 - Terminal.Gui — Copyright 2007-2011 Novell Inc; Copyright 2017 Microsoft Corp
 - BitFaster.Caching — Copyright (c) 2020 Alex Peck
 - ColorHelper — Copyright (c) 2020 Artyom Gritsuk
-- JetBrains.Annotations — Copyright (c) 2016-2024 JetBrains s.r.o.
+- JetBrains.Annotations — Copyright (c) 2016-2025 JetBrains s.r.o.
 - Microsoft.Extensions.* and the Microsoft .NET Runtime:
   - Copyright (c) .NET Foundation and Contributors
   - All rights reserved.
