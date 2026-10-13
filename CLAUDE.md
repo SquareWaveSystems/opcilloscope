@@ -153,46 +153,71 @@ Opcilloscope/
 │   │   ├── TestServer.cs           # Server with ApplicationConfiguration
 │   │   └── TestNodeManager.cs      # Custom NodeManager with test nodes
 │   │
-│   └── Opcilloscope.Tests/             # Unit and integration tests (xUnit)
-│       ├── Opcilloscope.Tests.csproj
-│       ├── Infrastructure/
-│       │   ├── TestModuleInitializer.cs # Test assembly initialization
-│       │   └── TestServerFixture.cs # xUnit fixture with IAsyncLifetime
-│       ├── Integration/
-│       │   ├── OpcUaIntegrationTests.cs
-│       │   ├── AuthenticationIntegrationTests.cs
-│       │   ├── ConnectionManagerIntegrationTests.cs
-│       │   ├── ErrorHandlingIntegrationTests.cs
-│       │   ├── NodeBrowserIntegrationTests.cs
-│       │   ├── ReconnectIntegrationTests.cs
-│       │   ├── SubscriptionManagerIntegrationTests.cs
-│       │   └── WriteIntegrationTests.cs
-│       ├── App/
-│       │   ├── ThemeManagerTests.cs
-│       │   ├── AppThemeTests.cs
-│       │   ├── FocusManagerTests.cs
-│       │   ├── Views/
-│       │   │   └── BrailleCanvasTests.cs
-│       │   └── Keybindings/
-│       │       ├── KeybindingTests.cs
-│       │       └── KeybindingManagerTests.cs
-│       ├── Configuration/
-│       │   ├── ConfigurationServiceTests.cs
-│       │   └── RecentFilesManagerTests.cs
-│       ├── OpcUa/
-│       │   ├── SubscriptionManagerTests.cs
-│       │   ├── NodeAttributesTests.cs
-│       │   └── Models/
-│       │       ├── BrowsedNodeTests.cs
-│       │       └── MonitoredNodeTests.cs
-│       └── Utilities/
-│           ├── LoggerTests.cs
-│           ├── CsvRecordingManagerTests.cs
-│           ├── NodeAttributeFormatterTests.cs
-│           ├── OpcValueConverterTests.cs
-│           └── ConnectionIdentifierTests.cs
+│   ├── Opcilloscope.Tests/             # Unit, integration and TUI component tests (xUnit)
+│   │   ├── Opcilloscope.Tests.csproj
+│   │   ├── GlobalUsings.cs
+│   │   ├── CommandLineParserTests.cs
+│   │   ├── Infrastructure/
+│   │   │   ├── TestModuleInitializer.cs # Test assembly initialization
+│   │   │   └── TestServerFixture.cs # xUnit fixture with IAsyncLifetime
+│   │   ├── Integration/
+│   │   │   ├── OpcUaIntegrationTests.cs
+│   │   │   ├── AuthenticationIntegrationTests.cs
+│   │   │   ├── ConnectionManagerIntegrationTests.cs
+│   │   │   ├── ErrorHandlingIntegrationTests.cs
+│   │   │   ├── NodeBrowserIntegrationTests.cs
+│   │   │   ├── ReconnectIntegrationTests.cs
+│   │   │   ├── SubscriptionManagerIntegrationTests.cs
+│   │   │   └── WriteIntegrationTests.cs
+│   │   ├── Tui/                    # Real Terminal.Gui views and dialogs (non-parallel "Tui" collection)
+│   │   │   ├── ConnectDialogTests.cs
+│   │   │   ├── MonitoredVariablesViewTests.cs
+│   │   │   ├── ThemeSchemeTests.cs
+│   │   │   └── TuiCollection.cs
+│   │   ├── App/
+│   │   │   ├── ThemeManagerTests.cs
+│   │   │   ├── AppThemeTests.cs
+│   │   │   ├── FocusManagerTests.cs
+│   │   │   ├── MainWindowStateTests.cs
+│   │   │   ├── SaveConfigDialogTests.cs
+│   │   │   ├── WriteValueDialogTests.cs
+│   │   │   ├── Views/
+│   │   │   │   ├── BrailleCanvasTests.cs
+│   │   │   │   └── ScopeViewSampleTests.cs
+│   │   │   └── Keybindings/
+│   │   │       ├── KeybindingTests.cs
+│   │   │       └── KeybindingManagerTests.cs
+│   │   ├── Configuration/
+│   │   │   ├── ConfigurationServiceTests.cs
+│   │   │   └── RecentFilesManagerTests.cs
+│   │   ├── OpcUa/
+│   │   │   ├── ConnectionCredentialsTests.cs
+│   │   │   ├── OpcUaClientWrapperTests.cs
+│   │   │   ├── SubscriptionManagerTests.cs
+│   │   │   ├── NodeAttributesTests.cs
+│   │   │   └── Models/
+│   │   │       ├── BrowsedNodeTests.cs
+│   │   │       └── MonitoredNodeTests.cs
+│   │   └── Utilities/
+│   │       ├── TerminalUiTests.cs
+│   │       ├── UiThreadTests.cs
+│   │       ├── LoggerTests.cs
+│   │       ├── CsvRecordingManagerTests.cs
+│   │       ├── NodeAttributeFormatterTests.cs
+│   │       ├── OpcValueConverterTests.cs
+│   │       └── ConnectionIdentifierTests.cs
+│   │
+│   └── Opcilloscope.E2ETests/          # Linux-only black-box PTY tests of the published binary (not in the .sln)
+│       ├── Opcilloscope.E2ETests.csproj
+│       ├── PublishedBinaryFixture.cs
+│       ├── Pty.cs
+│       ├── OpcilloscopeSession.cs
+│       ├── VtScreen.cs
+│       ├── VtScreenTests.cs
+│       ├── StartupTests.cs
+│       └── README.md
 │
-├── docs/                           # Screenshots and promotional images
+├── docs/                           # Testing guide, screenshots and demo media
 │
 └── .github/workflows/
     ├── ci.yml                      # Build and test on push/PR
