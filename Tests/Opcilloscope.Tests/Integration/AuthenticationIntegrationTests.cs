@@ -349,7 +349,15 @@ public class AuthenticationIntegrationTests : IClassFixture<TestServerFixture>
 
     private static void DeleteTemporaryPkiRoot(string path)
     {
-        if (Directory.Exists(path))
-            Directory.Delete(path, recursive: true);
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch (IOException)
+        {
+            // Best-effort: the SDK may still be writing the rejected server
+            // certificate into this store; don't mask the test's real result.
+        }
     }
 }
