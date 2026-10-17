@@ -86,7 +86,9 @@ The scope view starts with a sliding **30-second window** (zoomable from 5 s to 
 | `R` | Toggle CSV recording (selected monitored variables) |
 | `+` / `-` | Zoom in / out (scope) |
 | `Ctrl+O` / `Ctrl+S` | Open / save configuration |
+| `Ctrl+Shift+S` | Save configuration as |
 | `Ctrl+R` | Toggle CSV recording |
+| `Ctrl+Q` | Quit |
 | `?` | Help |
 
 ## Install
@@ -182,7 +184,7 @@ deleting a shared custom install directory.
 
 ## Quickstart (Developer)
 
-Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) version pinned in `global.json` (10.0.109). Because `rollForward` is `disable`, other SDK versions are rejected.
 
 ```bash
 git clone https://github.com/SquareWaveSystems/opcilloscope.git

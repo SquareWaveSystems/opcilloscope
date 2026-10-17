@@ -1,6 +1,6 @@
-# Contributing to Opcilloscope
+# Contributing to opcilloscope
 
-Thank you for your interest in contributing to Opcilloscope!
+Thank you for your interest in contributing to opcilloscope!
 
 ## Getting Started
 
@@ -16,7 +16,7 @@ Thank you for your interest in contributing to Opcilloscope!
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) version 10.0.109, as pinned in `global.json` (`rollForward` is `disable`, so other SDK versions are rejected)
 - **Linux only:** ICU libraries (`sudo apt install libicu-dev` on Debian/Ubuntu, `sudo dnf install libicu-devel` on Fedora/RHEL)
 
 ### Building and Testing
