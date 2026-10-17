@@ -35,8 +35,8 @@ Browse, monitor, and subscribe to industrial automation data right from your ter
 - **Themes** — Dark (default), light, and terminal (inherits your terminal's ANSI colour scheme).
 
 <p align="center">
-  <img src="docs/pr165/main-dark.png" alt="Dark theme" width="49%">
-  <img src="docs/pr165/main-light.png" alt="Light theme" width="49%">
+  <img src="docs/screenshot-dark.png" alt="Dark theme" width="49%">
+  <img src="docs/screenshot-light.png" alt="Light theme" width="49%">
 </p>
 
 <p align="center">
